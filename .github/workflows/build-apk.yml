@@ -16,41 +16,113 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # 1. Download source code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Configure Java
       - name: Install Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3. Configure Android SDK command-line tools
       - name: Configure Android SDK
+        shell: bash
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --version
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install \
+          set -euo pipefail
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+
+          echo "Android SDK directory: $SDK_ROOT"
+
+          mkdir -p "$SDK_ROOT/cmdline-tools"
+
+          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" \
+            -type f -name sdkmanager 2>/dev/null \
+            | head -n 1 || true)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Installing Android command-line tools"
+
+            TOOLS_ZIP="commandlinetools-linux-13114758_latest.zip"
+
+            curl -fL --retry 3 \
+              "https://dl.google.com/android/repository/$TOOLS_ZIP" \
+              -o /tmp/android-tools.zip
+
+            mkdir -p /tmp/android-tools
+            unzip -q /tmp/android-tools.zip \
+              -d /tmp/android-tools
+
+            mkdir -p "$SDK_ROOT/cmdline-tools/latest"
+
+            cp -a /tmp/android-tools/cmdline-tools/. \
+              "$SDK_ROOT/cmdline-tools/latest/"
+
+            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          chmod +x "$SDKMANAGER"
+
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          "$SDKMANAGER" --version
+
+          # Accept SDK licenses
+          set +o pipefail
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" --licenses
+          set -o pipefail
+
+          # Install Android packages
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" \
+            --install \
             "platforms;android-35" \
             "build-tools;35.0.0" \
             "platform-tools"
 
+          echo "Android SDK configured successfully"
+
+      # 4. Configure Gradle
       - name: Configure Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Build JA APK
+      # 5. Build debug APK
+      - name: Compile JA APK
+        shell: bash
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           AUTHORIZED_EMBED_TEMPLATE: ${{ secrets.AUTHORIZED_EMBED_TEMPLATE }}
           AUTHORIZED_EMBED_HOST: ${{ secrets.AUTHORIZED_EMBED_HOST }}
         run: |
+          set -euo pipefail
+
+          echo "Starting JA Android build"
+
+          # Provide configuration expected by the
+          # Android Gradle project.
+          {
+            echo "sdk.dir=$ANDROID_HOME"
+            echo "TMDB_API_KEY=$TMDB_API_KEY"
+            echo "AUTHORIZED_EMBED_TEMPLATE=$AUTHORIZED_EMBED_TEMPLATE"
+            echo "AUTHORIZED_EMBED_HOST=$AUTHORIZED_EMBED_HOST"
+          } > local.properties
+
           gradle --no-daemon --stacktrace assembleDebug
 
+      # 6. Upload compiled APK
       - name: Upload JA APK
         uses: actions/upload-artifact@v4
         with:
           name: JA-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 30
