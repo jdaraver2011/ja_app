@@ -1,0 +1,13 @@
+{
+  "manifest_version": 2,
+  "name": "JA Player Interaction Diagnostics",
+  "version": "1.0.0",
+  "description": "Opt-in player readiness and touch diagnostics; does not click or change playback.",
+  "browser_specific_settings": {"gecko": {"id": "ja-player-diagnostics@local.invalid"}},
+  "content_scripts": [{
+    "matches": ["*://vidsrc.sh/*", "*://*.vidsrc.sh/*"],
+    "js": ["diagnostics.js"],
+    "run_at": "document_idle",
+    "all_frames": true
+  }]
+}
