@@ -4,6 +4,21 @@ import android.util.Log
 import android.net.Uri
 import android.app.Activity
 import android.view.View
+import android.view.KeyEvent
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
@@ -81,14 +96,23 @@ fun GeckoExperimentalPlayer(url: String, showRestore: Boolean = false) {
             }
         }
     }
+    var playerView by remember(url) { mutableStateOf<GeckoView?>(null) }
+    var tvControlsVisible by remember(url) { mutableStateOf(false) }
+    var tvPlaying by remember(url) { mutableStateOf(true) }
+    val tvFirstButton = remember { FocusRequester() }
+    LaunchedEffect(tvControlsVisible) {
+        if (tvControlsVisible) {
+            try { tvFirstButton.requestFocus() } catch (_: Exception) { }
+        }
+    }
     var reload by remember(url) { mutableIntStateOf(0) }
-    var status by remember(url) { mutableStateOf("Initializing Firefox/Gecko engine…") }
-    var blockedWindows by remember(url) { mutableIntStateOf(0) }
-    var pageStarts by remember(url) { mutableIntStateOf(0) }
-    var blockedRedirects by remember(url) { mutableIntStateOf(0) }
-    var lastBlockedHost by remember(url) { mutableStateOf("none") }
-    var lastPageHost by remember(url) { mutableStateOf(android.net.Uri.parse(url).host ?: "unknown") }
-    var restoreCount by remember(url) { mutableIntStateOf(0) }
+    var status = "Initializing Firefox/Gecko engine…"
+    var blockedWindows = 0
+    var pageStarts = 0
+    var blockedRedirects = 0
+    var lastBlockedHost = "none"
+    var lastPageHost = android.net.Uri.parse(url).host ?: "unknown"
+    var restoreCount = 0
     val session = remember(url, reload) {
         GeckoSession().apply {
             contentDelegate = object : GeckoSession.ContentDelegate {}
@@ -140,7 +164,6 @@ fun GeckoExperimentalPlayer(url: String, showRestore: Boolean = false) {
                             "gesture=${request.hasUserGesture} redirect=${request.isRedirect}")
                         return GeckoResult.fromValue(AllowOrDeny.DENY)
                     }
-                    Log.d("JA_GECKO", "Allowed top-level navigation to $targetHost")
                     return null // GeckoView continues normally.
                 }
                 override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
@@ -154,11 +177,9 @@ fun GeckoExperimentalPlayer(url: String, showRestore: Boolean = false) {
                     pageStarts++
                     lastPageHost = android.net.Uri.parse(url).host ?: "unknown"
                     status = "Loading: $lastPageHost"
-                    Log.i("JA_GECKO", "Page start #$pageStarts: $url")
                 }
                 override fun onPageStop(session: GeckoSession, success: Boolean) {
                     status = if (success) "Page loaded (video playback not confirmed)" else "Page load failed"
-                    Log.i("JA_GECKO", "Page stopped: success=$success; blockedWindows=$blockedWindows")
                 }
             }
             try {
@@ -178,9 +199,60 @@ fun GeckoExperimentalPlayer(url: String, showRestore: Boolean = false) {
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { GeckoView(it).apply { setSession(session) } },
+            factory = {
+                object : GeckoView(it) {
+                    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                        if (event.action == KeyEvent.ACTION_DOWN && !tvControlsVisible &&
+                            (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                             event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                             event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                            tvControlsVisible = true
+                            return true
+                        }
+                        return super.dispatchKeyEvent(event)
+                    }
+                }.apply {
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+                    setSession(session)
+                    playerView = this
+                    post { Log.i("JA_PERF", "GeckoView window hardware acceleration: $isHardwareAccelerated") }
+                    requestFocus()
+                }
+            },
             update = { view -> if (view.session !== session) view.setSession(session) }
         )
+        // Native TV remote overlay. Media commands are forwarded to GeckoView;
+        // iframe players may not handle them. No simulated screen taps are used.
+        if (tvControlsVisible) {
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = 28.dp)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.Back) {
+                            tvControlsVisible = false
+                            true
+                        } else false
+                    },
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                fun sendMedia(keyCode: Int) {
+                    val down = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
+                    val up = KeyEvent(KeyEvent.ACTION_UP, keyCode)
+                    // GeckoView receives media keys, but the webpage may ignore them.
+                    playerView?.dispatchKeyEvent(down)
+                    playerView?.dispatchKeyEvent(up)
+                }
+                JaTvControl("-10s", { sendMedia(KeyEvent.KEYCODE_MEDIA_REWIND) })
+                JaTvControl(if (tvPlaying) "Pause" else "Play", {
+                    sendMedia(if (tvPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
+                    tvPlaying = !tvPlaying
+                }, firstRequester = tvFirstButton)
+                JaTvControl("+10s", { sendMedia(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) })
+                JaTvControl("Close", { tvControlsVisible = false })
+            }
+        }
         // Overlay controls do not change the session or navigate back to the catalog.
         if (showRestore) Column(
             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
@@ -196,5 +268,25 @@ fun GeckoExperimentalPlayer(url: String, showRestore: Boolean = false) {
                 }) { Text("Restore Episode", fontSize = 12.sp) }
             }
         }
+    }
+}
+
+@Composable
+private fun JaTvControl(
+    label: String,
+    onClick: () -> Unit,
+    firstRequester: FocusRequester? = null
+) {
+    var focused by remember { mutableStateOf(false) }
+    var modifier = Modifier
+        .onFocusChanged { focused = it.isFocused }
+        .border(
+            if (focused) 3.dp else 0.dp,
+            if (focused) Color.White else Color.Transparent,
+            RoundedCornerShape(8.dp)
+        )
+    if (firstRequester != null) modifier = modifier.focusRequester(firstRequester)
+    Button(onClick = onClick, modifier = modifier) {
+        Text(label, color = Color.White)
     }
 }
