@@ -1,0 +1,25 @@
+{
+  "manifest_version": 2,
+  "name": "JA Experimental Iframe Auto-Start",
+  "version": "1.2.0",
+  "description": "JA iframe autoplay and native TV playback control bridge",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ja-autoplay@local.invalid"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "autoplay.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ]
+}
