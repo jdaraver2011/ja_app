@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "JA Source Availability Monitor",
+  "version": "1.1.5",
+  "description": "Read-only playback status for provider fallback. Does not change player controls.",
+  "browser_specific_settings": {
+    "gecko": { "id": "ja-source-status@local.invalid" }
+  },
+  "permissions": [
+    "geckoViewAddons",
+    "nativeMessaging",
+    "nativeMessagingFromContent"
+  ],
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["status.js"],
+    "all_frames": true,
+    "match_about_blank": false,
+    "run_at": "document_idle"
+  }]
+}
