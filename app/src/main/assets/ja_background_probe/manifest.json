@@ -1,0 +1,15 @@
+{
+  "manifest_version": 2,
+  "name": "JA Muted Background Media Probe",
+  "version": "1.1.5.27",
+  "description": "Observe muted media time progression during bounded background provider checks.",
+  "browser_specific_settings": {"gecko": {"id": "ja-background-probe@local.invalid"}},
+  "permissions": ["geckoViewAddons", "nativeMessaging", "nativeMessagingFromContent"],
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["probe.js"],
+    "run_at": "document_start",
+    "all_frames": true,
+    "match_about_blank": false
+  }]
+}
