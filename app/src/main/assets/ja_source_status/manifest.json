@@ -1,0 +1,30 @@
+{
+  "manifest_version": 2,
+  "name": "JA Source Availability Monitor",
+  "version": "1.1.5.5",
+  "description": "Report media status and explicit player connection failures without changing autoplay or remote controls.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ja-source-status@local.invalid"
+    }
+  },
+  "permissions": [
+    "geckoViewAddons",
+    "nativeMessaging",
+    "nativeMessagingFromContent"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "status.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": false,
+      "run_at": "document_idle"
+    }
+  ]
+}
