@@ -141,6 +141,9 @@ class MainActivity : ComponentActivity() {
     var matchTvFrameRate by remember { mutableStateOf(settings.matchTvFrameRate) }
     var matchTvResolution by remember { mutableStateOf(settings.matchTvResolution) }
     var adBlockerMode by remember { mutableStateOf(settings.adBlockerMode) }
+    val blockerStatus by JaGeckoAdBlockers.status.collectAsState()
+    var blockerTools by remember { mutableStateOf<JaGeckoAdBlockers.ManagementPages?>(null) }
+    var blockerToolsError by remember { mutableStateOf<String?>(null) }
     var confirmPreferredSourceReset by remember { mutableStateOf(false) }
     var preferredSourceResetStatus by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf("Movies") }
@@ -593,6 +596,10 @@ class MainActivity : ComponentActivity() {
             searchGenre != null -> exitGenre()
         }
     }
+    blockerTools?.let { pages ->
+        JaBlockerTools(pages = pages, onClose = { blockerTools = null })
+        return
+    }
     // Playback occupies the entire activity instead of the catalog's padded column.
     if (playback != null) {
         // Each fallback must own a fresh Compose player generation. Dispose
@@ -606,6 +613,11 @@ class MainActivity : ComponentActivity() {
             source = playback!!, request = request, dao = dao,
             resumePositionMs = resumePositionMs,
             onRetry = { playbackSessionId += 1 },
+            onDisableBlockerAndRetry = {
+                adBlockerMode = JaGeckoAdBlockers.OFF
+                settings.adBlockerMode = JaGeckoAdBlockers.OFF
+                playbackSessionId += 1
+            },
             onPositionChanged = { resumePositionMs = it },
             showBack = showBack, showRestore = showRestore,
             showDiagnostics = showPlayerDiagnostics,
@@ -763,8 +775,26 @@ class MainActivity : ComponentActivity() {
                         ) { Text(name, color = Color.Black) }
                     }
                 }
-                Text("Selection applies in the background; the next player uses the selected blocker.",
+                Text("Status: ${blockerStatus.message}", color =
+                    if (blockerStatus.phase == JaGeckoAdBlockers.Phase.FAILED ||
+                        blockerStatus.phase == JaGeckoAdBlockers.Phase.WARNING) Color(0xFFFFC48A) else Color.LightGray,
+                    style = MaterialTheme.typography.bodySmall)
+                Text("Enabled means Gecko started the extension; it does not verify its filter engine. " +
+                    "Switching to Off waits for both filtering extensions to be disabled.",
                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                if (adBlockerMode == JaGeckoAdBlockers.UBLOCK) {
+                    Button(onClick = {
+                        blockerToolsError = null
+                        JaGeckoAdBlockers.managementPages(appContext) { pages, problem ->
+                            blockerTools = pages
+                            blockerToolsError = problem
+                        }
+                    }, enabled = blockerStatus.mode == JaGeckoAdBlockers.UBLOCK &&
+                        blockerStatus.phase != JaGeckoAdBlockers.Phase.STARTING) {
+                        Text("Open uBlock dashboard / logger")
+                    }
+                }
+                blockerToolsError?.let { Text(it, color = Color(0xFFFFC48A)) }
                 Spacer(Modifier.height(16.dp))
                 Text("Preferred playback sources", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text(
@@ -1144,6 +1174,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     hasNextSource: Boolean = false,
     onTryNextSource: () -> Unit = {},
     onRetry: () -> Unit = {},
+    onDisableBlockerAndRetry: () -> Unit = {},
     onPositionChanged: (Long) -> Unit = {},
     resumePositionMs: Long = 0L,
     onSourceStarted: (PlaybackSource) -> Unit = { _ -> },
@@ -1260,7 +1291,11 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     if (!embedLoadRequested) recoveryReason = "Player initialization is taking too long."
                 } else if (!confirmedPlayback) {
                     delay(45_000L)
-                    if (!confirmedPlayback) recoveryReason = "Playback has not started. Retry or choose another server."
+                    if (!confirmedPlayback) {
+                        recoveryReason = "Playback has not started. Retry or choose another server."
+                        JaGeckoAdBlockers.reportPlaybackProblem(adBlockerMode, "VIDEO_START_TIMEOUT")
+                        Log.w("JA_SOURCES", "VIDEO_START_TIMEOUT blocker=$adBlockerMode filterHealth=UNVERIFIED")
+                    }
                 }
             }
             Box(Modifier.fillMaxSize()) {
@@ -1307,6 +1342,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                         if (!confirmedPlayback && !startupFailureReported) {
                             startupFailureReported = true
                             recoveryReason = "This source could not start playback."
+                            JaGeckoAdBlockers.reportPlaybackProblem(adBlockerMode, reason)
                             onSourceFailure(source, reason)
                         } else if (confirmedPlayback) {
                             // Playback once succeeded; later errors are not proof the
@@ -1316,17 +1352,6 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                         }
                     }
                 )
-                if (!embedLoadRequested) {
-                    Surface(Modifier.align(Alignment.Center).padding(24.dp), color = Color(0xFF202832)) {
-                        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(Modifier.height(16.dp))
-                            Text("Preparing player…", color = Color.White)
-                            Text("First launch may take longer.", color = Color.LightGray)
-                            TextButton(onClick = onClose) { Text("Back") }
-                        }
-                    }
-                }
                 if (showBack) {
                     TvFocusButton(onClick = onClose, modifier = Modifier.align(Alignment.TopStart)) { Text("Back") }
                 }
@@ -1349,7 +1374,14 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             onDismissRequest = { recoveryReason = null },
             title = { Text("Playback needs attention") },
             text = { Text(reason) },
-            confirmButton = { TextButton(onClick = onRetry) { Text("Retry") } },
+            confirmButton = {
+                Column {
+                    TextButton(onClick = onRetry) { Text("Retry") }
+                    if (adBlockerMode != JaGeckoAdBlockers.OFF) {
+                        TextButton(onClick = onDisableBlockerAndRetry) { Text("Turn ad blocking Off and retry") }
+                    }
+                }
+            },
             dismissButton = {
                 Row {
                     if (hasNextSource) TextButton(onClick = onTryNextSource) { Text("Next Server") }

@@ -69,7 +69,7 @@ import java.util.WeakHashMap
  * in sessions that are still being torn down. Cache the *installation result*
  * per runtime and URI; each new session still attaches its own delegate.
  *
- * Retain installBuiltIn for compatibility with JA's existing GeckoView API.
+ * Install once per runtime, then attach each session's native delegates.
  */
 private val sharedExtensionInstalls =
     Collections.synchronizedMap(WeakHashMap<GeckoRuntime, MutableMap<String, GeckoResult<WebExtension>>>())
@@ -643,7 +643,7 @@ fun GeckoExperimentalPlayer(
                     return GeckoResult.fromValue(prompt.confirm(AllowOrDeny.DENY))
                 }
             }
-            // GeckoView 128 uses per-site autoplay permissions, not
+            // GeckoView uses per-site autoplay permissions, not
             // GeckoRuntimeSettings.Builder.autoplayDefault() (removed in v75).
             // Only grant autoplay; do not grant camera, mic or other permissions.
             permissionDelegate = object : GeckoSession.PermissionDelegate {
@@ -666,7 +666,7 @@ fun GeckoExperimentalPlayer(
             navigationDelegate = object : GeckoSession.NavigationDelegate {
                 // onLoadRequest handles top-level loads; subframe loads and media
                 // requests are NOT blocked by this callback.
-                // GeckoView 128: AllowOrDeny is org.mozilla.geckoview.AllowOrDeny,
+                // GeckoView: AllowOrDeny is org.mozilla.geckoview.AllowOrDeny,
                 // and LoadRequest does not expose an isTopLevel property.
                 override fun onLoadRequest(
                     session: GeckoSession,
@@ -746,6 +746,9 @@ fun GeckoExperimentalPlayer(
                 }
             }
             progressDelegate = object : GeckoSession.ProgressDelegate {
+                override fun onProgressChange(session: GeckoSession, progress: Int) {
+                    Log.d("JA_SOURCES", "PAGE_LOAD_PROGRESS percent=$progress blocker=$adBlockerMode")
+                }
                 override fun onPageStart(session: GeckoSession, url: String) {
                     pageStarts++
                     lastTopLevelUrl = url
