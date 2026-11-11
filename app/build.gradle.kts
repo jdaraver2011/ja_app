@@ -18,8 +18,8 @@ android {
         applicationId = "com.example.ja"
         minSdk = 23
         targetSdk = 35
-        versionCode = 11601
-        versionName = "1.1.6-review1"
+        versionCode = 11604
+        versionName = "1.1.6-review4"
         buildConfigField("String", "TMDB_API_KEY", "\"${prop("TMDB_API_KEY")}\"")
         buildConfigField("String", "AUTHORIZED_EMBED_TEMPLATE", "\"${prop("AUTHORIZED_EMBED_TEMPLATE")}\"")
         buildConfigField("String", "AUTHORIZED_EMBED_HOST", "\"${prop("AUTHORIZED_EMBED_HOST")}\"")

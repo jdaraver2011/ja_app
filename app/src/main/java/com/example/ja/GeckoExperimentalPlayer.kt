@@ -62,9 +62,6 @@ import org.mozilla.geckoview.WebRequestError
 import java.util.Collections
 import java.util.WeakHashMap
 
-// One extension installation per runtime, not once per episode or rotation.
-private val autoplayInstallStarted = Collections.newSetFromMap(WeakHashMap<GeckoRuntime, Boolean>())
-
 /**
  * Built-in extensions are runtime-wide, whereas their native-message delegates
  * are registered on each GeckoSession. Installing the same extension again for
@@ -100,19 +97,33 @@ private fun installedOnce(runtime: GeckoRuntime, uri: String): GeckoResult<WebEx
     return install
 }
 
-private fun installExperimentalAutoplay(runtime: GeckoRuntime) {
-    synchronized(autoplayInstallStarted) {
-        if (!autoplayInstallStarted.add(runtime)) return
-    }
-    try {
-        runtime.webExtensionController
-            .installBuiltIn("resource://android/assets/ja_autoplay/")
-            .accept(
-                { Log.i("JA_AUTOPLAY", "Autoplay content script installed") },
-                { error -> Log.w("JA_AUTOPLAY", "Autoplay extension unavailable; manual Play remains", error) }
-            )
-    } catch (error: Exception) {
-        Log.w("JA_AUTOPLAY", "Could not install autoplay extension; manual Play remains", error)
+/** Prewarm and await the same cached installations used by actual playback. */
+internal fun prepareJaPlayerExtensions(runtime: GeckoRuntime, done: (Boolean) -> Unit) {
+    val uris = arrayOf(
+        "resource://android/assets/ja_autoplay/",
+        "resource://android/assets/ja_tv_remote/",
+        "resource://android/assets/ja_overlay_guard/",
+        "resource://android/assets/ja_source_status/"
+    )
+    val barrier = JaStartupBarrier(object : JaStartupBarrier.Listener {
+        override fun onReady() { done(true) }
+        override fun onFailure(stage: String, reason: String) {
+            Log.w("JA_STARTUP", "EXTENSION_FAILED stage=$stage reason=$reason")
+            done(false)
+        }
+    }, *uris)
+    for (uri in uris) {
+        try {
+            installedOnce(runtime, uri).accept({ extension ->
+                if (extension == null) barrier.fail(uri, "Installation returned no extension")
+                else {
+                    Log.i("JA_STARTUP", "EXTENSION_READY uri=$uri")
+                    barrier.complete(uri)
+                }
+            }, { error -> barrier.fail(uri, error?.message ?: "Installation failed") })
+        } catch (error: Exception) {
+            barrier.fail(uri, error.message ?: "Installation failed")
+        }
     }
 }
 
@@ -128,12 +139,13 @@ private class JaRemoteBridge {
     private var activePort: WebExtension.Port? = null
     private var hideTitlePending = false
 
-    fun attach(runtime: GeckoRuntime, session: GeckoSession) {
+    fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
         try {
             installedOnce(runtime, "resource://android/assets/ja_tv_remote/")
                 .accept({ extension ->
                     if (extension == null) {
                         Log.w("JA_TV_BRIDGE", "BRIDGE_INSTALL_NULL")
+                        onReady(false)
                         return@accept
                     }
                     session.webExtensionController.setMessageDelegate(
@@ -187,9 +199,14 @@ private class JaRemoteBridge {
                         }, "ja_tv_remote"
                     )
                     Log.i("JA_TV_BRIDGE", "BRIDGE_INSTALLED_DELEGATE_READY")
-                }, { error -> Log.e("JA_TV_BRIDGE", "BRIDGE_INSTALL_FAILED", error) })
+                    onReady(true)
+                }, { error ->
+                    Log.e("JA_TV_BRIDGE", "BRIDGE_INSTALL_FAILED", error)
+                    onReady(false)
+                })
         } catch (e: Exception) {
             Log.e("JA_TV_BRIDGE", "BRIDGE_SETUP_FAILED", e)
+            onReady(false)
         }
     }
 
@@ -237,20 +254,21 @@ private class JaSourceStatusBridge {
     // A cold GeckoRuntime can take time to install an extension. Only load the
     // embed after its status listener is registered, otherwise a fast player
     // can start before its VIDEO_STARTED event can ever be observed.
-    // Installation failure must NOT block playback: proceed without monitoring.
-    private fun notifyReady(onReady: () -> Unit) {
+    // Failed initialization reports recovery instead of loading an unmonitored page.
+    private fun notifyReady(onReady: (Boolean) -> Unit, success: Boolean) {
         handler.post {
             if (!connected || readyNotified) return@post
             readyNotified = true
-            onReady()
+            onReady(success)
         }
     }
 
-    fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: () -> Unit) {
+    fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
         try {
             installedOnce(runtime, "resource://android/assets/ja_source_status/")
                 .accept({ extension ->
                     if (!connected) return@accept
+                    var delegateReady = false
                     try {
                         if (extension != null) {
                             session.webExtensionController.setMessageDelegate(
@@ -295,21 +313,22 @@ private class JaSourceStatusBridge {
                                 }, "ja_source_status"
                             )
                             Log.i("JA_SOURCES", "SOURCE_MONITOR_READY")
+                            delegateReady = true
                         } else {
                             Log.w("JA_SOURCES", "SOURCE_MONITOR_INSTALL_RETURNED_NULL")
                         }
                     } catch (error: Exception) {
                         Log.w("JA_SOURCES", "SOURCE_MONITOR_DELEGATE_FAILED", error)
                     } finally {
-                        notifyReady(onReady)
+                        notifyReady(onReady, delegateReady)
                     }
                 }, { error ->
                     Log.w("JA_SOURCES", "SOURCE_MONITOR_UNAVAILABLE", error)
-                    notifyReady(onReady)
+                    notifyReady(onReady, false)
                 })
         } catch (error: Exception) {
             Log.w("JA_SOURCES", "SOURCE_MONITOR_FAILED", error)
-            notifyReady(onReady)
+            notifyReady(onReady, false)
         }
     }
 
@@ -335,18 +354,19 @@ private class JaOverlayGuardBridge {
     private var connected = true
     private var readyNotified = false
 
-    private fun ready(onReady: () -> Unit) {
+    private fun ready(onReady: (Boolean) -> Unit, success: Boolean) {
         handler.post {
             if (!connected || readyNotified) return@post
             readyNotified = true
-            onReady()
+            onReady(success)
         }
     }
 
-    fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: () -> Unit) {
+    fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
         try {
             installedOnce(runtime, "resource://android/assets/ja_overlay_guard/")
                 .accept({ extension ->
+                    var delegateReady = false
                     try {
                         if (extension != null) {
                             session.webExtensionController.setMessageDelegate(
@@ -372,21 +392,22 @@ private class JaOverlayGuardBridge {
                                 }, "ja_overlay_guard"
                             )
                             Log.i("JA_AD_GUARD", "OVERLAY_GUARD_READY")
+                            delegateReady = true
                         } else {
                             Log.w("JA_AD_GUARD", "OVERLAY_GUARD_EXTENSION_NULL")
                         }
                     } catch (error: Exception) {
                         Log.w("JA_AD_GUARD", "OVERLAY_GUARD_DELEGATE_FAILED", error)
                     } finally {
-                        ready(onReady)
+                        ready(onReady, delegateReady)
                     }
                 }, { error ->
                     Log.w("JA_AD_GUARD", "OVERLAY_GUARD_INSTALL_FAILED", error)
-                    ready(onReady)
+                    ready(onReady, false)
                 })
         } catch (error: Exception) {
             Log.w("JA_AD_GUARD", "OVERLAY_GUARD_UNAVAILABLE", error)
-            ready(onReady)
+            ready(onReady, false)
         }
     }
 
@@ -549,6 +570,8 @@ fun GeckoExperimentalPlayer(
         reportFatalOnce(reason, "Media unavailable: ${reason.take(72)}")
     }
     val playerDisposed = remember(url, reload) { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val startupHandler = remember(url, reload) { Handler(Looper.getMainLooper()) }
+    val startupGate = remember(url, reload) { arrayOfNulls<JaStartupBarrier>(1) }
     val session = remember(url, reload) {
         GeckoSession().apply {
             // GeckoView can observe actual media playback even when the
@@ -761,53 +784,71 @@ fun GeckoExperimentalPlayer(
             }
             try {
                 val runtime = GeckoRuntime.getDefault(context.applicationContext)
-                installExperimentalAutoplay(runtime)
                 open(runtime)
-                remoteBridge.attach(runtime, this)
-                // Install a signed, full-featured Firefox ad blocker BEFORE
-                // loading the embed. Unlike keyword-only overlays, uBlock/AdGuard
-                // filter network requests and apply cosmetic rules in frames.
-                // Use a finite deadline for offline devices / slow AMO downloads.
-                val loadStarted = java.util.concurrent.atomic.AtomicBoolean(false)
-                val guardDeadline = Handler(Looper.getMainLooper())
-                fun loadWithExistingMonitors() {
-                    if (playerDisposed.get()) return
-                    if (!loadStarted.compareAndSet(false, true)) return
-                    overlayGuard.attach(runtime, this) {
-                        sourceStatusBridge.attach(runtime, this) {
-                            if (!playerDisposed.get()) {
-                                Log.i("JA_SOURCES", "EMBED_LOAD_AFTER_MONITORS host=${Uri.parse(url).host}")
-                                // Start the 45s media clock here, not when
-                                // PlayerScreen is first composed. Cold Gecko
-                                // extension installation may take many seconds.
-                                embedLoadWasRequested = true
-                                latestOnEmbedLoadRequested()
-                                loadUri(url)
+                val startedAt = android.os.SystemClock.elapsedRealtime()
+                val gate = JaStartupBarrier(object : JaStartupBarrier.Listener {
+                    override fun onReady() {
+                        startupHandler.removeCallbacksAndMessages(null)
+                        if (playerDisposed.get()) return
+                        Log.i("JA_STARTUP", "PLAYER_READY elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}")
+                        try {
+                            embedLoadWasRequested = true
+                            latestOnEmbedLoadRequested()
+                            loadUri(url)
+                        } catch (error: Exception) {
+                            Log.e("JA_STARTUP", "PLAYER_LOAD_FAILED", error)
+                            reportFatalOnce("INITIALIZATION_FAILED", "The player page could not open")
+                        }
+                    }
+                    override fun onFailure(stage: String, reason: String) {
+                        startupHandler.removeCallbacksAndMessages(null)
+                        if (playerDisposed.get()) return
+                        Log.w("JA_STARTUP", "PLAYER_SETUP_FAILED stage=$stage reason=$reason " +
+                            "elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}")
+                        reportFatalOnce("INITIALIZATION_FAILED", "Player setup failed at $stage")
+                    }
+                }, "extensions", "blocker", "monitors")
+                startupGate[0] = gate
+                Log.i("JA_STARTUP", "PLAYER_PREPARING mode=$adBlockerMode")
+                // A timeout offers recovery. It NEVER starts the page while a
+                // runtime-wide installation is still modifying the engine.
+                startupHandler.postDelayed({
+                    gate.fail("deadline", "Setup did not finish; pending=${gate.pendingStages()}")
+                }, 90_000L)
+                prepareJaPlayerExtensions(runtime) { ready ->
+                    if (!playerDisposed.get() && !gate.isTerminal()) {
+                        if (!ready) gate.fail("extensions", "Built-in extension setup failed")
+                        else {
+                            gate.complete("extensions")
+                            remoteBridge.attach(runtime, this) { remoteReady ->
+                                if (!playerDisposed.get() && !gate.isTerminal()) {
+                                    if (!remoteReady) gate.fail("remote", "Remote delegate setup failed")
+                                    else overlayGuard.attach(runtime, this) { guardReady ->
+                                        if (!playerDisposed.get() && !gate.isTerminal()) {
+                                            if (!guardReady) gate.fail("overlay", "Overlay delegate setup failed")
+                                            else sourceStatusBridge.attach(runtime, this) { statusReady ->
+                                                if (!playerDisposed.get() && !gate.isTerminal()) {
+                                                    if (statusReady) {
+                                                        Log.i("JA_STARTUP", "PLAYER_MONITORS_READY")
+                                                        gate.complete("monitors")
+                                                    } else gate.fail("status", "Status delegate setup failed")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                guardDeadline.postDelayed({
-                    if (!playerDisposed.get() && !embedLoadWasRequested) {
-                        reportFatalOnce("INITIALIZATION_TIMEOUT", "Player monitors did not become ready")
-                    }
-                }, 30_000L)
-                guardDeadline.postDelayed({
-                    if (!loadStarted.get()) {
-                        adBlockerStatus = "Blocker install timed out; JA popup protection remains"
-                        Log.w("JA_ADBLOCK", "BLOCKER_START_TIMEOUT mode=$adBlockerMode")
-                        loadWithExistingMonitors()
-                    }
-                }, 15000L)
-                try {
-                    JaGeckoAdBlockers.prepare(runtime, adBlockerMode) { result ->
+                JaGeckoAdBlockers.prepare(runtime, adBlockerMode) { result ->
+                    if (!playerDisposed.get() && !gate.isTerminal()) {
                         adBlockerStatus = result
-                        loadWithExistingMonitors()
+                        if (result.startsWith("Active:") || result.startsWith("Off:")) {
+                            Log.i("JA_STARTUP", "PLAYER_BLOCKER_READY elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}")
+                            gate.complete("blocker")
+                        } else gate.fail("blocker", result)
                     }
-                } catch (blockerError: Exception) {
-                    Log.w("JA_ADBLOCK", "BLOCKER_INITIALIZATION_FAILED", blockerError)
-                    adBlockerStatus = "Unavailable: ${blockerError.message ?: "initialization error"}"
-                    loadWithExistingMonitors()
                 }
             } catch (e: Exception) {
                 status = "GeckoView failed to initialize: ${e.message}"
@@ -819,6 +860,9 @@ fun GeckoExperimentalPlayer(
     DisposableEffect(session) {
         onDispose {
             playerDisposed.set(true)
+            startupGate[0]?.cancel()
+            startupGate[0] = null
+            startupHandler.removeCallbacksAndMessages(null)
             cancelNavigationWatchdog()
             remoteBridge.clear()
             sourceStatusBridge.clear()

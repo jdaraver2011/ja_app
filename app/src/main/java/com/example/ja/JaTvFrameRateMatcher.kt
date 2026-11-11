@@ -37,11 +37,10 @@ class JaTvFrameRateMatcher(
     private val outputDisplay: Display = activity.windowManager.defaultDisplay
     private val displayId = outputDisplay.displayId
 
-    private var lastFrames = -1
-    private var lastPosition = -1.0
-    private var intervalCount = 0
+    private val sampler = JaFrameRateSampler()
+    private var lastVideoWidth = 0
+    private var lastVideoHeight = 0
     private var requestedMode: Display.Mode? = null
-    private var lastMeasuredRate = Double.NaN
     private var attempted = false
     private var closed = false
     private var statisticsReceived = 0
@@ -63,7 +62,7 @@ class JaTvFrameRateMatcher(
         }
     }
 
-    /** Two adjacent 5-second samples reject pre-roll, seeking and noisy startup stats. */
+    /** Accept one-second bridge reports; require two agreeing cadence intervals. */
     fun observe(totalFrames: Int, positionSeconds: Double, videoWidth: Int, videoHeight: Int) {
         statisticsReceived++
         if (statisticsReceived <= 3 || statisticsReceived % 24 == 0) {
@@ -74,35 +73,14 @@ class JaTvFrameRateMatcher(
         if (!enabled || closed || attempted || requestedMode != null || totalFrames <= 0 || positionSeconds < 4.0) return
         // Some ad frames have tiny videos; valid foreground media must be HD-sized.
         if (videoWidth < 480 || videoHeight < 270) return
-        if (lastFrames < 0) {
-            lastFrames = totalFrames
-            lastPosition = positionSeconds
-            return
+        if (lastVideoWidth != videoWidth || lastVideoHeight != videoHeight) {
+            sampler.reset()
+            lastVideoWidth = videoWidth
+            lastVideoHeight = videoHeight
         }
-        val frameDelta = totalFrames - lastFrames
-        val timeDelta = positionSeconds - lastPosition
-        lastFrames = totalFrames
-        lastPosition = positionSeconds
-        // Normal reports are approximately 5 seconds apart. Reject pauses, seek
-        // jumps, scrubbing, or discontinuities instead of forcing a bad mode.
-        if (timeDelta < 3.5 || timeDelta > 8.0 || frameDelta <= 0) {
-            intervalCount = 0
-            return
-        }
-        val measured = frameDelta / timeDelta
-        if (measured !in 20.0..61.0) {
-            intervalCount = 0
-            return
-        }
-        // Require adjacent rates to agree; a seek or an ad switching videos
-        // must not force a display-mode change.
-        if (lastMeasuredRate.isFinite() && abs(measured - lastMeasuredRate) > 0.7) {
-            intervalCount = 0
-        }
-        lastMeasuredRate = measured
-        intervalCount++
-        Log.i(tag, "FRAME_RATE_MEASURED fps=${"%.3f".format(java.util.Locale.US, measured)} samples=$intervalCount")
-        if (intervalCount < 2) return
+        val measured = sampler.observe(totalFrames, positionSeconds)
+        if (!measured.isFinite()) return
+        Log.i(tag, "FRAME_RATE_MEASURED fps=${"%.3f".format(java.util.Locale.US, measured)} stable=true")
         val target = targetFor(measured) ?: run {
             Log.i(tag, "FRAME_RATE_UNKNOWN fps=$measured; no change")
             return

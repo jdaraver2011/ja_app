@@ -70,6 +70,9 @@ private data class DetailReturnPoint(val title: TitleItem?, val person: TmdbPers
 private fun prewarmPlayerAdBlocker(context: Context, mode: String) {
     try {
         val runtime = GeckoRuntime.getDefault(context.applicationContext)
+        prepareJaPlayerExtensions(runtime) { ready ->
+            Log.i("JA_STARTUP", "APP_EXTENSIONS_PREWARM ready=$ready")
+        }
         JaGeckoAdBlockers.prepare(runtime, mode) { status ->
             Log.i("JA_ADBLOCK", "APP_PREWARM mode=$mode status=$status")
         }
@@ -96,6 +99,7 @@ private fun jaAllowedSourceChoices(registered: List<PlaybackChoice>): List<Playb
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.i("JA_STARTUP", "APP_BUILD versionName=${BuildConfig.VERSION_NAME} versionCode=${BuildConfig.VERSION_CODE}")
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()
         setContent { MaterialTheme(colorScheme = darkColorScheme(primary = accent, background = bg, surface = Color(0xFF202832), onBackground = Color.White, onSurface = Color.White, onSurfaceVariant = Color.LightGray)) { StreamingApp(db.dao()) } }
         // Start extension setup as soon as JA opens, rather than waiting for the
@@ -1252,7 +1256,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             // connection alone as playback success.
             LaunchedEffect(source, request, embedLoadRequested, confirmedPlayback) {
                 if (!embedLoadRequested) {
-                    delay(35_000L)
+                    delay(95_000L)
                     if (!embedLoadRequested) recoveryReason = "Player initialization is taking too long."
                 } else if (!confirmedPlayback) {
                     delay(45_000L)
@@ -1312,6 +1316,17 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                         }
                     }
                 )
+                if (!embedLoadRequested) {
+                    Surface(Modifier.align(Alignment.Center).padding(24.dp), color = Color(0xFF202832)) {
+                        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.height(16.dp))
+                            Text("Preparing player…", color = Color.White)
+                            Text("First launch may take longer.", color = Color.LightGray)
+                            TextButton(onClick = onClose) { Text("Back") }
+                        }
+                    }
+                }
                 if (showBack) {
                     TvFocusButton(onClick = onClose, modifier = Modifier.align(Alignment.TopStart)) { Text("Back") }
                 }
