@@ -14,6 +14,8 @@ data class WatchItem(val mediaId: Int, val mediaType: String, val season: Int = 
 
 @Dao interface WatchDao {
     @Query("SELECT * FROM watch_items ORDER BY updatedAt DESC") suspend fun all(): List<WatchItem>
+    @Query("UPDATE watch_items SET positionMs=:position, updatedAt=:updated WHERE mediaId=:id AND mediaType=:type AND season=:season AND episode=:episode")
+    suspend fun updateProgress(id: Int, type: String, season: Int, episode: Int, position: Long, updated: Long)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun save(item: WatchItem)
     @Query("SELECT * FROM watch_items WHERE mediaId=:id AND mediaType=:type AND season=:season AND episode=:episode LIMIT 1") suspend fun find(id: Int, type: String, season: Int, episode: Int): WatchItem?
 }

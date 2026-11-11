@@ -1,5 +1,11 @@
 package com.example.ja
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -43,6 +49,8 @@ private val tvPriority = listOf(
 )
 
 class TmdbRepository {
+    private val genreCache = mutableMapOf<String, List<GenreRow>>()
+    fun cachedGenreRows(type: String): List<GenreRow>? = genreCache[type]
     private val client = OkHttpClient()
     private suspend fun fetch(path: String): JSONObject = withContext(Dispatchers.IO) {
         require(BuildConfig.TMDB_API_KEY.isNotBlank()) { "Set TMDB_API_KEY in local.properties" }
@@ -84,7 +92,7 @@ class TmdbRepository {
      * pages per underfilled genre. Rows may remain short if priority rules
      * assign their candidates elsewhere.
      */
-    suspend fun genreRows(type: String): List<GenreRow> {
+    suspend fun genreRows(type: String, onPartial: (List<GenreRow>) -> Unit = {}): List<GenreRow> {
         require(type == "movie" || type == "tv")
         val categories = if (type == "movie") movieGenres else tvGenres
         val priority = if (type == "movie") moviePriority else tvPriority
@@ -132,18 +140,55 @@ class TmdbRepository {
             return buckets
         }
 
-        for (category in categories) collect(category.genreId, 3)
+        val limit = Semaphore(3)
+        var successes = 0
+        var firstError: Exception? = null
+        suspend fun collectSafely(category: GenreQuery, pages: Int) {
+            try {
+                limit.withPermit { collect(category.genreId, pages) }
+                successes++
+            } catch (cancel: CancellationException) { throw cancel }
+            catch (error: Exception) {
+                if (firstError == null) firstError = error
+                lastPage[category.genreId] = 0
+                android.util.Log.w("JA_CATALOG", "GENRE_LOAD_FAILED genre=${category.genreId}", error)
+            }
+        }
+        // Coroutines inherit the caller dispatcher. Response parsing and merges
+        // run serially on Main; only blocking HTTP executes on Dispatchers.IO.
+        // Keep cached complete rows visible throughout background refresh.
+        coroutineScope {
+            categories.map { category -> async {
+                collectSafely(category, 1)
+                if (genreCache[type] == null) {
+                    val allocated = allocate()
+                    onPartial(categories.map { GenreRow(it.name, allocated.getValue(it.genreId)) })
+                }
+            } }.awaitAll()
+        }
+        if (successes == 0) throw (firstError ?: IllegalStateException("No catalogue rows loaded"))
         var assigned = allocate()
-        repeat(maxPages - 3) {
+        for (round in 1 until maxPages) {
             val shortGenres = categories.filter { category ->
                 assigned.getValue(category.genreId).size < targetCount &&
                     nextPage.getValue(category.genreId) <= lastPage.getValue(category.genreId)
             }
-            if (shortGenres.isEmpty()) return@repeat
-            for (category in shortGenres) collect(category.genreId, 1)
+            if (shortGenres.isEmpty()) break
+            coroutineScope { shortGenres.map { category -> async { collectSafely(category, 1) } }.awaitAll() }
             assigned = allocate()
+            if (genreCache[type] == null) onPartial(categories.map {
+                GenreRow(it.name, assigned.getValue(it.genreId))
+            })
         }
-        return categories.map { GenreRow(it.name, assigned.getValue(it.genreId)) }
+        val rows = categories.map { category ->
+            val fresh = assigned.getValue(category.genreId)
+            GenreRow(category.name, fresh.ifEmpty {
+                genreCache[type]?.firstOrNull { it.name == category.name }?.titles.orEmpty()
+            })
+        }
+        genreCache[type] = rows
+        onPartial(rows)
+        return rows
     }
 
     suspend fun trending(): List<TitleItem> = list(fetch("trending/all/week").getJSONArray("results"), "movie")

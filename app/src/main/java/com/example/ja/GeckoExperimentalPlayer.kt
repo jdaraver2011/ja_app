@@ -222,12 +222,16 @@ private class JaRemoteBridge {
  * requests the next provider; an ordinary slow load does not.
  */
 private class JaSourceStatusBridge {
+    var resumePositionMs: Long = 0L
+    var onProgress: ((Long) -> Unit)? = null
+    var onStalled: (() -> Unit)? = null
     var onStarted: (() -> Unit)? = null
     var onUnavailable: ((String) -> Unit)? = null
     private var connected = true
     private var started = false
     private var unavailable = false
     private val handler = Handler(Looper.getMainLooper())
+    private var startedPort: WebExtension.Port? = null
     private var readyNotified = false
 
     // A cold GeckoRuntime can take time to install an extension. Only load the
@@ -255,17 +259,26 @@ private class JaSourceStatusBridge {
                                     override fun onConnect(port: WebExtension.Port) {
                                         if (!connected) return
                                         Log.i("JA_SOURCES", "SOURCE_STATUS_PORT_CONNECTED")
+                                        try { port.postMessage(JSONObject().put("action", "resume").put("positionMs", resumePositionMs)) }
+                                        catch (_: Exception) { }
                                         port.setDelegate(object : WebExtension.PortDelegate {
                                             override fun onPortMessage(message: Any, port: WebExtension.Port) {
                                                 val report = message as? JSONObject ?: return
                                                 val event = report.optString("event")
                                                 val reason = report.optString("reason")
-                                                if (event !in setOf("VIDEO_STARTED", "MEDIA_UNAVAILABLE")) return
+                                                if (event !in setOf("VIDEO_STARTED", "MEDIA_UNAVAILABLE", "PROGRESS", "STALLED")) return
                                                 handler.post {
                                                     if (!connected) return@post
+                                                    if (startedPort != null && startedPort !== port) return@post
                                                     when (event) {
+                                                        "PROGRESS" -> {
+                                                            val position = report.optLong("positionMs", -1L)
+                                                            if (position >= 0L && started) onProgress?.invoke(position)
+                                                        }
+                                                        "STALLED" -> if (started) onStalled?.invoke()
                                                         "VIDEO_STARTED" -> if (!started) {
                                                             started = true
+                                                            startedPort = port
                                                             Log.i("JA_SOURCES", "VIDEO_STARTED frame=${report.optString("frame")}")
                                                             onStarted?.invoke()
                                                         }
@@ -304,6 +317,8 @@ private class JaSourceStatusBridge {
         connected = false
         onStarted = null
         onUnavailable = null
+        onProgress = null
+        onStalled = null
     }
 }
 
@@ -386,6 +401,9 @@ private class JaOverlayGuardBridge {
 @Composable
 fun GeckoExperimentalPlayer(
     url: String,
+    resumePositionMs: Long = 0L,
+    onProgress: (Long) -> Unit = {},
+    onPlaybackStalled: () -> Unit = {},
     showRestore: Boolean = false,
     showDiagnostics: Boolean = false,
     adBlockerMode: String = JaGeckoAdBlockers.UBLOCK,
@@ -404,6 +422,8 @@ fun GeckoExperimentalPlayer(
     onTopLevelRedirect: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val latestOnProgress by rememberUpdatedState(onProgress)
+    val latestOnStalled by rememberUpdatedState(onPlaybackStalled)
     val latestOnMediaStarted by rememberUpdatedState(onMediaStarted)
     val latestOnEmbedLoadRequested by rememberUpdatedState(onEmbedLoadRequested)
     val latestOnVideoStatistics by rememberUpdatedState(onVideoStatistics)
@@ -444,6 +464,9 @@ fun GeckoExperimentalPlayer(
     var webControlMode by remember(url, reload) { mutableStateOf(false) }
     remoteBridge.onControlModeClosed = { webControlMode = false }
     val sourceStatusBridge = remember(url, reload) { JaSourceStatusBridge() }
+    sourceStatusBridge.resumePositionMs = resumePositionMs
+    sourceStatusBridge.onProgress = { latestOnProgress(it) }
+    sourceStatusBridge.onStalled = { latestOnStalled() }
     val overlayGuard = remember(url, reload) { JaOverlayGuardBridge() }
     var videoStarted by remember(url, reload) { mutableStateOf(false) }
     val frameStatsDebugCount = remember(url, reload) { intArrayOf(0) }
@@ -462,6 +485,7 @@ fun GeckoExperimentalPlayer(
         // Preserve other optional statistics consumers; no duplicate matcher call.
         latestOnVideoStatistics(frames, seconds, width, height)
     }
+    var embedLoadWasRequested by remember(url, reload) { mutableStateOf(false) }
     var geckoMediaActive by remember(url, reload) { mutableStateOf(false) }
     var lastFatalEvent by remember(url, reload) { mutableStateOf<String?>(null) }
     var status by remember(url, reload) { mutableStateOf("Initializing Firefox/Gecko engine…") }
@@ -756,12 +780,18 @@ fun GeckoExperimentalPlayer(
                                 // Start the 45s media clock here, not when
                                 // PlayerScreen is first composed. Cold Gecko
                                 // extension installation may take many seconds.
+                                embedLoadWasRequested = true
                                 latestOnEmbedLoadRequested()
                                 loadUri(url)
                             }
                         }
                     }
                 }
+                guardDeadline.postDelayed({
+                    if (!playerDisposed.get() && !embedLoadWasRequested) {
+                        reportFatalOnce("INITIALIZATION_TIMEOUT", "Player monitors did not become ready")
+                    }
+                }, 30_000L)
                 guardDeadline.postDelayed({
                     if (!loadStarted.get()) {
                         adBlockerStatus = "Blocker install timed out; JA popup protection remains"
@@ -781,6 +811,7 @@ fun GeckoExperimentalPlayer(
                 }
             } catch (e: Exception) {
                 status = "GeckoView failed to initialize: ${e.message}"
+                reportFatalOnce("INITIALIZATION_FAILED", "The browser engine could not initialize")
                 Log.e("JA_GECKO", "GeckoView initialization failure", e)
             }
         }

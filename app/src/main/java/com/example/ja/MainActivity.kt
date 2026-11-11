@@ -382,10 +382,14 @@ class MainActivity : ComponentActivity() {
                 val activeView = if (tab == "Movies") moviesView else tvView
                 if (activeView == "Genres") {
                     results = emptyList()
-                    genreRows = emptyList()
-                    genresLoading = true
+                    val genreType = if (tab == "Movies") "movie" else "tv"
+                    genreRows = repo.cachedGenreRows(genreType).orEmpty()
+                    genresLoading = genreRows.isEmpty()
                     error = null
-                    try { genreRows = repo.genreRows(if (tab == "Movies") "movie" else "tv") }
+                    try { genreRows = repo.genreRows(genreType) { partial ->
+                        genreRows = partial
+                        genresLoading = false
+                    } }
                     catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
                     catch (e: Exception) { error = e.message }
                     finally { genresLoading = false }
@@ -466,9 +470,13 @@ class MainActivity : ComponentActivity() {
             pendingSearchRestore = searchReturnBookmark
         }
     }
-    fun play(item: TitleItem, s: Int = 0, e: Int = 0) {
+    var resumePrompt by remember { mutableStateOf<PlaybackRequest?>(null) }
+    var resumePositionMs by remember { mutableStateOf(0L) }
+    var resumeLookupBusy by remember { mutableStateOf(false) }
+    fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L) {
         // Direct playback: no HTTP preflight, no detached verification, and no
         // preference/HTTP ranking. Each failed player falls back locally.
+        resumePositionMs = startAtMs
         playbackSessionId += 1
         error = null
         playback = null
@@ -517,6 +525,42 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    fun play(item: TitleItem, s: Int = 0, e: Int = 0) {
+        if (resumeLookupBusy) return
+        resumeLookupBusy = true
+        scope.launch {
+            try {
+                val saved = dao.find(item.id, item.type, s, e)
+                if (saved != null && saved.positionMs >= 5_000L) {
+                    resumePositionMs = saved.positionMs
+                    resumePrompt = PlaybackRequest(item, s, e)
+                } else startPlayback(item, s, e)
+            } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+            catch (problem: Exception) { error = "Could not load saved progress. Please try again." }
+            finally { resumeLookupBusy = false }
+        }
+    }
+    resumePrompt?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { resumePrompt = null },
+            title = { Text("Continue watching?") },
+            text = { Text("Resume ${pending.media.title} at ${resumePositionMs / 60_000}:${((resumePositionMs / 1000) % 60).toString().padStart(2, '0')}?") },
+            confirmButton = { TextButton(onClick = {
+                resumePrompt = null
+                startPlayback(pending.media, pending.season, pending.episode, resumePositionMs)
+            }) { Text("Resume") } },
+            dismissButton = { TextButton(onClick = {
+                resumePrompt = null
+                scope.launch {
+                    try {
+                        dao.updateProgress(pending.media.id, pending.media.type, pending.season, pending.episode, 0L, System.currentTimeMillis())
+                        startPlayback(pending.media, pending.season, pending.episode, 0L)
+                    } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                    catch (problem: Exception) { error = "Could not reset saved progress. Please try again." }
+                }
+            }) { Text("Start over") } }
+        )
+    }
     fun nextPlaybackSource(reason: String, recordFailure: Boolean = true) {
         // No HTTP checks here either. All three sources are known from the
         // registry; actual GeckoView failures decide when to try the next one.
@@ -556,6 +600,9 @@ class MainActivity : ComponentActivity() {
         key(playbackSessionId, playbackChoiceIndex, playingSourceId) {
         PlayerScreen(
             source = playback!!, request = request, dao = dao,
+            resumePositionMs = resumePositionMs,
+            onRetry = { playbackSessionId += 1 },
+            onPositionChanged = { resumePositionMs = it },
             showBack = showBack, showRestore = showRestore,
             showDiagnostics = showPlayerDiagnostics,
             matchTvFrameRate = matchTvFrameRate,
@@ -600,7 +647,9 @@ class MainActivity : ComponentActivity() {
             },
             onSourceFailure = { failedSource, reason ->
                 // Ignore delayed reports emitted after a different player opened.
-                if (playback == failedSource) nextPlaybackSource(reason)
+                if (playback == failedSource) request?.let {
+                    serverPlaybackHistory.recordExplicitFailure(it, playingSourceId, reason)
+                }
             },
             onClose = {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=PLAYER_BACK_BUTTON")
@@ -1090,6 +1139,9 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     currentSourceId: String = "unknown",
     hasNextSource: Boolean = false,
     onTryNextSource: () -> Unit = {},
+    onRetry: () -> Unit = {},
+    onPositionChanged: (Long) -> Unit = {},
+    resumePositionMs: Long = 0L,
     onSourceStarted: (PlaybackSource) -> Unit = { _ -> },
     onTopLevelRedirect: (String) -> Unit = {},
     onSourceFailure: (PlaybackSource, String) -> Unit = { _, _ -> },
@@ -1114,6 +1166,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
         }
     }
     var playerError by remember(source) { mutableStateOf<String?>(null) }
+    var recoveryReason by remember(source) { mutableStateOf<String?>(null) }
     var confirmedPlayback by remember(source) { mutableStateOf(false) }
     // A running media session is evidence that the embed is active, even if
     // the nested video frame never emits VIDEO_STARTED. Do not mistake it for
@@ -1160,6 +1213,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     override fun onPlayerError(error: PlaybackException) {
                         playerError = "Native player failed: ${error.message ?: "Unknown media error"}"
                         Log.e("JA_PLAYBACK", "Native playback error", error)
+                        recoveryReason = "The native player could not play this source."
                         onSourceFailure(source, "NATIVE_PLAYBACK_ERROR")
                     }
                 }
@@ -1168,13 +1222,18 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             }
             LaunchedEffect(player, request) {
                 val r = request ?: return@LaunchedEffect
-                val old = dao.find(r.media.id, r.media.type, r.season, r.episode)
-                if (old != null && old.positionMs > 0) player.seekTo(old.positionMs)
+                if (resumePositionMs > 0) player.seekTo(resumePositionMs)
+                while (true) {
+                    delay(5_000L)
+                    val position = player.currentPosition.coerceAtLeast(0)
+                    onPositionChanged(position)
+                    PlaybackProgress.save(dao, r, position)
+                }
             }
             DisposableEffect(player, request) {
                 onDispose {
                     val r = request
-                    if (r != null) scope.launch { val old = dao.find(r.media.id, r.media.type, r.season, r.episode); dao.save(WatchItem(r.media.id, r.media.type, r.season, r.episode, r.media.title, r.media.poster, old?.favorite ?: false, player.currentPosition.coerceAtLeast(0))) }
+                    PlaybackProgress.save(dao, r, player.currentPosition.coerceAtLeast(0))
                     player.release()
                 }
             }
@@ -1191,38 +1250,26 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             // A page that fires PageStop but never plays media must not stay
             // on a white screen indefinitely. Do not treat hasVideo/iframe
             // connection alone as playback success.
-            val currentFailureCallback by rememberUpdatedState(onSourceFailure)
-            LaunchedEffect(source, request, currentSourceId, embedLoadRequested,
-                confirmedPlayback, geckoMediaActivity, startupFailureReported) {
-                when {
-                    startupFailureReported -> {
-                        Log.i("JA_SOURCES", "VIDEO_START_WATCHDOG_CANCELLED source=$currentSourceId reason=SOURCE_FAILED")
-                    }
-                    confirmedPlayback -> {
-                        Log.i("JA_SOURCES", "VIDEO_START_WATCHDOG_CANCELLED source=$currentSourceId reason=VIDEO_STARTED")
-                    }
-                    geckoMediaActivity -> {
-                        // Native media activity may come from a nested frame;
-                        // preserve working playback without falsely verifying the title.
-                        Log.i("JA_SOURCES", "VIDEO_START_WATCHDOG_CANCELLED source=$currentSourceId reason=GECKO_MEDIA_ACTIVITY")
-                    }
-                    !embedLoadRequested -> {
-                        Log.i("JA_SOURCES", "VIDEO_START_WATCHDOG_WAITING_FOR_EMBED source=$currentSourceId")
-                    }
-                    else -> {
-                        Log.i("JA_SOURCES", "VIDEO_START_WATCHDOG_ARMED source=$currentSourceId timeoutMs=45000 origin=EMBED_LOAD_REQUESTED")
-                        delay(45_000L)
-                        if (!confirmedPlayback && !geckoMediaActivity && !startupFailureReported) {
-                            startupFailureReported = true
-                            Log.w("JA_SOURCES", "VIDEO_START_WATCHDOG_TIMEOUT source=$currentSourceId elapsedMs=45000")
-                            currentFailureCallback(source, "VIDEO_START_TIMEOUT")
-                        }
-                    }
+            LaunchedEffect(source, request, embedLoadRequested, confirmedPlayback) {
+                if (!embedLoadRequested) {
+                    delay(35_000L)
+                    if (!embedLoadRequested) recoveryReason = "Player initialization is taking too long."
+                } else if (!confirmedPlayback) {
+                    delay(45_000L)
+                    if (!confirmedPlayback) recoveryReason = "Playback has not started. Retry or choose another server."
                 }
             }
             Box(Modifier.fillMaxSize()) {
                 GeckoExperimentalPlayer(
                     url = source.url,
+                    resumePositionMs = resumePositionMs,
+                    onProgress = { position ->
+                        onPositionChanged(position)
+                        PlaybackProgress.save(dao, request, position)
+                    },
+                    onPlaybackStalled = {
+                        recoveryReason = "Playback stopped advancing. Retry or choose another server."
+                    },
                     showRestore = showRestore,
                     showDiagnostics = showDiagnostics,
                     adBlockerMode = adBlockerMode,
@@ -1236,6 +1283,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     onMediaStarted = {
                         if (!confirmedPlayback) onSourceStarted(source)
                         confirmedPlayback = true
+                        recoveryReason = null
                         Log.i("JA_SOURCES", "SOURCE_PLAYING source=$currentSourceLabel")
                     },
                     // Stats are delivered directly to the current frame matcher
@@ -1254,10 +1302,12 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     onFatalError = { reason ->
                         if (!confirmedPlayback && !startupFailureReported) {
                             startupFailureReported = true
+                            recoveryReason = "This source could not start playback."
                             onSourceFailure(source, reason)
                         } else if (confirmedPlayback) {
                             // Playback once succeeded; later errors are not proof the
                             // entire title is unavailable on this source.
+                            recoveryReason = "Playback was interrupted."
                             Log.w("JA_SOURCES", "SOURCE_INTERRUPTED source=$currentSourceLabel reason=$reason")
                         }
                     }
@@ -1278,6 +1328,20 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                 }
             }
         }
+    }
+    recoveryReason?.let { reason ->
+        AlertDialog(
+            onDismissRequest = { recoveryReason = null },
+            title = { Text("Playback needs attention") },
+            text = { Text(reason) },
+            confirmButton = { TextButton(onClick = onRetry) { Text("Retry") } },
+            dismissButton = {
+                Row {
+                    if (hasNextSource) TextButton(onClick = onTryNextSource) { Text("Next Server") }
+                    TextButton(onClick = onClose) { Text("Back") }
+                }
+            }
+        )
     }
 }
 

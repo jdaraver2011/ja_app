@@ -20,6 +20,35 @@
   let visibleErrorSince = 0;
   let lastErrorSignature = '';
   let scanNumber = 0;
+  let trackedVideo = null;
+  let resumeMs = 0;
+  let resumeReady = false;
+  let resumeApplied = false;
+  let lastSavedAt = 0;
+  let lastPosition = -1;
+  let lastAdvanceAt = performance.now();
+  let stallReported = false;
+  const emitProgress = () => {
+    if (!trackedVideo || !reportedStarted || !port || !resumeApplied) return;
+    const position = trackedVideo.currentTime;
+    if (!Number.isFinite(position) || position < 0) return;
+    try { port.postMessage({event:'PROGRESS', positionMs:Math.round(position * 1000), frame:location.hostname}); } catch (_) {}
+  };
+  const applyResume = () => {
+    if (!resumeReady || resumeApplied || !trackedVideo) return;
+    if (resumeMs <= 0) { resumeApplied = true; return; }
+    const ranges = trackedVideo.seekable;
+    if (!ranges || !ranges.length) return;
+    const target = resumeMs / 1000;
+    // Wait for a seekable range containing the requested position. Never
+    // silently clamp a saved movie position to the beginning of a live window.
+    for (let i=0; i<ranges.length; i++) {
+      if (target >= ranges.start(i) && target <= ranges.end(i)) {
+        try { trackedVideo.currentTime = target; resumeApplied = true; } catch (_) {}
+        return;
+      }
+    }
+  };
 
   // A source may place the real player in an iframe. Do not trust arbitrary
   // ad/tracker frames to declare a title unavailable.
@@ -130,6 +159,13 @@
     try {
       const newPort = browser.runtime.connectNative('ja_source_status');
       port = newPort;
+      newPort.onMessage.addListener(message => {
+        if (message?.action === 'resume') {
+          resumeReady = true;
+          resumeMs = Math.max(0, Number(message.positionMs) || 0);
+          applyResume();
+        }
+      });
       newPort.onDisconnect.addListener(() => {
         if (port !== newPort) return;
         port = null;
@@ -153,19 +189,23 @@
   const videos = () => Array.from(document.querySelectorAll('video')).filter(visibleVideo);
 
   const reportStarted = (v) => {
-    if (reportedStarted || !visibleVideo(v) || v.paused || v.ended || v.readyState < 2) return;
+    if (reportedStarted || !confirmedPlayerContext() || !visibleVideo(v) ||
+        v.videoWidth < 480 || v.videoHeight < 270 || v.paused || v.ended || v.readyState < 2) return;
     const now = performance.now();
     const earlier = progress.get(v);
     if (!earlier) {
       progress.set(v, { t: v.currentTime, at: now });
-    } else if (now - earlier.at >= 1000 && v.currentTime - earlier.t >= 0.5) {
+    } else if (now - earlier.at >= 3000 && v.currentTime - earlier.t >= 2.0) {
       reportedStarted = true;
+      trackedVideo = v;
+      lastAdvanceAt = now;
+      applyResume();
       send('VIDEO_STARTED', 'TIME_ADVANCING');
     }
   };
 
   const mediaError = (v) => {
-    if (reportedStarted || reportedUnavailable || !visibleVideo(v)) return;
+    if (reportedStarted || reportedUnavailable || !confirmedPlayerContext() || !visibleVideo(v)) return;
     const code = v.error?.code;
     // 4 = MEDIA_ERR_SRC_NOT_SUPPORTED. 3 = MEDIA_ERR_DECODE.
     // Network stalls and transient request errors are NOT hard failures.
@@ -173,7 +213,7 @@
     if (fatalTimers.has(v)) return;
     const t = setTimeout(() => {
       fatalTimers.delete(v);
-      if (reportedStarted || reportedUnavailable || !visibleVideo(v)) return;
+      if (reportedStarted || reportedUnavailable || !confirmedPlayerContext() || !visibleVideo(v)) return;
       if (v.error?.code !== code || videos().some(other => other !== v && !other.paused && other.readyState >= 2)) return;
       reportedUnavailable = true;
       send('MEDIA_UNAVAILABLE', `VIDEO_ERROR_${code}`);
@@ -203,4 +243,25 @@
     found.forEach(v => { reportStarted(v); if (v.error) mediaError(v); });
     checkVisibleFailure();
   }, 450);
+  setInterval(() => {
+    if (!reportedStarted || !trackedVideo || document.hidden) return;
+    applyResume();
+    const now = performance.now();
+    const position = trackedVideo.currentTime;
+    if (trackedVideo.paused || trackedVideo.ended || Math.abs(position - lastPosition) > 0.05) {
+      lastAdvanceAt = now;
+      stallReported = false;
+    } else if (!stallReported && now - lastAdvanceAt >= 30_000) {
+      stallReported = true;
+      try { port?.postMessage({event:'STALLED', frame:location.hostname}); } catch (_) {}
+    }
+    lastPosition = position;
+    if (now - lastSavedAt >= 5000) { emitProgress(); lastSavedAt = now; }
+  }, 1000);
+  document.addEventListener('pause', emitProgress, true);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) emitProgress();
+    else lastAdvanceAt = performance.now();
+  });
+  window.addEventListener('pagehide', emitProgress);
 })();
