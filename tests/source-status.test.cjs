@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const code = fs.readFileSync('app/src/main/assets/ja_source_status/status.js', 'utf8');
-function harness({trusted = true, resumeMs = 0, ready = true} = {}) {
+function harness({trusted = true, resumeMs = 0, ready = true, restart = false} = {}) {
   let now = 0;
   const messages = [], intervals = [], timers = [], documentEvents = {};
   let receive;
@@ -34,7 +34,7 @@ function harness({trusted = true, resumeMs = 0, ready = true} = {}) {
     setInterval:(f,ms)=>{intervals.push({f,ms});return intervals.length;},
     clearInterval:()=>{},setTimeout:f=>{timers.push(f);return timers.length;}
   });
-  if (ready) receive({action:'resume',positionMs:resumeMs});
+  if (ready) receive({action:'resume',positionMs:resumeMs,restart});
   function advance(ms,position) {
     now += ms;
     if (position !== undefined) video.currentTime=position;
@@ -99,3 +99,27 @@ console.log('PASS: finite duration forwarding, unknown/live duration rejection a
  assert.equal(count(),before+2,'backward seeks must still persist');
 }
 console.log('PASS: duplicate progress suppression preserves duration updates and backward seeks');
+
+{
+ const h=harness({restart:true});
+ h.advance(0,120);h.advance(4000,124);
+ assert.equal(h.video.currentTime,0,'explicit Start Over overrides a provider-restored position');
+ h.advance(5000,5);
+ assert.equal(h.video.currentTime,5,'restart is one-shot and does not repeatedly seek');
+}
+{
+ const h=harness({restart:true,ready:false});
+ h.video.seekable={length:0};
+ h.advance(0,120);h.advance(4000,124);
+ h.receive({action:'resume',positionMs:0,restart:true});
+ assert.equal(h.video.currentTime,124,'wait for a seekable range');
+ assert(!h.messages.some(m=>m.event==='PROGRESS'));
+ h.video.seekable={length:1,start:()=>0,end:()=>7200};
+ h.advance(1000);
+ assert.equal(h.video.currentTime,0,'late seekability still applies explicit zero');
+}
+{
+ const h=harness({trusted:false,restart:true});h.advance(0,120);h.advance(4000,124);
+ assert.equal(h.video.currentTime,124,'untrusted ad frames cannot receive title restart');
+}
+console.log('PASS: explicit zero restart, one-shot seek, delayed seekability and trusted-frame guard');
