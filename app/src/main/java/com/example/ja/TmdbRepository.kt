@@ -8,7 +8,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import org.json.JSONArray
@@ -50,8 +49,11 @@ private val tvPriority = listOf(
 
 class TmdbRepository {
     private val genreCache = mutableMapOf<String, List<GenreRow>>()
+    private val freshGenres = JaTimedCache<String, List<GenreRow>>(2, 600_000L)
+    private val seasonCache = JaTimedCache<Int, List<Int>>(24, 300_000L)
+    private val episodeCache = JaTimedCache<String, List<EpisodeItem>>(32, 300_000L)
     fun cachedGenreRows(type: String): List<GenreRow>? = genreCache[type]
-    private val client = OkHttpClient()
+    private val client = JaTmdbHttp.client
     private suspend fun fetch(path: String): JSONObject = withContext(Dispatchers.IO) {
         require(BuildConfig.TMDB_API_KEY.isNotBlank()) { "Set TMDB_API_KEY in local.properties" }
         val separator = if ('?' in path) '&' else '?'
@@ -94,6 +96,7 @@ class TmdbRepository {
      */
     suspend fun genreRows(type: String, onPartial: (List<GenreRow>) -> Unit = {}): List<GenreRow> {
         require(type == "movie" || type == "tv")
+        freshGenres.get(type)?.let { onPartial(it); return it }
         val categories = if (type == "movie") movieGenres else tvGenres
         val priority = if (type == "movie") moviePriority else tvPriority
         val validIds = categories.map { it.genreId }.toSet()
@@ -187,6 +190,8 @@ class TmdbRepository {
             })
         }
         genreCache[type] = rows
+        // Partial network failures may be displayed, but remain eligible for retry.
+        if (firstError == null) freshGenres.put(type, rows)
         onPartial(rows)
         return rows
     }
@@ -196,11 +201,14 @@ class TmdbRepository {
     suspend fun shows(): List<TitleItem> = list(fetch("tv/popular").getJSONArray("results"), "tv")
     suspend fun search(query: String): List<TitleItem> = list(fetch("search/multi?query=${URLEncoder.encode(query, "UTF-8")}").getJSONArray("results"), "movie")
     suspend fun seasons(id: Int): List<Int> {
+        seasonCache.get(id)?.let { return it }
         val arr = fetch("tv/$id").getJSONArray("seasons")
-        return (0 until arr.length()).map { arr.getJSONObject(it).getInt("season_number") }.filter { it > 0 }
+        return (0 until arr.length()).map { arr.getJSONObject(it).getInt("season_number") }.filter { it > 0 }.also { seasonCache.put(id, it) }
     }
     suspend fun episodes(id: Int, season: Int): List<EpisodeItem> {
+        val key = "$id:$season"
+        episodeCache.get(key)?.let { return it }
         val arr = fetch("tv/$id/season/$season").getJSONArray("episodes")
-        return (0 until arr.length()).map { arr.getJSONObject(it) }.map { EpisodeItem(season, it.getInt("episode_number"), it.optString("name")) }
+        return (0 until arr.length()).map { arr.getJSONObject(it) }.map { EpisodeItem(season, it.getInt("episode_number"), it.optString("name")) }.also { episodeCache.put(key, it) }
     }
 }

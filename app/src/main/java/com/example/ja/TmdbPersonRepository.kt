@@ -2,11 +2,9 @@ package com.example.ja
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 /** Person details and credits from TMDB's person endpoint, with no inferred information. */
 data class TmdbPersonFilmCredit(
@@ -35,13 +33,12 @@ data class TmdbPersonDetails(
 
 /** Independent of the stable title catalog, details and playback repositories. */
 class TmdbPersonRepository {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
+    private val client = JaTmdbHttp.client
+    private val cache = JaTimedCache<Int, TmdbPersonDetails>(16, 300_000L)
 
     suspend fun person(credit: TmdbPersonCredit): TmdbPersonDetails = withContext(Dispatchers.IO) {
         require(credit.id > 0) { "TMDB person ID is unavailable" }
+        cache.get(credit.id)?.let { return@withContext it }
         val apiKey = BuildConfig.TMDB_API_KEY
         require(apiKey.isNotBlank()) { "TMDB API key is not configured" }
         val url = okhttp3.HttpUrl.Builder()
@@ -59,7 +56,7 @@ class TmdbPersonRepository {
                 if (!response.isSuccessful) error("TMDB person request failed (HTTP ${response.code})")
                 JSONObject(response.body?.string() ?: error("TMDB returned no person details"))
             }
-        parsePerson(responseJson, credit)
+        parsePerson(responseJson, credit).also { cache.put(credit.id, it) }
     }
 
     private fun parsePerson(obj: JSONObject, fallback: TmdbPersonCredit): TmdbPersonDetails {

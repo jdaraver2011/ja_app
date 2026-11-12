@@ -10,12 +10,10 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /** Dedicated TMDB search adapter. The stable catalog and player repositories are unchanged. */
 enum class JaSearchMode(val label: String) {
@@ -48,10 +46,7 @@ data class JaTitlePage(
 }
 
 class TmdbSearchRepository {
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
+    private val http = JaTmdbHttp.client
     private var genreCache: List<JaSearchGenre>? = null
     // A person can be primarily known for acting and also direct films or TV episodes.
     // Cache verified Director credits so repeated searches don't re-fetch every profile.

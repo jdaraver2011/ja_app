@@ -139,6 +139,7 @@ private class JaRemoteBridge {
     private val ports = mutableSetOf<WebExtension.Port>()
     private var activePort: WebExtension.Port? = null
     private var hideTitlePending = false
+    private var statisticsLogCount = 0
 
     fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
         try {
@@ -161,10 +162,13 @@ private class JaRemoteBridge {
                                 }
                                 port.setDelegate(object : WebExtension.PortDelegate {
                                     override fun onPortMessage(message: Any, port: WebExtension.Port) {
-                                        Log.i("JA_TV_BRIDGE", "FRAME_REPORT $message")
                                         try {
                                             val report = message as? JSONObject
                                             val event = report?.optString("event")
+                                            // Forward every sample, but avoid formatting/writing a JSON log each second.
+                                            if (event != "VIDEO_STATS" || ++statisticsLogCount <= 3 || statisticsLogCount % 30 == 0) {
+                                                Log.i("JA_TV_BRIDGE", "FRAME_REPORT $message")
+                                            }
                                             if (event == "VIDEO_STATS" && report != null &&
                                                 report.optInt("width", 0) >= 480 &&
                                                 report.optInt("height", 0) >= 270 &&

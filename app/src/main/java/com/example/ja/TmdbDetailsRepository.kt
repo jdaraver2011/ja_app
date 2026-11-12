@@ -2,11 +2,9 @@ package com.example.ja
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 /** Detailed metadata supplied by TMDB. No media-stream attributes or third-party scores are inferred. */
 data class TmdbPersonCredit(
@@ -48,15 +46,15 @@ data class TmdbTitleDetails(
  * Requests one appended TMDB response per opened title.
  */
 class TmdbDetailsRepository {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
+    private val client = JaTmdbHttp.client
+    private val cache = JaTimedCache<String, TmdbTitleDetails>(32, 300_000L)
 
     suspend fun details(media: TitleItem): TmdbTitleDetails = withContext(Dispatchers.IO) {
         require(media.type == "movie" || media.type == "tv") { "Unknown media type" }
         val key = BuildConfig.TMDB_API_KEY
         require(key.isNotBlank()) { "TMDB API key is not configured" }
+        val cacheKey = "${media.type}:${media.id}"
+        cache.get(cacheKey)?.let { return@withContext it }
         val tv = media.type == "tv"
         val append = if (tv) "aggregate_credits,content_ratings,recommendations" else "credits,release_dates,recommendations"
         val url = okhttp3.HttpUrl.Builder()
@@ -74,7 +72,7 @@ class TmdbDetailsRepository {
             if (!response.isSuccessful) error("TMDB detail request failed (HTTP ${response.code})")
             JSONObject(response.body?.string() ?: error("TMDB returned no details"))
         }
-        parse(json, media, tv)
+        parse(json, media, tv).also { cache.put(cacheKey, it) }
     }
 
     private fun parse(obj: JSONObject, fallback: TitleItem, tv: Boolean): TmdbTitleDetails {
