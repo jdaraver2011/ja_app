@@ -85,3 +85,17 @@ console.log('PASS: sustained start, untrusted frame rejection, progress, resume,
  assert.equal(h.messages.filter(m=>m.event==='PROGRESS').at(-1).positionMs,100000);
 }
 console.log('PASS: finite duration forwarding, unknown/live duration rejection and ended progress flush');
+
+{
+ const h=harness(); h.video.duration=100;
+ h.advance(0,10); h.advance(4000,14); h.advance(5000,90);
+ const count=()=>h.messages.filter(m=>m.event==='PROGRESS').length;
+ const before=count();h.video.paused=true;
+ h.documentEvents.pause();h.advance(5000,90);h.documentEvents.ended();
+ assert.equal(count(),before,'unchanged pause/end samples do not cause extra database writes');
+ h.video.duration=99;h.documentEvents.pause();
+ assert.equal(count(),before+1,'duration corrections must reach watched marking');
+ h.video.currentTime=50;h.documentEvents.pause();
+ assert.equal(count(),before+2,'backward seeks must still persist');
+}
+console.log('PASS: duplicate progress suppression preserves duration updates and backward seeks');
