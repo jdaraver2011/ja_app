@@ -16,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -58,6 +60,12 @@ fun JaSearchScreen(
     restorePosition: Pair<Int, Int>? = null,
     onPositionRestored: () -> Unit = {}
 ) {
+    var genreFocusId by remember(selectedGenre) { mutableStateOf<Int?>(null) }
+    var genreFocusIndex by remember(selectedGenre) { mutableIntStateOf(0) }
+    LaunchedEffect(genreFocusId) {
+        val id = genreFocusId ?: return@LaunchedEffect
+        gridState.scrollToItem(genreFocusIndex)
+    }
     // The grid is removed while showing title/person details. Once it is laid
     // out again, restore both the item index and its pixel offset.
     LaunchedEffect(restorePosition) {
@@ -145,7 +153,10 @@ fun JaSearchScreen(
             }
             // Keep existing titles visible during additional-page requests.
             items(genreTitles, key = { "genre-title-${it.type}-${it.id}" }) { title ->
-                JaSearchTitleCard(title) { onOpenTitle(title) }
+                JaSearchTitleCard(title,
+                    restoreFocus = genreFocusId == title.id,
+                    onFocusRestored = { genreFocusId = null }
+                ) { onOpenTitle(title) }
             }
             if (genrePageError != null) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "genre-page-error") {
@@ -163,7 +174,16 @@ fun JaSearchScreen(
                         JaSearchButton(
                             if (genreLoadingMore) "Loading…" else "Load More",
                             highlighted = true,
-                            onClick = { if (!genreLoadingMore) onLoadMoreGenre() }
+                            onClick = {
+                                if (!genreLoadingMore) {
+                                    val trailing = 2 + (if (genrePageError != null) 1 else 0)
+                                    val firstTitleIndex = gridState.layoutInfo.totalItemsCount - genreTitles.size - trailing
+                                    val index = lastLoadedRowIndex(gridState, genreTitles.size, firstTitleIndex)
+                                    genreFocusIndex = (firstTitleIndex + index).coerceAtLeast(0)
+                                    genreFocusId = genreTitles.getOrNull(index)?.id
+                                    onLoadMoreGenre()
+                                }
+                            }
                         )
                     }
                 }
@@ -279,8 +299,19 @@ private fun JaSearchButton(
 @Composable
 internal fun JaSearchTitleCard(
     title: TitleItem,
+    modifier: Modifier = Modifier,
+    restoreFocus: Boolean = false,
+    onFocusRestored: () -> Unit = {},
     onClick: () -> Unit
 ) {
+    val ownRequester = remember { FocusRequester() }
+    LaunchedEffect(restoreFocus) {
+        if (restoreFocus) {
+            withFrameNanos { }
+            ownRequester.requestFocus()
+            onFocusRestored()
+        }
+    }
     var focused by remember { mutableStateOf(false) }
     // All title grids (Movies, TV, Search, Search Genres, Favorites) match the
     // existing horizontal genre row: 140dp card / 190dp tall poster.
@@ -290,7 +321,7 @@ internal fun JaSearchTitleCard(
         contentAlignment = Alignment.TopCenter
     ) {
         Column(
-            modifier = Modifier.width(140.dp)
+            modifier = modifier.width(140.dp).focusRequester(ownRequester)
                 .onFocusChanged { focused = it.isFocused }
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(9.dp)) else Modifier)
                 .clickable(onClick = onClick)
@@ -307,7 +338,7 @@ internal fun JaSearchTitleCard(
                 contentScale = ContentScale.Crop
             )
             Text(
-                title.title, color = Color.White, fontSize = 13.sp,
+                (if (title.watched) "✓ " else "") + title.title, color = Color.White, fontSize = 13.sp,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
             )

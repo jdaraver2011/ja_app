@@ -241,7 +241,7 @@ private class JaRemoteBridge {
  */
 private class JaSourceStatusBridge {
     var resumePositionMs: Long = 0L
-    var onProgress: ((Long) -> Unit)? = null
+    var onProgress: ((Long, Long) -> Unit)? = null
     var onStalled: (() -> Unit)? = null
     var onStarted: (() -> Unit)? = null
     var onUnavailable: ((String) -> Unit)? = null
@@ -292,7 +292,7 @@ private class JaSourceStatusBridge {
                                                     when (event) {
                                                         "PROGRESS" -> {
                                                             val position = report.optLong("positionMs", -1L)
-                                                            if (position >= 0L && started) onProgress?.invoke(position)
+                                                            if (position >= 0L && started) onProgress?.invoke(position, report.optLong("durationMs", 0L))
                                                         }
                                                         "STALLED" -> if (started) onStalled?.invoke()
                                                         "VIDEO_STARTED" -> if (!started) {
@@ -424,7 +424,7 @@ private class JaOverlayGuardBridge {
 fun GeckoExperimentalPlayer(
     url: String,
     resumePositionMs: Long = 0L,
-    onProgress: (Long) -> Unit = {},
+    onProgress: (Long, Long) -> Unit = { _, _ -> },
     onPlaybackStalled: () -> Unit = {},
     showRestore: Boolean = false,
     showDiagnostics: Boolean = false,
@@ -489,7 +489,7 @@ fun GeckoExperimentalPlayer(
     remoteBridge.onControlModeClosed = { webControlMode = false }
     val sourceStatusBridge = remember(url, reload) { JaSourceStatusBridge() }
     sourceStatusBridge.resumePositionMs = resumePositionMs
-    sourceStatusBridge.onProgress = { latestOnProgress(it) }
+    sourceStatusBridge.onProgress = { position, duration -> latestOnProgress(position, duration) }
     sourceStatusBridge.onStalled = { latestOnStalled() }
     val overlayGuard = remember(url, reload) { JaOverlayGuardBridge() }
     var videoStarted by remember(url, reload) { mutableStateOf(false) }

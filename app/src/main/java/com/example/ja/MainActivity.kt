@@ -19,6 +19,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusTarget
@@ -119,6 +121,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable fun StreamingApp(dao: WatchDao) {
     val appContext = LocalContext.current.applicationContext
+    remember { WatchedStore.initialize(appContext); true }
+    val watched by WatchedStore.watched.collectAsState()
+    fun marked(item: TitleItem) = item.copy(watched = WatchedStore.key(item.id, item.type) in watched)
+    var pendingEpisodeFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val repo = remember { TmdbRepository() }
     val detailsRepo = remember { TmdbDetailsRepository() }
     val peopleRepo = remember { TmdbPersonRepository() }
@@ -414,13 +420,15 @@ class MainActivity : ComponentActivity() {
     // DETAILS_NAV v1.1.4b: retain every title/person route so Back returns to its caller.
     LaunchedEffect(Unit) { Log.i("JA_DETAILS_NAV", "v1.1.4b navigation patch active") }
     fun showTitle(item: TitleItem) {
+        pendingEpisodeFocus = null
         selected = item; episodes = emptyList(); seasons = emptyList()
         // Details load TMDB metadata only; no provider HTTP or hidden-video tests.
         Log.i("JA_SERVERS", "DETAILS_NO_PROBES type=${item.type} tmdb=${item.id}")
         if (item.type == "tv") scope.launch {
             try {
                 val loadedSeasons = repo.seasons(item.id)
-                val selectedSeason = loadedSeasons.firstOrNull() ?: 1
+                val selectedSeason = history.firstOrNull { it.mediaId == item.id && it.mediaType == "tv" &&
+                    it.episode > 0 && it.season in loadedSeasons }?.season ?: loadedSeasons.firstOrNull() ?: 1
                 val loadedEpisodes = repo.episodes(item.id, selectedSeason)
                 // Ignore an old response if the user has already navigated away.
                 if (selected?.id == item.id && selected?.type == item.type) {
@@ -483,6 +491,7 @@ class MainActivity : ComponentActivity() {
     fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L) {
         // Direct playback: no HTTP preflight, no detached verification, and no
         // preference/HTTP ranking. Each failed player falls back locally.
+        if (item.type == "tv") pendingEpisodeFocus = s to e
         resumePositionMs = startAtMs
         playbackSessionId += 1
         error = null
@@ -538,7 +547,7 @@ class MainActivity : ComponentActivity() {
         scope.launch {
             try {
                 val saved = dao.find(item.id, item.type, s, e)
-                if (saved != null && saved.positionMs >= 5_000L) {
+                if (saved != null && saved.positionMs >= 5_000L && WatchedStore.key(item.id, item.type, s, e) !in watched) {
                     resumePositionMs = saved.positionMs
                     resumePrompt = PlaybackRequest(item, s, e)
                 } else startPlayback(item, s, e)
@@ -591,6 +600,7 @@ class MainActivity : ComponentActivity() {
             playback != null -> {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=ANDROID_BACK")
                 playback = null
+                refreshHistory()
             }
             selected != null || selectedPerson != null -> backFromDetails()
             searchGenre != null -> exitGenre()
@@ -670,6 +680,7 @@ class MainActivity : ComponentActivity() {
             onClose = {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=PLAYER_BACK_BUTTON")
                 playback = null
+                refreshHistory()
             }
         )
         }
@@ -690,22 +701,12 @@ class MainActivity : ComponentActivity() {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 Text("Player controls", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text("Choose which controls appear over GeckoView. Android's system Back action still exits playback.", color = Color.LightGray)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = showBack, onCheckedChange = { showBack = it; settings.showBack = it })
-                    Text("Show Back button", color = Color.White)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = showRestore, onCheckedChange = { showRestore = it; settings.showRestore = it })
-                    Text("Show Restore Episode button", color = Color.White)
-                }
+                TvSettingsToggle("Show Back button", showBack) { showBack = it; settings.showBack = it }
+                TvSettingsToggle("Show Restore Episode button", showRestore) { showRestore = it; settings.showRestore = it }
                 Spacer(Modifier.height(16.dp))
                 Text("Player diagnostics", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = showPlayerDiagnostics,
-                        onCheckedChange = { showPlayerDiagnostics = it; settings.showPlayerDiagnostics = it }
-                    )
-                    Text("Show player diagnostics overlay", color = Color.White)
+                TvSettingsToggle("Show player diagnostics overlay", showPlayerDiagnostics) {
+                    showPlayerDiagnostics = it; settings.showPlayerDiagnostics = it
                 }
                 Text(
                     "Shows provider, loading, media and navigation diagnostics over GeckoView. " +
@@ -715,15 +716,8 @@ class MainActivity : ComponentActivity() {
                 )
                 Spacer(Modifier.height(16.dp))
                 Text("Android TV display performance", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = matchTvFrameRate,
-                        onCheckedChange = { enabled ->
-                            matchTvFrameRate = enabled
-                            settings.matchTvFrameRate = enabled
-                        }
-                    )
-                    Text("Match TV frame rate during playback", color = Color.White)
+                TvSettingsToggle("Match TV frame rate during playback", matchTvFrameRate) {
+                    matchTvFrameRate = it; settings.matchTvFrameRate = it
                 }
                 Text(
                     "Enabled by default on Android TV; disabled on phones. JA measures video frames to " +
@@ -731,16 +725,9 @@ class MainActivity : ComponentActivity() {
                         "Your previous display preference is restored when playback closes.",
                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = matchTvResolution,
-                        enabled = matchTvFrameRate,
-                        onCheckedChange = { enabled ->
-                            matchTvResolution = enabled
-                            settings.matchTvResolution = enabled
-                        }
-                    )
-                    Text("Match TV output resolution to video (experimental)", color = Color.White)
+                TvSettingsToggle("Match TV output resolution to video (experimental)",
+                    matchTvResolution, enabled = matchTvFrameRate) {
+                    matchTvResolution = it; settings.matchTvResolution = it
                 }
                 Text(
                     "Optional Android TV test: a 1080-class video can request 1080p at its matching frame rate " +
@@ -783,7 +770,7 @@ class MainActivity : ComponentActivity() {
                     "Switching to Off waits for both filtering extensions to be disabled.",
                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                 if (adBlockerMode == JaGeckoAdBlockers.UBLOCK) {
-                    Button(onClick = {
+                    TvFocusButton(onClick = {
                         blockerToolsError = null
                         JaGeckoAdBlockers.managementPages(appContext) { pages, problem ->
                             blockerTools = pages
@@ -870,10 +857,21 @@ class MainActivity : ComponentActivity() {
             TitleDetailsScreen(
                 item = item,
                 repo = detailsRepo,
+                watchedKeys = watched,
+                pendingEpisodeFocus = pendingEpisodeFocus,
+                onEpisodeFocusRestored = { pendingEpisodeFocus = null },
+                onSetWatched = { s, e, value ->
+                    scope.launch {
+                        try {
+                            PlaybackProgress.setWatched(dao, item.id, item.type, s, e, value)
+                            refreshHistory()
+                        } catch (problem: Exception) { error = "Could not save watched status. Please retry." }
+                    }
+                },
                 isFavorite = history.any { it.mediaId == item.id && it.mediaType == item.type && it.favorite },
                 onPlay = {
                     if (item.type == "movie") play(item)
-                    else play(item, season, episodes.firstOrNull()?.episode ?: 1)
+                    else nextUnwatchedEpisode(item.id, episodes, watched)?.let { play(item, it.season, it.episode) }
                 },
                 onToggleFavorite = {
                     scope.launch {
@@ -893,11 +891,13 @@ class MainActivity : ComponentActivity() {
                 season = season,
                 episodes = episodes,
                 onSeasonSelected = { chosen ->
+                    pendingEpisodeFocus = null
                     season = chosen
                     episodes = emptyList()
                     scope.launch {
                         try {
-                            episodes = repo.episodes(item.id, chosen)
+                            val loaded = repo.episodes(item.id, chosen)
+                            if (selected?.id == item.id && selected?.type == item.type && season == chosen) episodes = loaded
                         } catch (ex: Exception) { error = ex.message }
                     }
                 },
@@ -920,9 +920,9 @@ class MainActivity : ComponentActivity() {
                     loading = searchLoading,
                     hasSearched = searchHasSearched,
                     error = searchError,
-                    results = searchResponse,
+                    results = searchResponse.copy(titles = searchResponse.titles.map { marked(it) }),
                     selectedGenre = searchGenre,
-                    genreTitles = searchGenreTitles,
+                    genreTitles = searchGenreTitles.map { marked(it) },
                     genreLoading = searchGenreLoading,
                     genreLoadingMore = searchGenreLoadingMore,
                     genreHasMore = searchGenrePage in 1 until searchGenreTotalPages,
@@ -956,6 +956,12 @@ class MainActivity : ComponentActivity() {
                     val loadedPage = if (isMovieTab) popularPage else tvPopularPage
                     val totalPages = if (isMovieTab) popularTotalPages else tvPopularTotalPages
                     val pageError = if (isMovieTab) popularError else tvPopularError
+                    var pageFocusId by remember(tab, activeView) { mutableStateOf<Int?>(null) }
+                    LaunchedEffect(pageFocusId) {
+                        val id = pageFocusId ?: return@LaunchedEffect
+                        val index = titles.indexOfFirst { it.id == id }
+                        if (index >= 0) gridState.scrollToItem(index + 1)
+                    }
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 152.dp),
                         state = gridState,
@@ -972,7 +978,10 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         gridItems(titles, key = { "popular-${it.type}-${it.id}" }) { item ->
-                            JaSearchTitleCard(item) { open(item) }
+                            JaSearchTitleCard(marked(item),
+                                restoreFocus = pageFocusId == item.id,
+                                onFocusRestored = { pageFocusId = null }
+                            ) { open(item) }
                         }
                         if (pageError != null) {
                             item(span = { GridItemSpan(maxLineSpan) }, key = "popular-error") {
@@ -984,13 +993,19 @@ class MainActivity : ComponentActivity() {
                                 LinearProgressIndicator(Modifier.fillMaxWidth())
                             }
                         }
-                        if (!loading && (loadedPage == 0 || loadedPage < totalPages)) {
+                        if (loadedPage == 0 || loadedPage < totalPages) {
                             item(span = { GridItemSpan(maxLineSpan) }, key = "popular-more") {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                                     TvFocusButton(
-                                        onClick = { if (isMovieTab) loadMorePopular() else loadMorePopularTV() },
+                                        onClick = {
+                                            if (!loading) {
+                                                val index = lastLoadedRowIndex(gridState, titles.size, 1)
+                                                pageFocusId = titles.getOrNull(index)?.id
+                                                if (isMovieTab) loadMorePopular() else loadMorePopularTV()
+                                            }
+                                        },
                                         colors = ButtonDefaults.buttonColors(containerColor = accent)
-                                    ) { Text(if (loadedPage == 0) "Retry" else "Load More", color = Color.Black) }
+                                    ) { Text(if (loading) "Loading…" else if (loadedPage == 0) "Retry" else "Load More", color = Color.Black) }
                                 }
                             }
                         }
@@ -1009,7 +1024,7 @@ class MainActivity : ComponentActivity() {
                                 val rowState = genreScrollStates.getOrPut("$tab:${row.name}") { LazyListState() }
                                 LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     items(row.titles, key = { "${it.type}-${it.id}" }) { item ->
-                                        PosterTile(item) { open(item) }
+                                        PosterTile(marked(item)) { open(item) }
                                     }
                                 }
                             }
@@ -1066,7 +1081,7 @@ class MainActivity : ComponentActivity() {
                             contentPadding = PaddingValues(bottom = 24.dp)
                         ) {
                             gridItems(favoriteTitles, key = { "favorite-${it.type}-${it.id}" }) { item ->
-                                JaSearchTitleCard(item) { open(item) }
+                                JaSearchTitleCard(marked(item)) { open(item) }
                             }
                         }
                     }
@@ -1078,7 +1093,7 @@ class MainActivity : ComponentActivity() {
                     results.chunked(50).forEach { group ->
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 14.dp)) {
                             items(group, key = { "${it.type}-${it.id}" }) { item ->
-                                PosterTile(item) { open(item) }
+                                PosterTile(marked(item)) { open(item) }
                             }
                         }
                     }
@@ -1119,6 +1134,7 @@ private fun TvFocusButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
+    enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -1128,6 +1144,7 @@ private fun TvFocusButton(
             .onFocusChanged { focused = it.isFocused }
             .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(24.dp)) else Modifier),
         colors = colors,
+        enabled = enabled,
         content = content
     )
 }
@@ -1154,7 +1171,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             .padding(3.dp)
     ) {
         AsyncImage(item.posterUrl, item.title, Modifier.fillMaxWidth().height(190.dp), contentScale = ContentScale.Crop)
-        Text(item.title, modifier = Modifier.fillMaxWidth(), maxLines = 2,
+        Text((if (item.watched) "✓ " else "") + item.title, modifier = Modifier.fillMaxWidth(), maxLines = 2,
             overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, color = Color.White)
     }
 }
@@ -1262,13 +1279,13 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     delay(5_000L)
                     val position = player.currentPosition.coerceAtLeast(0)
                     onPositionChanged(position)
-                    PlaybackProgress.save(dao, r, position)
+                    PlaybackProgress.save(dao, r, position, player.duration)
                 }
             }
             DisposableEffect(player, request) {
                 onDispose {
                     val r = request
-                    PlaybackProgress.save(dao, r, player.currentPosition.coerceAtLeast(0))
+                    PlaybackProgress.save(dao, r, player.currentPosition.coerceAtLeast(0), player.duration)
                     player.release()
                 }
             }
@@ -1302,9 +1319,9 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                 GeckoExperimentalPlayer(
                     url = source.url,
                     resumePositionMs = resumePositionMs,
-                    onProgress = { position ->
+                    onProgress = { position, duration ->
                         onPositionChanged(position)
-                        PlaybackProgress.save(dao, request, position)
+                        PlaybackProgress.save(dao, request, position, duration)
                     },
                     onPlaybackStalled = {
                         recoveryReason = "Playback stopped advancing. Retry or choose another server."
@@ -1417,4 +1434,18 @@ private class PlayerControlSettings(context: Context) {
     var adBlockerMode: String
         get() = JaGeckoAdBlockers.normalized(prefs.getString("ad_blocker_mode", JaGeckoAdBlockers.UBLOCK) ?: JaGeckoAdBlockers.UBLOCK)
         set(value) { prefs.edit().putString("ad_blocker_mode", JaGeckoAdBlockers.normalized(value)).apply() }
+}
+
+@Composable
+private fun TvSettingsToggle(label: String, checked: Boolean, enabled: Boolean = true,
+    onChanged: (Boolean) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth()
+        .onFocusChanged { focused = it.isFocused }
+        .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+        .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChanged)
+        .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+        Text(label, color = if (enabled) Color.White else Color.Gray, modifier = Modifier.padding(start = 8.dp))
+    }
 }

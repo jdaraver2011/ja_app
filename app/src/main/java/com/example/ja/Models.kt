@@ -2,7 +2,7 @@ package com.example.ja
 
 import androidx.room.*
 
-data class TitleItem(val id: Int, val title: String, val overview: String, val poster: String?, val backdrop: String?, val type: String, val rating: Double = 0.0) {
+data class TitleItem(val id: Int, val title: String, val overview: String, val poster: String?, val backdrop: String?, val type: String, val rating: Double = 0.0, val watched: Boolean = false) {
     val posterUrl get() = poster?.let { "https://image.tmdb.org/t/p/w500$it" }
     val backdropUrl get() = backdrop?.let { "https://image.tmdb.org/t/p/w780$it" }
 }
@@ -23,4 +23,10 @@ data class WatchItem(val mediaId: Int, val mediaType: String, val season: Int = 
 @Database(entities = [WatchItem::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): WatchDao
+}
+
+internal fun nextUnwatchedEpisode(id: Int, episodes: List<EpisodeItem>, watched: Set<String>): EpisodeItem? {
+    val next = JaWatchRules.nextUnwatched(episodes.map { it.episode }.toIntArray(),
+        episodes.map { WatchedStore.key(id, "tv", it.season, it.episode) in watched }.toBooleanArray())
+    return episodes.firstOrNull { it.episode == next }
 }

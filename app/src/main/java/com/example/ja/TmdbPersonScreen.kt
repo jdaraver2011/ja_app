@@ -202,6 +202,8 @@ private fun PersonBackButton(onClick: () -> Unit, label: String) {
 
 @Composable
 private fun PersonKnownForCard(credit: TmdbPersonFilmCredit, onClick: () -> Unit) {
+    val watched by WatchedStore.watched.collectAsState()
+    val label = (if (WatchedStore.key(credit.title.id, credit.title.type) in watched) "✓ " else "") + credit.title.title
     var focused by remember { mutableStateOf(false) }
     Column(
         Modifier.width(130.dp)
@@ -216,7 +218,7 @@ private fun PersonKnownForCard(credit: TmdbPersonFilmCredit, onClick: () -> Unit
                 .clip(RoundedCornerShape(7.dp)).background(personSurface),
             contentScale = ContentScale.Crop
         )
-        Text(credit.title.title, color = Color.White, fontSize = 12.sp, maxLines = 2,
+        Text(label, color = Color.White, fontSize = 12.sp, maxLines = 2,
             overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
         credit.year?.let { Text(it, color = personMuted, fontSize = 11.sp) }
@@ -225,6 +227,8 @@ private fun PersonKnownForCard(credit: TmdbPersonFilmCredit, onClick: () -> Unit
 
 @Composable
 private fun PersonFilmographyRow(credit: TmdbPersonFilmCredit, onClick: () -> Unit) {
+    val watched by WatchedStore.watched.collectAsState()
+    val label = (if (WatchedStore.key(credit.title.id, credit.title.type) in watched) "✓ " else "") + credit.title.title
     var focused by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth()
@@ -243,7 +247,7 @@ private fun PersonFilmographyRow(credit: TmdbPersonFilmCredit, onClick: () -> Un
             contentScale = ContentScale.Crop
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(credit.title.title, color = Color.White, fontWeight = FontWeight.SemiBold,
+            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
                 listOfNotNull(credit.year, credit.title.type.uppercase(), credit.role)

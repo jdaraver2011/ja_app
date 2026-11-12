@@ -4,6 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -11,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -21,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import java.util.Locale
 
 // JA's existing palette. This page is separate from the GeckoView/remote player.
@@ -34,6 +38,10 @@ fun TitleDetailsScreen(
     item: TitleItem,
     repo: TmdbDetailsRepository,
     isFavorite: Boolean,
+    watchedKeys: Set<String> = emptySet(),
+    pendingEpisodeFocus: Pair<Int, Int>? = null,
+    onEpisodeFocusRestored: () -> Unit = {},
+    onSetWatched: (Int, Int, Boolean) -> Unit = { _, _, _ -> },
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenRecommendation: (TitleItem) -> Unit,
@@ -49,6 +57,10 @@ fun TitleDetailsScreen(
     onSaveScrollY: (Int) -> Unit = {}
 ) {
     val detailsScrollState = rememberScrollState()
+    val episodeRow = rememberLazyListState()
+    val episodeFocus = remember { FocusRequester() }
+    val watchedMovie = WatchedStore.key(item.id, item.type) in watchedKeys
+    val nextEpisode = nextUnwatchedEpisode(item.id, episodes, watchedKeys)
     DisposableEffect(item.type, item.id) {
         onDispose { onSaveScrollY(detailsScrollState.value) }
     }
@@ -69,6 +81,19 @@ fun TitleDetailsScreen(
         if (!detailsLoading && restoreScrollY != null) {
             withFrameNanos { }
             detailsScrollState.scrollTo(restoreScrollY)
+        }
+    }
+
+    LaunchedEffect(pendingEpisodeFocus, episodes, detailsLoading) {
+        val target = pendingEpisodeFocus ?: return@LaunchedEffect
+        if (detailsLoading) return@LaunchedEffect
+        val index = episodes.indexOfFirst { it.season == target.first && it.episode == target.second }
+        if (index >= 0) {
+            episodeRow.scrollToItem(index)
+            snapshotFlow { episodeRow.layoutInfo.visibleItemsInfo.any { it.index == index } }.first { it }
+            withFrameNanos { }
+            episodeFocus.requestFocus()
+            onEpisodeFocusRestored()
         }
     }
 
@@ -146,7 +171,14 @@ fun TitleDetailsScreen(
                         horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DetailsActionButton("▶  Play", primary = true, compact = compact, onClick = onPlay)
+                        DetailsActionButton(
+                            if (item.type == "movie") "▶  Play" else nextEpisode?.let { "▶ S${it.season} E${it.episode}" }
+                                ?: if (episodes.isEmpty()) "Loading episodes…" else "✓ Season watched",
+                            primary = true, compact = compact,
+                            enabled = item.type == "movie" || nextEpisode != null, onClick = onPlay)
+                        if (item.type == "movie") DetailsActionButton(
+                            if (watchedMovie) "✓ Watched · Mark unwatched" else "Mark watched",
+                            compact = compact, onClick = { onSetWatched(0, 0, !watchedMovie) })
                         DetailsActionButton(
                             if (isFavorite) "★  Favorited" else "☆  Favorite",
                             compact = compact,
@@ -184,9 +216,13 @@ fun TitleDetailsScreen(
             }
             if (episodes.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(episodes, key = { it.episode }) { ep ->
-                        DetailsEpisodeCard(ep, onClick = { onEpisodePlay(ep) })
+                LazyRow(state = episodeRow, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(episodes, key = { "${it.season}:${it.episode}" }) { ep ->
+                        val watched = WatchedStore.key(item.id, "tv", ep.season, ep.episode) in watchedKeys
+                        DetailsEpisodeCard(ep, watched,
+                            modifier = if (pendingEpisodeFocus == (ep.season to ep.episode)) Modifier.focusRequester(episodeFocus) else Modifier,
+                            onSetWatched = { onSetWatched(ep.season, ep.episode, !watched) },
+                            onClick = { onEpisodePlay(ep) })
                     }
                 }
             }
@@ -255,7 +291,7 @@ fun TitleDetailsScreen(
                             contentScale = ContentScale.Crop
                         )
                         Text(
-                            suggested.title, color = Color.White, fontSize = 12.sp,
+                            (if (WatchedStore.key(suggested.id, suggested.type) in watchedKeys) "✓ " else "") + suggested.title, color = Color.White, fontSize = 12.sp,
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth().padding(top = 5.dp)
@@ -311,11 +347,13 @@ private fun DetailsActionButton(
     text: String,
     primary: Boolean = false,
     compact: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
     Button(
         onClick = onClick,
+        enabled = enabled,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (primary) detailsAccent else detailsSurface,
             contentColor = if (primary) Color.Black else Color.White
@@ -333,18 +371,23 @@ private fun DetailsActionButton(
 }
 
 @Composable
-private fun DetailsEpisodeCard(ep: EpisodeItem, onClick: () -> Unit) {
+private fun DetailsEpisodeCard(ep: EpisodeItem, watched: Boolean, modifier: Modifier,
+    onSetWatched: () -> Unit, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    Column(
-        Modifier.width(190.dp).heightIn(min = 92.dp)
-            .clip(RoundedCornerShape(12.dp)).background(detailsSurface)
-            .onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier)
-            .clickable(onClick = onClick).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text("S${ep.season} E${ep.episode}", color = detailsAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Text(ep.name, color = Color.White, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        Text("▶ Play episode", color = detailsMuted, fontSize = 11.sp)
+    Column(Modifier.width(190.dp).clip(RoundedCornerShape(12.dp)).background(detailsSurface)) {
+        Column(
+            modifier.fillMaxWidth().heightIn(min = 100.dp)
+                .onFocusChanged { focused = it.isFocused }
+                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier)
+                .clickable(onClick = onClick).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text("${if (watched) "✓ " else ""}S${ep.season} E${ep.episode}", color = detailsAccent,
+                fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(ep.name, color = Color.White, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text("▶ Play episode", color = detailsMuted, fontSize = 11.sp)
+        }
+        DetailsActionButton(if (watched) "Mark unwatched" else "Mark watched",
+            compact = true, onClick = onSetWatched)
     }
 }
