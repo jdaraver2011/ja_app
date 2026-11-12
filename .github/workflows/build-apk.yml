@@ -63,6 +63,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-cache-tests" app/src/main/java/com/example/ja/JaTimedCache.java tests/JaTimedCacheTest.java
           java -cp "$RUNNER_TEMP/ja-cache-tests" com.example.ja.JaTimedCacheTest
+      - name: Test display mode recovery
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-recovery-tests" app/src/main/java/com/example/ja/JaFrameRateRecovery.java tests/JaFrameRateRecoveryTest.java
+          java -cp "$RUNNER_TEMP/ja-recovery-tests" com.example.ja.JaFrameRateRecoveryTest
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
@@ -71,7 +75,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-1.1.6-review9-debug
+          name: JA-1.1.6-review10-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
