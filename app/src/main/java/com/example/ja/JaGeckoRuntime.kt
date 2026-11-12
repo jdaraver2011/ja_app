@@ -14,6 +14,21 @@ internal object JaGeckoRuntime {
     const val EXTENSION_SCRIPT_PREF = "dom.max_ext_content_script_run_time"
     private var instance: GeckoRuntime? = null
 
+    /** Only called after the user confirms the root-level double-Back exit. */
+    fun shutdownForExit(onComplete: () -> Unit) {
+        val runtime = instance
+        if (runtime == null) { onComplete(); return }
+        try {
+            runtime.setDelegate(object : GeckoRuntime.Delegate {
+                override fun onShutdown() { onComplete() }
+            })
+            runtime.shutdown()
+        } catch (error: Exception) {
+            Log.w("JA_STARTUP", "EXPLICIT_EXIT_SHUTDOWN_FAILED", error)
+            onComplete()
+        }
+    }
+
     fun get(context: Context): GeckoRuntime {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Gecko runtime requires the main thread" }
         instance?.let { return it }

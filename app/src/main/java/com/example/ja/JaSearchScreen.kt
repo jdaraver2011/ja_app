@@ -36,6 +36,7 @@ private val searchMuted = Color(0xFFB5BEC6)
 /** Search results are hoisted by MainActivity so returning from a title/person retains the query. */
 @Composable
 fun JaSearchScreen(
+    returnFocus: JaTitleReturnFocus? = null,
     query: String,
     gridState: LazyGridState,
     onQueryChange: (String) -> Unit,
@@ -154,6 +155,7 @@ fun JaSearchScreen(
             // Keep existing titles visible during additional-page requests.
             items(genreTitles, key = { "genre-title-${it.type}-${it.id}" }) { title ->
                 JaSearchTitleCard(title,
+                    returnFocus = returnFocus, returnKey = "Search:Genre:${selectedGenre.type}:${selectedGenre.id}:${title.type}:${title.id}",
                     restoreFocus = genreFocusId == title.id,
                     onFocusRestored = { genreFocusId = null }
                 ) { onOpenTitle(title) }
@@ -196,7 +198,7 @@ fun JaSearchScreen(
                     JaSearchSection("Movies", movieResults.size)
                 }
                 items(movieResults, key = { "movie-${it.id}" }) { title ->
-                    JaSearchTitleCard(title) { onOpenTitle(title) }
+                    JaSearchTitleCard(title, returnFocus = returnFocus, returnKey = "Search:Result:${title.type}:${title.id}") { onOpenTitle(title) }
                 }
             }
             if (tvResults.isNotEmpty()) {
@@ -204,7 +206,7 @@ fun JaSearchScreen(
                     JaSearchSection("TV Shows", tvResults.size)
                 }
                 items(tvResults, key = { "tv-${it.id}" }) { title ->
-                    JaSearchTitleCard(title) { onOpenTitle(title) }
+                    JaSearchTitleCard(title, returnFocus = returnFocus, returnKey = "Search:Result:${title.type}:${title.id}") { onOpenTitle(title) }
                 }
             }
             if (results.people.isNotEmpty()) {
@@ -219,7 +221,7 @@ fun JaSearchScreen(
                     )
                 }
                 items(results.people, key = { "person-${it.credit.id}" }) { person ->
-                    JaSearchPersonCard(person) { onOpenPerson(person.credit) }
+                    JaSearchPersonCard(person, returnFocus) { onOpenPerson(person.credit) }
                 }
             }
             if (results.genres.isNotEmpty()) {
@@ -300,11 +302,13 @@ private fun JaSearchButton(
 internal fun JaSearchTitleCard(
     title: TitleItem,
     modifier: Modifier = Modifier,
+    returnFocus: JaTitleReturnFocus? = null,
+    returnKey: String? = null,
     restoreFocus: Boolean = false,
     onFocusRestored: () -> Unit = {},
     onClick: () -> Unit
 ) {
-    val ownRequester = remember { FocusRequester() }
+    val ownRequester = rememberTitleReturnRequester(returnFocus, returnKey)
     LaunchedEffect(restoreFocus) {
         if (restoreFocus) {
             withFrameNanos { }
@@ -322,9 +326,9 @@ internal fun JaSearchTitleCard(
     ) {
         Column(
             modifier = modifier.width(140.dp).focusRequester(ownRequester)
-                .onFocusChanged { focused = it.isFocused }
+                .onFocusChanged { focused = it.isFocused; if (it.isFocused && returnKey != null) returnFocus?.restored(returnKey) }
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(9.dp)) else Modifier)
-                .clickable(onClick = onClick)
+                .clickable { if (returnKey != null) returnFocus?.opened(returnKey); onClick() }
                 .padding(3.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -347,13 +351,15 @@ internal fun JaSearchTitleCard(
 }
 
 @Composable
-private fun JaSearchPersonCard(person: JaSearchPerson, onClick: () -> Unit) {
+private fun JaSearchPersonCard(person: JaSearchPerson, returnFocus: JaTitleReturnFocus?, onClick: () -> Unit) {
+    val returnKey = "Search:Person:${person.credit.id}"
+    val requester = rememberTitleReturnRequester(returnFocus, returnKey)
     var focused by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier.fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
+        modifier = Modifier.fillMaxWidth().focusRequester(requester)
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) returnFocus?.restored(returnKey) }
             .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
-            .clickable(onClick = onClick).padding(3.dp),
+            .clickable { returnFocus?.opened(returnKey); onClick() }.padding(3.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {

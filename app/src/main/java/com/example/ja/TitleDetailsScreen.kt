@@ -47,7 +47,6 @@ fun TitleDetailsScreen(
     onOpenRecommendation: (TitleItem) -> Unit,
     onOpenPerson: (TmdbPersonCredit) -> Unit,
     onBack: () -> Unit,
-    backLabel: String,
     seasons: List<Int>,
     season: Int,
     episodes: List<EpisodeItem>,
@@ -109,7 +108,7 @@ fun TitleDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            DetailsActionButton("← Back to $backLabel", onClick = onBack)
+            JaCompactBackButton(onClick = onBack)
         }
         // Compact header for both movies and TV shows. The oversized backdrop
         // has been removed to bring Overview (and TV seasons) into view sooner.

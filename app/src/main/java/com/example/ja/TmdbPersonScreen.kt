@@ -11,7 +11,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -35,7 +41,6 @@ fun TmdbPersonScreen(
     repository: TmdbPersonRepository,
     onBack: () -> Unit,
     onOpenTitle: (TitleItem) -> Unit,
-    backLabel: String = "title",
     filmographyPage: Int = 0,
     onFilmographyPageChange: (Int) -> Unit = {},
     restoreScrollPosition: Pair<Int, Int>? = null,
@@ -43,6 +48,8 @@ fun TmdbPersonScreen(
 ) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scrollScope = rememberCoroutineScope()
+    val backFocus = remember(person.id) { FocusRequester() }
+    val biographyFocus = remember(person.id) { FocusRequester() }
     // Save on navigation away; restoration waits until TMDB details are loaded.
     DisposableEffect(person.id) {
         onDispose {
@@ -77,7 +84,21 @@ fun TmdbPersonScreen(
         state = listState,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { PersonBackButton(onClick = onBack, label = backLabel) }
+        item(key = "back") {
+            JaCompactBackButton(onClick = onBack, modifier = Modifier.focusRequester(backFocus)
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && !loading && personInfo != null) {
+                        scrollScope.launch {
+                            val biographyIndex = 2 + (if (error != null) 1 else 0)
+                            listState.scrollToItem(biographyIndex)
+                            snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == "biography" } }.first { it }
+                            withFrameNanos { }
+                            biographyFocus.requestFocus()
+                        }
+                        true
+                    } else false
+                })
+        }
 
         item { BoxWithConstraints(Modifier.fillMaxWidth()) {
             val compact = maxWidth < 620.dp
@@ -85,8 +106,8 @@ fun TmdbPersonScreen(
                 AsyncImage(
                     model = personInfo?.profileUrl ?: person.profileUrl,
                     contentDescription = "Portrait of ${personInfo?.name ?: person.name}",
-                    modifier = Modifier.width(if (compact) 116.dp else 200.dp)
-                        .height(if (compact) 172.dp else 300.dp)
+                    modifier = Modifier.width(if (compact) 84.dp else 144.dp)
+                        .height(if (compact) 126.dp else 212.dp)
                         .clip(RoundedCornerShape(12.dp)).background(personSurface),
                     contentScale = ContentScale.Crop
                 )
@@ -109,11 +130,17 @@ fun TmdbPersonScreen(
         error?.let { message -> item { Text("TMDB person details unavailable: $message", color = personMuted) } }
 
         if (!loading && personInfo != null) {
-            item { Text("Biography", fontSize = 22.sp, color = Color.White, fontWeight = FontWeight.SemiBold) }
-            item {
-                Text(
-                    personInfo?.biography ?: "No biography is currently available from TMDB.",
-                    color = Color.White, fontSize = 15.sp, lineHeight = 23.sp
+            item(key = "biography") {
+                PersonBiography(
+                    text = personInfo?.biography ?: "No biography is currently available from TMDB.",
+                    requester = biographyFocus,
+                    onUpToBack = {
+                        scrollScope.launch {
+                            listState.scrollToItem(0)
+                            withFrameNanos { }
+                            backFocus.requestFocus()
+                        }
+                    }
                 )
             }
             if (!personInfo?.alsoKnownAs.isNullOrEmpty()) {
@@ -141,7 +168,7 @@ fun TmdbPersonScreen(
                 val start = page * 50
                 val credits = allCredits.drop(start).take(50)
                 // LazyColumn items before the filmography heading (loaded state).
-                val filmographyHeaderIndex = 4 +
+                val filmographyHeaderIndex = 3 +
                     (if (error != null) 1 else 0) +
                     (if (!personInfo?.alsoKnownAs.isNullOrEmpty()) 1 else 0) +
                     (if (!personInfo?.knownForTitles.isNullOrEmpty()) 2 else 0)
@@ -188,16 +215,36 @@ private fun PersonFact(label: String, value: String) {
     }
 }
 
+/** A bounded reading panel keeps long biographies accessible with the remote. */
 @Composable
-private fun PersonBackButton(onClick: () -> Unit, label: String) {
+private fun PersonBiography(text: String, requester: FocusRequester, onUpToBack: () -> Unit) {
+    val scroll = rememberScrollState()
+    val step = with(LocalDensity.current) { 72.dp.toPx() }
     var focused by remember { mutableStateOf(false) }
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(containerColor = personSurface, contentColor = Color.White),
-        modifier = Modifier.onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier),
-        shape = RoundedCornerShape(12.dp)
-    ) { Text("← Back to $label") }
+    Column(
+        Modifier.fillMaxWidth().focusRequester(requester)
+            .onFocusChanged { focused = it.isFocused }
+            .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) false
+                else when (event.key) {
+                    Key.DirectionDown -> if (scroll.canScrollForward) { scroll.dispatchRawDelta(step); true } else false
+                    Key.DirectionUp -> {
+                        if (scroll.canScrollBackward) scroll.dispatchRawDelta(-step) else onUpToBack()
+                        true
+                    }
+                    else -> false
+                }
+            }.focusable().padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Biography", fontSize = 22.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+        // The outer panel owns remote focus; this inner scroll area has one reading target.
+        Column(Modifier.fillMaxWidth().heightIn(max = 220.dp)
+            .focusProperties { canFocus = false }.verticalScroll(scroll)) {
+            Text(text, color = Color.White, fontSize = 15.sp, lineHeight = 23.sp)
+        }
+    }
 }
 
 @Composable

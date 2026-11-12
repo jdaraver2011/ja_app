@@ -1,6 +1,9 @@
 package com.example.ja
 
 import android.util.Log
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +16,16 @@ import kotlinx.coroutines.sync.withLock
 object PlaybackProgress {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
+    private val pending = mutableSetOf<Job>()
+    /** Finish queued resume/watched writes before the explicit process exit. */
+    suspend fun flush() {
+        while (true) {
+            val jobs = synchronized(pending) { pending.toList() }
+            if (jobs.isEmpty()) break
+            jobs.joinAll()
+        }
+        withContext(Dispatchers.IO) { mutex.withLock { } }
+    }
     suspend fun setWatched(dao: WatchDao, id: Int, type: String, season: Int, episode: Int, watched: Boolean) {
         withContext(Dispatchers.IO) {
             mutex.withLock {
@@ -26,7 +39,7 @@ object PlaybackProgress {
     fun save(dao: WatchDao, request: PlaybackRequest?, positionMs: Long, durationMs: Long = 0L) {
         val r = request ?: return
         if (positionMs < 0) return
-        scope.launch {
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             mutex.withLock {
                 try {
                     dao.updateProgress(r.media.id, r.media.type, r.season, r.episode,
@@ -37,5 +50,8 @@ object PlaybackProgress {
                 } catch (error: Exception) { Log.w("JA_PROGRESS", "SAVE_FAILED", error) }
             }
         }
+        synchronized(pending) { pending.add(job) }
+        job.invokeOnCompletion { synchronized(pending) { pending.remove(job) } }
+        job.start()
     }
 }

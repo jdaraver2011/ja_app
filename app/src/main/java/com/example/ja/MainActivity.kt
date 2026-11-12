@@ -22,6 +22,10 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.input.key.onKeyEvent
@@ -99,6 +103,25 @@ private fun jaAllowedSourceChoices(registered: List<PlaybackChoice>): List<Playb
         .sortedBy { jaActiveSourceIds.indexOf(it.id) }
 
 class MainActivity : ComponentActivity() {
+    private var explicitExit = false
+
+    fun closeFromDoubleBack() {
+        if (explicitExit) return
+        explicitExit = true
+        finishAndRemoveTask()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Home, app switching and configuration changes never take this path.
+        if (explicitExit) {
+            val main = android.os.Handler(android.os.Looper.getMainLooper())
+            val terminate = Runnable { android.os.Process.killProcess(android.os.Process.myPid()) }
+            main.postDelayed(terminate, 5000L)
+            JaGeckoRuntime.shutdownForExit { main.post(terminate) }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i("JA_STARTUP", "APP_BUILD versionName=${BuildConfig.VERSION_NAME} versionCode=${BuildConfig.VERSION_CODE}")
@@ -120,7 +143,19 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable fun StreamingApp(dao: WatchDao) {
+    val activity = LocalContext.current as? MainActivity
     val appContext = LocalContext.current.applicationContext
+    val titleReturnFocus = remember { JaTitleReturnFocus() }
+    val exitGate = remember { JaDoubleBackExit() }
+    var exiting by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) exitGate.reset()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     remember { WatchedStore.initialize(appContext); true }
     val watched by WatchedStore.watched.collectAsState()
     fun marked(item: TitleItem) = item.copy(watched = WatchedStore.key(item.id, item.type) in watched)
@@ -156,6 +191,7 @@ class MainActivity : ComponentActivity() {
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
+    val continueScrollState = rememberScrollState()
     var genreRows by remember { mutableStateOf(emptyList<GenreRow>()) }
     var genresLoading by remember { mutableStateOf(false) }
     // Movies can switch between the existing genre rows and a paged popular grid.
@@ -234,6 +270,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     fun runSearch(text: String, desiredMode: JaSearchMode) {
+        titleReturnFocus.clear()
         searchRevision += 1
         searchReturnBookmark = null
         pendingSearchRestore = null
@@ -479,6 +516,7 @@ class MainActivity : ComponentActivity() {
         } else {
             selectedPerson = null
             selected = null
+            titleReturnFocus.returned()
             Log.i("JA_DETAILS_NAV", "BACK_TO_CATALOG depth=0")
         }
         if (tab == "Search" && selected == null && selectedPerson == null) {
@@ -597,7 +635,11 @@ class MainActivity : ComponentActivity() {
         playbackChoiceIndex = next
         playback = target.source
     }
-    BackHandler(playback != null || selected != null || selectedPerson != null || (tab == "Search" && searchGenre != null)) {
+    LaunchedEffect(tab, selected?.id, selectedPerson?.id, playback, searchGenre, blockerTools) {
+        exitGate.reset()
+    }
+    BackHandler {
+        if (exiting) return@BackHandler
         when {
             playback != null -> {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=ANDROID_BACK")
@@ -605,8 +647,24 @@ class MainActivity : ComponentActivity() {
                 refreshHistory()
             }
             selected != null || selectedPerson != null -> backFromDetails()
-            searchGenre != null -> exitGenre()
+            tab == "Search" && searchGenre != null -> exitGenre()
+            else -> {
+                if (exitGate.press(android.os.SystemClock.elapsedRealtime())) {
+                    exiting = true
+                    scope.launch {
+                        PlaybackProgress.flush()
+                        activity?.closeFromDoubleBack()
+                    }
+                } else android.widget.Toast.makeText(appContext,
+                    "Press Back again to exit", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
+    }
+    if (exiting) {
+        Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) {
+            Text("Closing JA…", color = Color.White)
+        }
+        return
     }
     blockerTools?.let { pages ->
         JaBlockerTools(pages = pages, onClose = { blockerTools = null })
@@ -694,7 +752,7 @@ class MainActivity : ComponentActivity() {
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf("Movies", "TV", "Search", "Favorites", "Continue", "Settings")) { t ->
-                TvFocusButton(onClick = { tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null }, colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)) { Text(t, color = Color.Black) }
+                TvFocusButton(onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null }, colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)) { Text(t, color = Color.Black) }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -844,7 +902,6 @@ class MainActivity : ComponentActivity() {
                 person = activePerson,
                 repository = peopleRepo,
                 onBack = { backFromDetails() },
-                backLabel = if (selected == null) "Search" else "title",
                 onOpenTitle = { creditTitle -> open(creditTitle, fromDetails = true) },
                 filmographyPage = personFilmographyPages[activePerson.id] ?: 0,
                 onFilmographyPageChange = { page -> personFilmographyPages[activePerson.id] = page },
@@ -887,9 +944,6 @@ class MainActivity : ComponentActivity() {
                 onOpenRecommendation = { suggested -> open(suggested, fromDetails = true) },
                 onOpenPerson = { person -> openPerson(person) },
                 onBack = { backFromDetails() },
-                backLabel = detailsBackStack.lastOrNull()?.let { destination ->
-                    destination.person?.name ?: destination.title?.title ?: "Search"
-                } ?: if (tab == "Search") "Search" else "Catalog",
                 seasons = seasons,
                 season = season,
                 episodes = episodes,
@@ -912,6 +966,7 @@ class MainActivity : ComponentActivity() {
         } else {
             if (tab == "Search") {
                 JaSearchScreen(
+                    returnFocus = titleReturnFocus,
                     query = search, onQueryChange = { search = it },
                     gridState = searchGridState,
                     mode = searchMode,
@@ -982,6 +1037,7 @@ class MainActivity : ComponentActivity() {
                         }
                         gridItems(titles, key = { "popular-${it.type}-${it.id}" }) { item ->
                             JaSearchTitleCard(marked(item),
+                                returnFocus = titleReturnFocus, returnKey = "$tab:Popular:${item.type}:${item.id}",
                                 restoreFocus = pageFocusId == item.id,
                                 onFocusRestored = { pageFocusId = null }
                             ) { open(item) }
@@ -1027,7 +1083,7 @@ class MainActivity : ComponentActivity() {
                                 val rowState = genreScrollStates.getOrPut("$tab:${row.name}") { LazyListState() }
                                 LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     items(row.titles, key = { "${it.type}-${it.id}" }) { item ->
-                                        PosterTile(marked(item)) { open(item) }
+                                        PosterTile(marked(item), titleReturnFocus, "$tab:Genres:${row.name}:${item.type}:${item.id}") { open(item) }
                                     }
                                 }
                             }
@@ -1084,7 +1140,8 @@ class MainActivity : ComponentActivity() {
                             contentPadding = PaddingValues(bottom = 24.dp)
                         ) {
                             gridItems(favoriteTitles, key = { "favorite-${it.type}-${it.id}" }) { item ->
-                                JaSearchTitleCard(marked(item)) { open(item) }
+                                JaSearchTitleCard(marked(item), returnFocus = titleReturnFocus,
+                                    returnKey = "Favorites:$favoritesView:${item.type}:${item.id}") { open(item) }
                             }
                         }
                     }
@@ -1092,11 +1149,12 @@ class MainActivity : ComponentActivity() {
             } else {
                 Text(tab, style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Spacer(Modifier.height(8.dp))
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    results.chunked(50).forEach { group ->
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 14.dp)) {
+                Column(Modifier.verticalScroll(continueScrollState)) {
+                    results.chunked(50).forEachIndexed { rowIndex, group ->
+                        val rowState = genreScrollStates.getOrPut("Continue:$rowIndex") { LazyListState() }
+                        LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 14.dp)) {
                             items(group, key = { "${it.type}-${it.id}" }) { item ->
-                                PosterTile(marked(item)) { open(item) }
+                                PosterTile(marked(item), titleReturnFocus, "Continue:$rowIndex:${item.type}:${item.id}") { open(item) }
                             }
                         }
                     }
@@ -1163,14 +1221,15 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     )
 }
 
-@Composable private fun PosterTile(item: TitleItem, onClick: () -> Unit) {
+@Composable private fun PosterTile(item: TitleItem, returnFocus: JaTitleReturnFocus,
+    returnKey: String, onClick: () -> Unit) {
+    val requester = rememberTitleReturnRequester(returnFocus, returnKey)
     var focused by remember { mutableStateOf(false) }
     Column(
-        Modifier.width(140.dp)
-            .onFocusChanged { focused = it.isFocused }
+        Modifier.width(140.dp).focusRequester(requester)
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) returnFocus.restored(returnKey) }
             .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(8.dp)) else Modifier)
-            .clickable(onClick = onClick)
-            .focusable()
+            .clickable { returnFocus.opened(returnKey); onClick() }
             .padding(3.dp)
     ) {
         AsyncImage(item.posterUrl, item.title, Modifier.fillMaxWidth().height(190.dp), contentScale = ContentScale.Crop)
