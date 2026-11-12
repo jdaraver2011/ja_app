@@ -245,6 +245,7 @@ private class JaRemoteBridge {
  */
 private class JaSourceStatusBridge {
     var resumePositionMs: Long = 0L
+    var restartFromBeginning: Boolean = false
     var onProgress: ((Long, Long) -> Unit)? = null
     var onStalled: (() -> Unit)? = null
     var onStarted: (() -> Unit)? = null
@@ -282,7 +283,7 @@ private class JaSourceStatusBridge {
                                     override fun onConnect(port: WebExtension.Port) {
                                         if (!connected) return
                                         Log.i("JA_SOURCES", "SOURCE_STATUS_PORT_CONNECTED")
-                                        try { port.postMessage(JSONObject().put("action", "resume").put("positionMs", resumePositionMs)) }
+                                        try { port.postMessage(JSONObject().put("action", "resume").put("positionMs", resumePositionMs).put("restart", restartFromBeginning)) }
                                         catch (_: Exception) { }
                                         port.setDelegate(object : WebExtension.PortDelegate {
                                             override fun onPortMessage(message: Any, port: WebExtension.Port) {
@@ -428,6 +429,7 @@ private class JaOverlayGuardBridge {
 fun GeckoExperimentalPlayer(
     url: String,
     resumePositionMs: Long = 0L,
+    restartFromBeginning: Boolean = false,
     onProgress: (Long, Long) -> Unit = { _, _ -> },
     onPlaybackStalled: () -> Unit = {},
     showRestore: Boolean = false,
@@ -493,6 +495,7 @@ fun GeckoExperimentalPlayer(
     remoteBridge.onControlModeClosed = { webControlMode = false }
     val sourceStatusBridge = remember(url, reload) { JaSourceStatusBridge() }
     sourceStatusBridge.resumePositionMs = resumePositionMs
+    sourceStatusBridge.restartFromBeginning = restartFromBeginning
     sourceStatusBridge.onProgress = { position, duration -> latestOnProgress(position, duration) }
     sourceStatusBridge.onStalled = { latestOnStalled() }
     val overlayGuard = remember(url, reload) { JaOverlayGuardBridge() }

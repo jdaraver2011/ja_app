@@ -487,12 +487,14 @@ class MainActivity : ComponentActivity() {
     }
     var resumePrompt by remember { mutableStateOf<PlaybackRequest?>(null) }
     var resumePositionMs by remember { mutableStateOf(0L) }
+    var restartFromBeginning by remember { mutableStateOf(false) }
     var resumeLookupBusy by remember { mutableStateOf(false) }
-    fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L) {
+    fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L, restart: Boolean = false) {
         // Direct playback: no HTTP preflight, no detached verification, and no
         // preference/HTTP ranking. Each failed player falls back locally.
         if (item.type == "tv") pendingEpisodeFocus = s to e
         resumePositionMs = startAtMs
+        restartFromBeginning = restart
         playbackSessionId += 1
         error = null
         playback = null
@@ -570,7 +572,7 @@ class MainActivity : ComponentActivity() {
                 scope.launch {
                     try {
                         dao.updateProgress(pending.media.id, pending.media.type, pending.season, pending.episode, 0L, System.currentTimeMillis())
-                        startPlayback(pending.media, pending.season, pending.episode, 0L)
+                        startPlayback(pending.media, pending.season, pending.episode, 0L, restart = true)
                     } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
                     catch (problem: Exception) { error = "Could not reset saved progress. Please try again." }
                 }
@@ -622,13 +624,14 @@ class MainActivity : ComponentActivity() {
         PlayerScreen(
             source = playback!!, request = request, dao = dao,
             resumePositionMs = resumePositionMs,
+            restartFromBeginning = restartFromBeginning,
             onRetry = { playbackSessionId += 1 },
             onDisableBlockerAndRetry = {
                 adBlockerMode = JaGeckoAdBlockers.OFF
                 settings.adBlockerMode = JaGeckoAdBlockers.OFF
                 playbackSessionId += 1
             },
-            onPositionChanged = { resumePositionMs = it },
+            onPositionChanged = { resumePositionMs = it; restartFromBeginning = false },
             showBack = showBack, showRestore = showRestore,
             showDiagnostics = showPlayerDiagnostics,
             matchTvFrameRate = matchTvFrameRate,
@@ -1194,6 +1197,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     onDisableBlockerAndRetry: () -> Unit = {},
     onPositionChanged: (Long) -> Unit = {},
     resumePositionMs: Long = 0L,
+    restartFromBeginning: Boolean = false,
     onSourceStarted: (PlaybackSource) -> Unit = { _ -> },
     onTopLevelRedirect: (String) -> Unit = {},
     onSourceFailure: (PlaybackSource, String) -> Unit = { _, _ -> },
@@ -1274,7 +1278,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             }
             LaunchedEffect(player, request) {
                 val r = request ?: return@LaunchedEffect
-                if (resumePositionMs > 0) player.seekTo(resumePositionMs)
+                if (restartFromBeginning || resumePositionMs > 0) player.seekTo(resumePositionMs)
                 while (true) {
                     delay(5_000L)
                     val position = player.currentPosition.coerceAtLeast(0)
@@ -1319,6 +1323,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                 GeckoExperimentalPlayer(
                     url = source.url,
                     resumePositionMs = resumePositionMs,
+                    restartFromBeginning = restartFromBeginning,
                     onProgress = { position, duration ->
                         onPositionChanged(position)
                         PlaybackProgress.save(dao, request, position, duration)
