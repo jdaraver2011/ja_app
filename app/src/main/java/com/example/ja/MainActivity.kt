@@ -68,7 +68,9 @@ import kotlinx.coroutines.delay
 
 private val bg = Color(0xFF12171D)
 private val accent = Color(0xFFE5A43B)
-private data class DetailReturnPoint(val title: TitleItem?, val person: TmdbPersonCredit?)
+private data class DetailReturnPoint(
+    val title: TitleItem?, val person: TmdbPersonCredit?, val castId: Int? = null
+)
 /** Prewarm the SAME GeckoRuntime used by the embedded player.
  * The Firefox add-on persists across restarts; Gecko only downloads it once.
  * Never hold up the catalog UI or title selection while it initializes.
@@ -160,6 +162,7 @@ class MainActivity : ComponentActivity() {
     val watched by WatchedStore.watched.collectAsState()
     fun marked(item: TitleItem) = item.copy(watched = WatchedStore.key(item.id, item.type) in watched)
     var pendingEpisodeFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var pendingCastFocus by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val repo = remember { TmdbRepository() }
     val detailsRepo = remember { TmdbDetailsRepository() }
     val peopleRepo = remember { TmdbPersonRepository() }
@@ -457,6 +460,7 @@ class MainActivity : ComponentActivity() {
     // DETAILS_NAV v1.1.4b: retain every title/person route so Back returns to its caller.
     LaunchedEffect(Unit) { Log.i("JA_DETAILS_NAV", "v1.1.4b navigation patch active") }
     fun showTitle(item: TitleItem) {
+        pendingCastFocus = null
         pendingEpisodeFocus = null
         selected = item; episodes = emptyList(); seasons = emptyList()
         // Details load TMDB metadata only; no provider HTTP or hidden-video tests.
@@ -489,12 +493,15 @@ class MainActivity : ComponentActivity() {
         showTitle(item)
     }
     fun openPerson(person: TmdbPersonCredit) {
+        pendingEpisodeFocus = null
+        pendingCastFocus = null
         if (tab == "Search" && selected == null && selectedPerson == null) {
             searchReturnBookmark = searchGridState.firstVisibleItemIndex to searchGridState.firstVisibleItemScrollOffset
         }
         // From title details, remember the title. From Search, return straight to Search.
         if (selected != null || selectedPerson != null) {
-            detailsBackStack.add(DetailReturnPoint(selected, selectedPerson))
+            detailsBackStack.add(DetailReturnPoint(selected, selectedPerson,
+                castId = if (selectedPerson == null && selected != null) person.id else null))
         } else {
             detailsBackStack.clear()
         }
@@ -511,6 +518,9 @@ class MainActivity : ComponentActivity() {
                 seasons = emptyList()
             } else if (selected?.id != previous.title.id || selected?.type != previous.title.type) {
                 showTitle(previous.title)
+            }
+            if (previous.person == null && previous.title != null && previous.castId != null) {
+                pendingCastFocus = "${previous.title.type}:${previous.title.id}" to previous.castId
             }
             Log.i("JA_DETAILS_NAV", "BACK_TO_${if (previous.person == null) "TITLE" else "PERSON"} id=${previous.title?.id ?: 0} depth=${detailsBackStack.size}")
         } else {
@@ -918,6 +928,8 @@ class MainActivity : ComponentActivity() {
                 item = item,
                 repo = detailsRepo,
                 watchedKeys = watched,
+                pendingCastFocusId = pendingCastFocus?.takeIf { it.first == "${item.type}:${item.id}" }?.second,
+                onCastFocusRestored = { pendingCastFocus = null },
                 pendingEpisodeFocus = pendingEpisodeFocus,
                 onEpisodeFocusRestored = { pendingEpisodeFocus = null },
                 onSetWatched = { s, e, value ->

@@ -40,6 +40,8 @@ fun TitleDetailsScreen(
     repo: TmdbDetailsRepository,
     isFavorite: Boolean,
     watchedKeys: Set<String> = emptySet(),
+    pendingCastFocusId: Int? = null,
+    onCastFocusRestored: () -> Unit = {},
     pendingEpisodeFocus: Pair<Int, Int>? = null,
     onEpisodeFocusRestored: () -> Unit = {},
     onSetWatched: (Int, Int, Boolean) -> Unit = { _, _, _ -> },
@@ -59,6 +61,8 @@ fun TitleDetailsScreen(
     val detailsScrollState = rememberScrollState()
     val episodeRow = rememberLazyListState()
     val episodeFocus = remember { FocusRequester() }
+    val castRow = rememberLazyListState()
+    val castFocus = remember { FocusRequester() }
     val watchedMovie = WatchedStore.key(item.id, item.type) in watchedKeys
     val nextEpisode = nextUnwatchedEpisode(item.id, episodes, watchedKeys)
     DisposableEffect(item.type, item.id) {
@@ -94,6 +98,22 @@ fun TitleDetailsScreen(
             withFrameNanos { }
             episodeFocus.requestFocus()
             onEpisodeFocusRestored()
+        }
+    }
+
+    LaunchedEffect(pendingCastFocusId, detailsLoading, details?.cast) {
+        val personId = pendingCastFocusId ?: return@LaunchedEffect
+        if (detailsLoading) return@LaunchedEffect
+        val index = details?.cast.orEmpty().indexOfFirst { it.id == personId }
+        if (index >= 0) {
+            castRow.scrollToItem(index)
+            snapshotFlow { castRow.layoutInfo.visibleItemsInfo.any { it.index == index } }.first { it }
+            // The vertical details bookmark is restored by the earlier effect.
+            withFrameNanos { }
+            withFrameNanos { }
+            castFocus.requestFocus()
+        } else if (detailsError != null || details != null) {
+            onCastFocusRestored()
         }
     }
 
@@ -231,12 +251,16 @@ fun TitleDetailsScreen(
 
         if (!details?.cast.isNullOrEmpty()) {
             DetailsHeading("Cast & Crew")
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            LazyRow(state = castRow, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(details!!.cast, key = { it.id }) { person ->
                     var focused by remember { mutableStateOf(false) }
                     Column(
                         Modifier.width(100.dp)
-                            .onFocusChanged { focused = it.isFocused }
+                            .then(if (pendingCastFocusId == person.id) Modifier.focusRequester(castFocus) else Modifier)
+                            .onFocusChanged {
+                                focused = it.isFocused
+                                if (it.isFocused && pendingCastFocusId == person.id) onCastFocusRestored()
+                            }
                             .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier)
                             .clickable { onOpenPerson(person) }
                             .padding(4.dp),
@@ -366,7 +390,6 @@ private fun DetailsActionButton(
             vertical = if (compact) 6.dp else 9.dp
         ),
         modifier = Modifier.onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier)
     ) {
         Text(text, fontWeight = FontWeight.SemiBold, fontSize = if (compact) 12.sp else 14.sp, maxLines = 1)
     }

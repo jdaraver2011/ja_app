@@ -9,7 +9,7 @@ public final class JaBiographyNavigation {
             case SELECT: return reading ? Action.END_READING : Action.BEGIN_READING;
             case BACK: return reading ? Action.END_READING : Action.PROPAGATE;
             case UP: return reading ? (canScroll ? Action.SCROLL_UP : Action.STAY) : Action.PREVIOUS;
-            case DOWN: return reading && canScroll ? Action.SCROLL_DOWN : Action.NEXT;
+            case DOWN: return reading ? (canScroll ? Action.SCROLL_DOWN : Action.STAY) : Action.NEXT;
             default: return Action.PROPAGATE;
         }
     }
