@@ -12,10 +12,10 @@ public final class JaBiographyNavigationTest {
         expect(Action.SCROLL_DOWN,true,Key.DOWN,true);
         expect(Action.SCROLL_UP,true,Key.UP,true);
         expect(Action.STAY,true,Key.UP,false);
-        expect(Action.NEXT,true,Key.DOWN,false); // bottom never traps the viewer
+        expect(Action.STAY,true,Key.DOWN,false); // stay in reading mode at the bottom
         expect(Action.END_READING,true,Key.BACK,true); // Back exits reading, not the person screen
         expect(Action.END_READING,true,Key.SELECT,false);
         expect(Action.PROPAGATE,false,Key.BACK,false);
-        System.out.println("PASS: opt-in reading, long/short bio bypass, scroll limits, bottom escape and Back behavior");
+        System.out.println("PASS: opt-in reading, long/short bio bypass, scroll limits, reading boundary and Back behavior");
     }
 }
