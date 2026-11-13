@@ -1,6 +1,6 @@
 package com.example.ja
 
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +43,9 @@ internal fun rememberTitleReturnRequester(state: JaTitleReturnFocus?, key: Strin
     return requester
 }
 
+internal fun jaButtonFocusBorder(focused: Boolean): BorderStroke? =
+    if (focused) BorderStroke(2.dp, Color.White) else null
+
 /** Same dimensions, padding and typography as Favorites' Movies/TV selectors. */
 @Composable
 internal fun JaCompactBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -50,8 +53,8 @@ internal fun JaCompactBackButton(onClick: () -> Unit, modifier: Modifier = Modif
     Button(
         onClick = onClick,
         modifier = modifier.height(26.dp)
-            .onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(18.dp)) else Modifier),
+            .onFocusChanged { focused = it.isFocused },
+        border = jaButtonFocusBorder(focused),
         shape = RoundedCornerShape(18.dp),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)

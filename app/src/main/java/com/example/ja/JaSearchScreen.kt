@@ -286,11 +286,11 @@ private fun JaSearchButton(
             containerColor = if (highlighted) searchAmber else searchPanel,
             contentColor = if (highlighted) Color.Black else Color.White
         ),
+        border = jaButtonFocusBorder(focused),
         shape = RoundedCornerShape(12.dp),
         modifier = modifier
             .then(if (compact) Modifier.height(26.dp) else Modifier)
-            .onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier),
+            .onFocusChanged { focused = it.isFocused },
         contentPadding = if (compact) PaddingValues(horizontal = 6.dp, vertical = 0.dp)
             else PaddingValues(horizontal = 16.dp, vertical = 11.dp)
     ) {

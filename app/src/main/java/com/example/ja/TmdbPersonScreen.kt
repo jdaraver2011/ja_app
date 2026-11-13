@@ -1,5 +1,6 @@
 package com.example.ja
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -50,6 +51,7 @@ fun TmdbPersonScreen(
     val scrollScope = rememberCoroutineScope()
     val backFocus = remember(person.id) { FocusRequester() }
     val biographyFocus = remember(person.id) { FocusRequester() }
+    val contentFocus = remember(person.id) { FocusRequester() }
     // Save on navigation away; restoration waits until TMDB details are loaded.
     DisposableEffect(person.id) {
         onDispose {
@@ -76,6 +78,28 @@ fun TmdbPersonScreen(
             // restoring before the loaded content is laid out would clamp to top.
             withFrameNanos { }
             listState.scrollToItem(restoreScrollPosition.first, restoreScrollPosition.second)
+        }
+    }
+
+    val movePastBiography: () -> Unit = {
+        val info = personInfo
+        if (info != null) scrollScope.launch {
+            val prefix = 3 + (if (error != null) 1 else 0) + (if (info.alsoKnownAs.isNotEmpty()) 1 else 0)
+            if (info.knownForTitles.isNotEmpty()) {
+                listState.scrollToItem(prefix)
+                snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == "known-for-row" } }.first { it }
+                withFrameNanos { }
+                contentFocus.requestFocus()
+            } else if (info.filmography.isNotEmpty()) {
+                val pages = (info.filmography.size + 49) / 50
+                val page = filmographyPage.coerceIn(0, pages - 1)
+                val firstCredit = info.filmography[page * 50]
+                val firstKey = "${firstCredit.title.type}:${firstCredit.title.id}"
+                listState.scrollToItem(prefix + 1 + (if (pages > 1) 1 else 0))
+                snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == firstKey } }.first { it }
+                withFrameNanos { }
+                contentFocus.requestFocus()
+            }
         }
     }
 
@@ -134,6 +158,7 @@ fun TmdbPersonScreen(
                 PersonBiography(
                     text = personInfo?.biography ?: "No biography is currently available from TMDB.",
                     requester = biographyFocus,
+                    onDownToContent = movePastBiography,
                     onUpToBack = {
                         scrollScope.launch {
                             listState.scrollToItem(0)
@@ -152,10 +177,12 @@ fun TmdbPersonScreen(
 
             if (!personInfo?.knownForTitles.isNullOrEmpty()) {
                 item { Text("Known For", fontSize = 22.sp, color = Color.White, fontWeight = FontWeight.SemiBold) }
-                item {
+                item(key = "known-for-row") {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(personInfo!!.knownForTitles, key = { "${it.title.type}:${it.title.id}" }) { credit ->
-                            PersonKnownForCard(credit, onClick = { onOpenTitle(credit.title) })
+                            PersonKnownForCard(credit,
+                                modifier = if (credit == personInfo!!.knownForTitles.first()) Modifier.focusRequester(contentFocus) else Modifier,
+                                onClick = { onOpenTitle(credit.title) })
                         }
                     }
                 }
@@ -189,7 +216,9 @@ fun TmdbPersonScreen(
                     }
                 }
                 items(credits, key = { "${it.title.type}:${it.title.id}" }) { credit ->
-                    PersonFilmographyRow(credit, onClick = { onOpenTitle(credit.title) })
+                    PersonFilmographyRow(credit,
+                        modifier = if (personInfo!!.knownForTitles.isEmpty() && credit == credits.first()) Modifier.focusRequester(contentFocus) else Modifier,
+                        onClick = { onOpenTitle(credit.title) })
                 }
                 if (pageCount > 1) {
                     item(key = "filmography-pages-bottom") {
@@ -215,31 +244,45 @@ private fun PersonFact(label: String, value: String) {
     }
 }
 
-/** A bounded reading panel keeps long biographies accessible with the remote. */
+/** Up/Down navigate past the panel until the viewer explicitly chooses to read. */
 @Composable
-private fun PersonBiography(text: String, requester: FocusRequester, onUpToBack: () -> Unit) {
+private fun PersonBiography(text: String, requester: FocusRequester, onUpToBack: () -> Unit,
+    onDownToContent: () -> Unit) {
     val scroll = rememberScrollState()
     val step = with(LocalDensity.current) { 72.dp.toPx() }
     var focused by remember { mutableStateOf(false) }
+    var reading by remember { mutableStateOf(false) }
+    fun act(action: JaBiographyNavigation.Action) {
+        when (action) {
+            JaBiographyNavigation.Action.BEGIN_READING -> reading = true
+            JaBiographyNavigation.Action.END_READING -> reading = false
+            JaBiographyNavigation.Action.SCROLL_UP -> scroll.dispatchRawDelta(-step)
+            JaBiographyNavigation.Action.SCROLL_DOWN -> scroll.dispatchRawDelta(step)
+            JaBiographyNavigation.Action.PREVIOUS -> { reading = false; onUpToBack() }
+            JaBiographyNavigation.Action.NEXT -> { reading = false; onDownToContent() }
+            else -> Unit
+        }
+    }
+    BackHandler(reading) { act(JaBiographyNavigation.action(reading, JaBiographyNavigation.Key.BACK, false)) }
     Column(
         Modifier.fillMaxWidth().focusRequester(requester)
-            .onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+            .onFocusChanged { focused = it.isFocused; if (!focused) reading = false }
+            .then(if (focused) Modifier.border(2.dp, if (reading) personAccent else Color.White, RoundedCornerShape(10.dp)) else Modifier)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) false
                 else when (event.key) {
-                    Key.DirectionDown -> if (scroll.canScrollForward) { scroll.dispatchRawDelta(step); true } else false
-                    Key.DirectionUp -> {
-                        if (scroll.canScrollBackward) scroll.dispatchRawDelta(-step) else onUpToBack()
-                        true
-                    }
+                    Key.DirectionDown -> { act(JaBiographyNavigation.action(reading, JaBiographyNavigation.Key.DOWN, scroll.canScrollForward)); true }
+                    Key.DirectionUp -> { act(JaBiographyNavigation.action(reading, JaBiographyNavigation.Key.UP, scroll.canScrollBackward)); true }
                     else -> false
                 }
-            }.focusable().padding(10.dp),
+            }.clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                act(JaBiographyNavigation.action(reading, JaBiographyNavigation.Key.SELECT, false))
+            }.padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Biography", fontSize = 22.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-        // The outer panel owns remote focus; this inner scroll area has one reading target.
+        Text(if (reading) "Reading · Up/Down to scroll · Back to finish" else "OK to read · Down to skip",
+            color = personAccent, fontSize = 11.sp)
         Column(Modifier.fillMaxWidth().heightIn(max = 220.dp)
             .focusProperties { canFocus = false }.verticalScroll(scroll)) {
             Text(text, color = Color.White, fontSize = 15.sp, lineHeight = 23.sp)
@@ -248,12 +291,12 @@ private fun PersonBiography(text: String, requester: FocusRequester, onUpToBack:
 }
 
 @Composable
-private fun PersonKnownForCard(credit: TmdbPersonFilmCredit, onClick: () -> Unit) {
+private fun PersonKnownForCard(credit: TmdbPersonFilmCredit, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val watched by WatchedStore.watched.collectAsState()
     val label = (if (WatchedStore.key(credit.title.id, credit.title.type) in watched) "✓ " else "") + credit.title.title
     var focused by remember { mutableStateOf(false) }
     Column(
-        Modifier.width(130.dp)
+        modifier.width(130.dp)
             .onFocusChanged { focused = it.isFocused }
             .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(9.dp)) else Modifier)
             .clickable(onClick = onClick).padding(3.dp),
@@ -273,12 +316,12 @@ private fun PersonKnownForCard(credit: TmdbPersonFilmCredit, onClick: () -> Unit
 }
 
 @Composable
-private fun PersonFilmographyRow(credit: TmdbPersonFilmCredit, onClick: () -> Unit) {
+private fun PersonFilmographyRow(credit: TmdbPersonFilmCredit, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val watched by WatchedStore.watched.collectAsState()
     val label = (if (WatchedStore.key(credit.title.id, credit.title.type) in watched) "✓ " else "") + credit.title.title
     var focused by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth()
+        modifier.fillMaxWidth()
             .onFocusChanged { focused = it.isFocused }
             .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(9.dp)) else Modifier)
             .clip(RoundedCornerShape(9.dp))
@@ -335,9 +378,9 @@ private fun PersonPageButton(
             containerColor = if (selected) personAccent else personSurface,
             contentColor = if (selected) Color.Black else Color.White
         ),
+        border = jaButtonFocusBorder(focused),
         shape = RoundedCornerShape(10.dp),
         contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp),
         modifier = Modifier.onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
     ) { Text(text, fontSize = 12.sp) }
 }

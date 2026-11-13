@@ -1178,8 +1178,8 @@ private fun TvSecondaryButton(
         onClick = onClick,
         modifier = Modifier
             .height(26.dp)
-            .onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(18.dp)) else Modifier),
+            .onFocusChanged { focused = it.isFocused },
+        border = jaButtonFocusBorder(focused),
         shape = RoundedCornerShape(18.dp),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
         colors = ButtonDefaults.buttonColors(containerColor = if (selected) accent else Color.DarkGray)
@@ -1202,8 +1202,8 @@ private fun TvFocusButton(
     Button(
         onClick = onClick,
         modifier = modifier
-            .onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(24.dp)) else Modifier),
+            .onFocusChanged { focused = it.isFocused },
+        border = jaButtonFocusBorder(focused),
         colors = colors,
         enabled = enabled,
         content = content
@@ -1215,8 +1215,8 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     var focused by remember { mutableStateOf(false) }
     TextButton(
         onClick = onClick,
-        modifier = Modifier.onFocusChanged { focused = it.isFocused }
-            .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(8.dp)) else Modifier),
+        modifier = Modifier.onFocusChanged { focused = it.isFocused },
+        border = jaButtonFocusBorder(focused),
         content = content
     )
 }

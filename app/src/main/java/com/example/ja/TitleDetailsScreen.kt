@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -201,27 +202,28 @@ fun TitleDetailsScreen(
 
         if (item.type == "tv") {
             DetailsHeading("Seasons & Episodes")
-            if (seasons.isEmpty()) {
-                Text("Loading seasons…", color = detailsMuted, fontSize = 13.sp)
-            } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(seasons) { candidate ->
-                        DetailsActionButton(
-                            "Season $candidate", primary = candidate == season,
-                            onClick = { onSeasonSelected(candidate) }
-                        )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (seasons.isEmpty()) {
+                    Text("Loading seasons…", color = detailsMuted, fontSize = 13.sp)
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(seasons) { candidate ->
+                            DetailsActionButton(
+                                "Season $candidate", primary = candidate == season,
+                                onClick = { onSeasonSelected(candidate) }
+                            )
+                        }
                     }
                 }
-            }
-            if (episodes.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                LazyRow(state = episodeRow, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(episodes, key = { "${it.season}:${it.episode}" }) { ep ->
-                        val watched = WatchedStore.key(item.id, "tv", ep.season, ep.episode) in watchedKeys
-                        DetailsEpisodeCard(ep, watched,
-                            modifier = if (pendingEpisodeFocus == (ep.season to ep.episode)) Modifier.focusRequester(episodeFocus) else Modifier,
-                            onSetWatched = { onSetWatched(ep.season, ep.episode, !watched) },
-                            onClick = { onEpisodePlay(ep) })
+                if (episodes.isNotEmpty()) {
+                    LazyRow(state = episodeRow, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(episodes, key = { "${it.season}:${it.episode}" }) { ep ->
+                            val watched = WatchedStore.key(item.id, "tv", ep.season, ep.episode) in watchedKeys
+                            DetailsEpisodeCard(ep, watched,
+                                modifier = if (pendingEpisodeFocus == (ep.season to ep.episode)) Modifier.focusRequester(episodeFocus) else Modifier,
+                                onSetWatched = { onSetWatched(ep.season, ep.episode, !watched) },
+                                onClick = { onEpisodePlay(ep) })
+                        }
                     }
                 }
             }
@@ -357,6 +359,7 @@ private fun DetailsActionButton(
             containerColor = if (primary) detailsAccent else detailsSurface,
             contentColor = if (primary) Color.Black else Color.White
         ),
+        border = jaButtonFocusBorder(focused),
         shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(
             horizontal = if (compact) 9.dp else 16.dp,
@@ -372,21 +375,31 @@ private fun DetailsActionButton(
 @Composable
 private fun DetailsEpisodeCard(ep: EpisodeItem, watched: Boolean, modifier: Modifier,
     onSetWatched: () -> Unit, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Column(Modifier.width(190.dp).clip(RoundedCornerShape(12.dp)).background(detailsSurface)) {
+    var playFocused by remember { mutableStateOf(false) }
+    var watchedFocused by remember { mutableStateOf(false) }
+    val playShape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)
+    val watchedShape = RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp)
+    Column(Modifier.width(168.dp).clip(RoundedCornerShape(10.dp)).background(detailsSurface)) {
         Column(
-            modifier.fillMaxWidth().heightIn(min = 100.dp)
-                .onFocusChanged { focused = it.isFocused }
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier)
-                .clickable(onClick = onClick).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier.fillMaxWidth().heightIn(min = 64.dp).clip(playShape)
+                .onFocusChanged { playFocused = it.isFocused }
+                .then(if (playFocused) Modifier.border(2.dp, Color.White, playShape) else Modifier)
+                .clickable(role = Role.Button, onClick = onClick).padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Text("${if (watched) "✓ " else ""}S${ep.season} E${ep.episode}", color = detailsAccent,
                 fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(ep.name, color = Color.White, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Text("▶ Play episode", color = detailsMuted, fontSize = 11.sp)
+            Text(ep.name, color = Color.White, fontSize = 13.sp, minLines = 2, maxLines = 2,
+                overflow = TextOverflow.Ellipsis)
         }
-        DetailsActionButton(if (watched) "Mark unwatched" else "Mark watched",
-            compact = true, onClick = onSetWatched)
+        HorizontalDivider(color = detailsMuted.copy(alpha = 0.18f))
+        Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(watchedShape)
+            .onFocusChanged { watchedFocused = it.isFocused }
+            .then(if (watchedFocused) Modifier.border(2.dp, Color.White, watchedShape) else Modifier)
+            .clickable(role = Role.Button, onClick = onSetWatched)
+            .padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (watched) "Mark unwatched" else "Mark watched", color = Color.White,
+                fontSize = 11.sp, maxLines = 1)
+        }
     }
 }
