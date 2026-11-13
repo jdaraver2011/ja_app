@@ -71,6 +71,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-exit-tests" app/src/main/java/com/example/ja/JaDoubleBackExit.java tests/JaDoubleBackExitTest.java
           java -cp "$RUNNER_TEMP/ja-exit-tests" com.example.ja.JaDoubleBackExitTest
+      - name: Test biography reading and escape controls
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-biography-tests" app/src/main/java/com/example/ja/JaBiographyNavigation.java tests/JaBiographyNavigationTest.java
+          java -cp "$RUNNER_TEMP/ja-biography-tests" com.example.ja.JaBiographyNavigationTest
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
@@ -79,7 +83,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-1.1.6-review11-debug
+          name: JA-1.1.6-review12-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
