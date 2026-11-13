@@ -75,6 +75,14 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-biography-tests" app/src/main/java/com/example/ja/JaBiographyNavigation.java tests/JaBiographyNavigationTest.java
           java -cp "$RUNNER_TEMP/ja-biography-tests" com.example.ja.JaBiographyNavigationTest
+      - name: Test movie release cutoff
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-release-tests" app/src/main/java/com/example/ja/JaMovieReleaseRules.java tests/JaMovieReleaseRulesTest.java
+          java -cp "$RUNNER_TEMP/ja-release-tests" com.example.ja.JaMovieReleaseRulesTest
+      - name: Test independent genre membership
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-genre-tests" app/src/main/java/com/example/ja/JaGenreCatalog.java tests/JaGenreCatalogTest.java
+          java -cp "$RUNNER_TEMP/ja-genre-tests" com.example.ja.JaGenreCatalogTest
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
@@ -83,7 +91,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-1.1.6-review13-debug
+          name: JA-1.1.6-review15-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
