@@ -101,13 +101,15 @@ class TmdbRepository {
             repeat(pageCount) {
                 val page = nextPage.getValue(genreId)
                 if (page > minOf(maxPages, lastPage.getValue(genreId))) return
-                val releaseFilter = if (type == "movie") "&region=US&with_release_type=4%7C6&release_date.lte=${today.minusDays(1)}" else ""
+                val releaseFilter = if (type == "movie") "&primary_release_date.lte=${JaMovieReleaseRules.releasedThrough(today)}" else ""
                 val response = fetch("discover/$type?sort_by=popularity.desc&include_adult=false&with_genres=$genreId&page=$page$releaseFilter")
                 nextPage[genreId] = page + 1
                 lastPage[genreId] = minOf(maxPages, response.optInt("total_pages", 1))
                 val results = response.optJSONArray("results") ?: return
                 for (i in 0 until results.length()) {
                     val obj = results.optJSONObject(i) ?: continue
+                    if (type == "movie" && JaMovieReleaseRules.classify(obj.optString("release_date"), today) !=
+                        JaMovieReleaseRules.Bucket.RELEASED) continue
                     val id = obj.optInt("id")
                     if (id <= 0) continue
                     val rawIds = obj.optJSONArray("genre_ids") ?: continue
