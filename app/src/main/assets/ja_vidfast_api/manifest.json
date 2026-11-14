@@ -1,0 +1,11 @@
+{
+  "manifest_version": 2,
+  "name": "JA VidFast API Adapter",
+  "version": "1.1.6.18",
+  "browser_specific_settings": {"gecko":{"id":"ja-vidfast-api@local.invalid"}},
+  "permissions": ["geckoViewAddons","nativeMessaging","nativeMessagingFromContent"],
+  "content_scripts": [{
+    "matches":["https://vidfast.vc/*"], "js":["vidfast.js"],
+    "all_frames":false, "run_at":"document_start"
+  }]
+}
