@@ -52,7 +52,13 @@ class VidFastEmbedProvider : PlaybackProvider {
         val url = Uri.Builder().scheme("https").authority("vidfast.vc")
             .encodedPath(path)
             .appendQueryParameter("autoPlay", "true")
-            .appendQueryParameter("theme", "E5A43B").build().toString()
+            .appendQueryParameter("theme", "E5A43B")
+            .appendQueryParameter("hideServer", "false")
+            .apply { if (request.media.type == "tv") {
+                appendQueryParameter("autoNext", "false")
+                appendQueryParameter("nextButton", "false")
+            } }
+            .build().toString()
         return checkedSource(url, "vidfast.vc")
     }
 }

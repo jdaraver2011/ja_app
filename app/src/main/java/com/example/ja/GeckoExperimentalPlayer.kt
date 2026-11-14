@@ -493,10 +493,16 @@ fun GeckoExperimentalPlayer(
     val remoteBridge = remember(url, reload) { JaRemoteBridge() }
     var webControlMode by remember(url, reload) { mutableStateOf(false) }
     remoteBridge.onControlModeClosed = { webControlMode = false }
+    val vidFastBridge = remember(url,reload) {
+        if (Uri.parse(url).host == "vidfast.vc") JaVidFastBridge(url,resumePositionMs,restartFromBeginning) else null
+    }
     val sourceStatusBridge = remember(url, reload) { JaSourceStatusBridge() }
     sourceStatusBridge.resumePositionMs = resumePositionMs
     sourceStatusBridge.restartFromBeginning = restartFromBeginning
-    sourceStatusBridge.onProgress = { position, duration -> latestOnProgress(position, duration) }
+    sourceStatusBridge.onProgress = { position, duration ->
+        if (vidFastBridge?.ownsProgress() != true) latestOnProgress(position, duration)
+    }
+    vidFastBridge?.onProgress = { position,duration -> latestOnProgress(position,duration) }
     sourceStatusBridge.onStalled = { latestOnStalled() }
     val overlayGuard = remember(url, reload) { JaOverlayGuardBridge() }
     var videoStarted by remember(url, reload) { mutableStateOf(false) }
@@ -564,7 +570,8 @@ fun GeckoExperimentalPlayer(
     overlayGuard.onBlocked = { event, _ ->
         if (event == "AD_FRAME_BLOCKED") blockedAdFrames++ else blockedInPageOverlays++
     }
-    sourceStatusBridge.onStarted = {
+    val confirmMediaStarted: () -> Unit = {
+        if (!videoStarted) {
         cancelNavigationWatchdog()
         videoStarted = true
         // Title banners are separate from JW control bars. Request hiding
@@ -574,7 +581,10 @@ fun GeckoExperimentalPlayer(
             Log.i("JA_TV_BRIDGE", "TITLE_CHROME_HIDE_REQUESTED")
         }
         latestOnMediaStarted()
+        }
     }
+    sourceStatusBridge.onStarted = confirmMediaStarted
+    vidFastBridge?.onStarted = confirmMediaStarted
     sourceStatusBridge.onUnavailable = { reason ->
         reportFatalOnce(reason, "Media unavailable: ${reason.take(72)}")
     }
@@ -841,8 +851,15 @@ fun GeckoExperimentalPlayer(
                                             else sourceStatusBridge.attach(runtime, this) { statusReady ->
                                                 if (!playerDisposed.get() && !gate.isTerminal()) {
                                                     if (statusReady) {
-                                                        Log.i("JA_STARTUP", "PLAYER_MONITORS_READY")
-                                                        gate.complete("monitors")
+                                                        if (vidFastBridge == null) {
+                                                            Log.i("JA_STARTUP", "PLAYER_MONITORS_READY")
+                                                            gate.complete("monitors")
+                                                        } else vidFastBridge.attach(runtime,this,::installedOnce) { apiReady ->
+                                                            if (!playerDisposed.get() && !gate.isTerminal()) {
+                                                                Log.i("JA_VIDFAST","OPTIONAL_API_READY ready=$apiReady")
+                                                                gate.complete("monitors")
+                                                            }
+                                                        }
                                                     } else gate.fail("status", "Status delegate setup failed")
                                                 }
                                             }
@@ -878,6 +895,7 @@ fun GeckoExperimentalPlayer(
             cancelNavigationWatchdog()
             remoteBridge.clear()
             sourceStatusBridge.clear()
+            vidFastBridge?.clear()
             overlayGuard.clear()
             try { session.close() } catch (_: Exception) {}
         }
@@ -950,7 +968,7 @@ fun GeckoExperimentalPlayer(
                                     armControlsIdleTask()
                                 }
                                 Log.i("JA_TV_REMOTE", "keyCode=${event.keyCode} action=$action focus=${hasFocus()}")
-                                remoteBridge.send(action)
+                                if (vidFastBridge?.send(action) != true) remoteBridge.send(action)
                                 return true
                             }
                         }

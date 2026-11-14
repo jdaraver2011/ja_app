@@ -1497,6 +1497,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             }
         }
         is PlaybackSource.Embed -> {
+            val embedUrl = remember(source) { JaVidFastBridge.resumeUrl(source.url,resumePositionMs) }
             // GeckoView is the sole embedded player for website-based sources.
             // No Chrome Custom Tabs, external browser, or Android WebView controls.
             // The effect is bound to the active source and composed player.
@@ -1519,7 +1520,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             }
             Box(Modifier.fillMaxSize()) {
                 GeckoExperimentalPlayer(
-                    url = source.url,
+                    url = embedUrl,
                     resumePositionMs = resumePositionMs,
                     restartFromBeginning = restartFromBeginning,
                     onProgress = { position, duration ->
