@@ -112,6 +112,7 @@ class TmdbRepository {
                         JaMovieReleaseRules.Bucket.RELEASED) continue
                     val id = obj.optInt("id")
                     if (id <= 0) continue
+                    if (type == "movie" && !JaVidSrcCatalog.includeMovie(id)) continue
                     val rawIds = obj.optJSONArray("genre_ids") ?: continue
                     val ids = (0 until rawIds.length())
                         .map { rawIds.optInt(it) }

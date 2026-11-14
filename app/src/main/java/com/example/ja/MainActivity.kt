@@ -160,6 +160,13 @@ class MainActivity : ComponentActivity() {
     }
     remember { WatchedStore.initialize(appContext); true }
     val watched by WatchedStore.watched.collectAsState()
+    remember { JaVidSrcCatalog.initialize(appContext); true }
+    val vidSrcSnapshot by JaVidSrcCatalog.snapshot.collectAsState()
+    val vidSrcQuality by JaVidSrcCatalog.quality.collectAsState()
+    val vidSrcPromotions by JaVidSrcCatalog.promotions.collectAsState()
+    val sourceDataVersion = vidSrcSnapshot.generation to vidSrcPromotions
+    fun sourcesCurrent(version: Pair<Long,Long>) =
+        JaVidSrcCatalog.snapshot.value.generation == version.first && JaVidSrcCatalog.promotions.value == version.second
     fun marked(item: TitleItem) = item.copy(watched = WatchedStore.key(item.id, item.type) in watched)
     var pendingEpisodeFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var pendingCastFocus by remember { mutableStateOf<Pair<String, Int>?>(null) }
@@ -170,8 +177,9 @@ class MainActivity : ComponentActivity() {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> catalogueRefresh.background()
+                Lifecycle.Event.ON_STOP -> { catalogueRefresh.background(); JaVidSrcCatalog.foreground(false) }
                 Lifecycle.Event.ON_START -> {
+                    JaVidSrcCatalog.foreground(true)
                     catalogueRefresh.foreground(java.time.LocalDate.now())
                     catalogueDate = catalogueRefresh.day()
                     catalogueGeneration = catalogueRefresh.generation()
@@ -190,8 +198,9 @@ class MainActivity : ComponentActivity() {
             catalogueGeneration = catalogueRefresh.generation()
         }
     }
+    LaunchedEffect(catalogueGeneration, catalogueDate) { JaVidSrcCatalog.refreshOverdue() }
     val repo = remember { TmdbRepository() }
-    val movieCatalogueRepo = remember(catalogueDate, catalogueGeneration) { TmdbRepository() }
+    val movieCatalogueRepo = remember(catalogueDate, catalogueGeneration, sourceDataVersion) { TmdbRepository() }
     val detailsRepo = remember { TmdbDetailsRepository() }
     val peopleRepo = remember { TmdbPersonRepository() }
     val searchRepo = remember { TmdbSearchRepository() }
@@ -227,21 +236,25 @@ class MainActivity : ComponentActivity() {
     var genresLoading by remember { mutableStateOf(false) }
     // Movies can switch between the existing genre rows and a paged popular grid.
     var moviesView by remember { mutableStateOf("Popular") }
-    val popularGridState = key(catalogueDate, catalogueGeneration) { rememberLazyGridState() }
-    var popularTitles by remember(catalogueDate, catalogueGeneration) { mutableStateOf(emptyList<TitleItem>()) }
-    var popularPage by remember(catalogueDate, catalogueGeneration) { mutableIntStateOf(0) }
-    var popularTotalPages by remember(catalogueDate, catalogueGeneration) { mutableIntStateOf(1) }
-    var popularLoading by remember(catalogueDate, catalogueGeneration) { mutableStateOf(false) }
-    var popularError by remember(catalogueDate, catalogueGeneration) { mutableStateOf<String?>(null) }
-    val otherGridState = key(catalogueDate, catalogueGeneration) { rememberLazyGridState() }
-    var otherTitles by remember(catalogueDate, catalogueGeneration) { mutableStateOf(emptyList<TitleItem>()) }
-    var otherPage by remember(catalogueDate, catalogueGeneration) { mutableIntStateOf(0) }
-    var otherTotalPages by remember(catalogueDate, catalogueGeneration) { mutableIntStateOf(1) }
-    var otherLoading by remember(catalogueDate, catalogueGeneration) { mutableStateOf(false) }
-    var otherError by remember(catalogueDate, catalogueGeneration) { mutableStateOf<String?>(null) }
-    val otherMovieIds = remember(otherTitles) { otherTitles.map { it.id }.toSet() }
+    val popularGridState = key(catalogueDate, catalogueGeneration, sourceDataVersion) { rememberLazyGridState() }
+    var popularTitles by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf(emptyList<TitleItem>()) }
+    var popularPage by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableIntStateOf(0) }
+    var popularTotalPages by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableIntStateOf(1) }
+    var popularLoading by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf(false) }
+    var popularError by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf<String?>(null) }
+    val otherGridState = key(catalogueDate, catalogueGeneration, sourceDataVersion) { rememberLazyGridState() }
+    var otherTitles by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf(emptyList<TitleItem>()) }
+    var otherPage by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableIntStateOf(0) }
+    var otherTotalPages by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableIntStateOf(1) }
+    var otherLoading by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf(false) }
+    var otherError by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf<String?>(null) }
+    val otherDisplayTitles = remember(otherTitles,vidSrcQuality.cams) {
+        (vidSrcQuality.cams.values.sortedBy { it.title } + otherTitles).distinctBy { it.id }
+    }
+    val otherMovieIds = remember(otherDisplayTitles) { otherDisplayTitles.map { it.id }.toSet() }
     fun outsideOther(titles: List<TitleItem>): List<TitleItem> = titles.filter {
-        JaMovieReleaseRules.includeOutsideOther(it.type, it.id, otherMovieIds)
+        JaMovieReleaseRules.includeOutsideOther(it.type, it.id, otherMovieIds) &&
+            (it.type != "movie" || JaVidSrcCatalog.includeMovie(it.id))
     }
     // TV has its own Popular/Genres toggle, paged results and scroll state.
     // Keep the original TV genre rows and all Movies/Search state intact.
@@ -287,6 +300,7 @@ class MainActivity : ComponentActivity() {
     var searchHasSearched by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var searchRevision by remember { mutableIntStateOf(0) }
+    var searchGenreSources by remember { mutableStateOf(sourceDataVersion) }
     var searchGenreDataGeneration by remember { mutableLongStateOf(-1L) }
     var searchGenre by remember { mutableStateOf<JaSearchGenre?>(null) }
     var searchGenreTitles by remember { mutableStateOf(emptyList<TitleItem>()) }
@@ -358,8 +372,10 @@ class MainActivity : ComponentActivity() {
         }
     }
     fun browseGenre(genre: JaSearchGenre, refreshing: Boolean = false) {
+        searchGenreSources = sourceDataVersion
         searchGenreDataGeneration = catalogueGeneration
         val requestGeneration = catalogueGeneration
+        val requestSources = sourceDataVersion
         genreSearchRevision += 1
         val revision = genreSearchRevision
         if (!refreshing) {
@@ -375,33 +391,36 @@ class MainActivity : ComponentActivity() {
         searchGenrePageError = null
         searchError = null
         searchGenreLoading = true
+        if (genre.type == "movie" && !vidSrcSnapshot.ready) { searchGenreLoading = false; return }
         scope.launch {
             try {
                 val found = searchRepo.genreTitlesPage(genre, 1)
-                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration) {
+                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration && (genre.type != "movie" || sourcesCurrent(requestSources))) {
                     searchGenreTitles = found.titles
                     searchGenrePage = found.page
                     searchGenreTotalPages = found.totalPages
                     Log.i("JA_SEARCH", "GENRE_PAGE id=${genre.id} page=${found.page} count=${found.titles.size}")
                 }
             } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
-            catch (ex: Exception) { if (genreSearchRevision == revision && catalogueGeneration == requestGeneration) searchError = ex.message }
-            finally { if (genreSearchRevision == revision && catalogueGeneration == requestGeneration) searchGenreLoading = false }
+            catch (ex: Exception) { if (genreSearchRevision == revision && catalogueGeneration == requestGeneration && (genre.type != "movie" || sourcesCurrent(requestSources))) searchError = ex.message }
+            finally { if (genreSearchRevision == revision && catalogueGeneration == requestGeneration && (genre.type != "movie" || sourcesCurrent(requestSources))) searchGenreLoading = false }
         }
     }
     fun loadMoreGenre() {
         val genre = searchGenre ?: return
+        if (genre.type == "movie" && !vidSrcSnapshot.ready) return
         if (searchGenreLoading || searchGenreLoadingMore || searchGenrePage == 0 ||
             searchGenrePage >= searchGenreTotalPages || searchGenrePage >= 500) return
         val revision = genreSearchRevision
         val requestGeneration = catalogueGeneration
+        val requestSources = sourceDataVersion
         val nextPage = searchGenrePage + 1
         searchGenreLoadingMore = true
         searchGenrePageError = null
         scope.launch {
             try {
                 val found = searchRepo.genreTitlesPage(genre, nextPage)
-                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration && searchGenre == genre) {
+                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration && (genre.type != "movie" || sourcesCurrent(requestSources)) && searchGenre == genre) {
                     searchGenreTitles = (searchGenreTitles + found.titles).distinctBy { it.type to it.id }
                     searchGenrePage = found.page
                     searchGenreTotalPages = found.totalPages
@@ -409,9 +428,9 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
             catch (ex: Exception) {
-                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration) searchGenrePageError = "Couldn't load more titles: ${ex.message}"
+                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration && (genre.type != "movie" || sourcesCurrent(requestSources))) searchGenrePageError = "Couldn't load more titles: ${ex.message}"
             } finally {
-                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration) searchGenreLoadingMore = false
+                if (genreSearchRevision == revision && catalogueGeneration == requestGeneration && (genre.type != "movie" || sourcesCurrent(requestSources))) searchGenreLoadingMore = false
             }
         }
     }
@@ -423,8 +442,10 @@ class MainActivity : ComponentActivity() {
         pendingSearchRestore = genreDirectoryBookmark
     }
     fun loadMorePopular() {
+        if (!vidSrcSnapshot.ready) return
         if (popularLoading || popularPage >= popularTotalPages || popularPage >= 500) return
         val nextPage = popularPage + 1
+        val requestSources = sourceDataVersion
         val requestDate = catalogueDate
         val requestGeneration = catalogueGeneration
         popularLoading = true
@@ -432,35 +453,36 @@ class MainActivity : ComponentActivity() {
         scope.launch {
             try {
                 val found = searchRepo.popularMoviesPage(nextPage)
-                if (java.time.LocalDate.now() != requestDate || catalogueGeneration != requestGeneration) return@launch
+                if (java.time.LocalDate.now() != requestDate || catalogueGeneration != requestGeneration || !sourcesCurrent(requestSources)) return@launch
                 popularTitles = (popularTitles + found.titles).distinctBy { it.type to it.id }
                 popularPage = found.page
                 popularTotalPages = found.totalPages
                 Log.i("JA_MOVIES", "POPULAR_PAGE page=${found.page} total=${popularTitles.size}")
             } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
             catch (ex: Exception) {
-                if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration) popularError = "Couldn't load popular movies: ${ex.message}"
+                if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration && sourcesCurrent(requestSources)) popularError = "Couldn't load popular movies: ${ex.message}"
                 Log.w("JA_MOVIES", "POPULAR_LOAD_FAILED page=$nextPage", ex)
-            } finally { if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration) popularLoading = false }
+            } finally { if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration && sourcesCurrent(requestSources)) popularLoading = false }
         }
     }
     fun loadMoreOther() {
         if (otherLoading || otherPage >= otherTotalPages || otherPage >= 500) return
         val nextPage = otherPage + 1
+        val requestSources = sourceDataVersion
         val requestDate = catalogueDate
         val requestGeneration = catalogueGeneration
         otherLoading = true; otherError = null
         scope.launch {
             try {
                 val found = searchRepo.otherMoviesPage(nextPage)
-                if (java.time.LocalDate.now() != requestDate || catalogueGeneration != requestGeneration) return@launch
+                if (java.time.LocalDate.now() != requestDate || catalogueGeneration != requestGeneration || !sourcesCurrent(requestSources)) return@launch
                 otherTitles = (otherTitles + found.titles).distinctBy { it.id }
                 otherPage = found.page
                 // A filtered batch may be empty while later source pages still match.
                 otherTotalPages = found.totalPages
             } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
-            catch (ex: Exception) { if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration) otherError = "Couldn't load Other movies: ${ex.message}" }
-            finally { if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration) otherLoading = false }
+            catch (ex: Exception) { if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration && sourcesCurrent(requestSources)) otherError = "Couldn't load Other movies: ${ex.message}" }
+            finally { if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration && sourcesCurrent(requestSources)) otherLoading = false }
         }
     }
     fun loadMorePopularTV() {
@@ -482,14 +504,16 @@ class MainActivity : ComponentActivity() {
             } finally { tvPopularLoading = false }
         }
     }
+    LaunchedEffect(playback,playbackLoading) { JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading) }
     val catalogueVisible = selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.
-    LaunchedEffect(catalogueGeneration, catalogueDate, catalogueVisible, tab, searchGenre) {
+    LaunchedEffect(catalogueGeneration, catalogueDate, catalogueVisible, tab, searchGenre, sourceDataVersion) {
         val genre = searchGenre
         if (catalogueVisible && tab == "Search" && genre != null &&
-            searchGenreDataGeneration != catalogueGeneration) browseGenre(genre, refreshing = true)
+            (searchGenreDataGeneration != catalogueGeneration || (genre.type == "movie" && searchGenreSources != sourceDataVersion)) &&
+            (genre.type != "movie" || vidSrcSnapshot.ready)) browseGenre(genre, refreshing = true)
     }
-    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate, catalogueGeneration, catalogueVisible) {
+    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate, catalogueGeneration, catalogueVisible, sourceDataVersion) {
         if (!catalogueVisible) return@LaunchedEffect
         when (tab) {
             "Movies" -> if (moviesView == "Popular" && popularPage == 0 && !popularLoading) {
@@ -504,7 +528,7 @@ class MainActivity : ComponentActivity() {
     }
     // Fetch the existing genre rows only when the corresponding Genres view is selected.
     // Popular switching keeps the previously fetched pages and individual grid scroll positions.
-    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate, catalogueGeneration, catalogueVisible) {
+    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate, catalogueGeneration, catalogueVisible, sourceDataVersion) {
         if (!catalogueVisible) return@LaunchedEffect
         refreshHistory()
         when (tab) {
@@ -513,6 +537,9 @@ class MainActivity : ComponentActivity() {
                 if (activeView == "Genres") {
                     results = emptyList()
                     val genreType = if (tab == "Movies") "movie" else "tv"
+                    if (genreType == "movie" && !vidSrcSnapshot.ready) {
+                        genreRows = emptyList(); genresLoading = true; return@LaunchedEffect
+                    }
                     val genreRepo = if (genreType == "movie") movieCatalogueRepo else repo
                     genreRows = genreRepo.cachedGenreRows(genreType).orEmpty()
                     genresLoading = genreRows.isEmpty()
@@ -541,6 +568,7 @@ class MainActivity : ComponentActivity() {
         pendingCastFocus = null
         pendingEpisodeFocus = null
         selected = item; episodes = emptyList(); seasons = emptyList()
+        JaVidSrcCatalog.observe(item)
         // Details load TMDB metadata only; no provider HTTP or hidden-video tests.
         Log.i("JA_SERVERS", "DETAILS_NO_PROBES type=${item.type} tmdb=${item.id}")
         if (item.type == "tv") scope.launch {
@@ -846,6 +874,15 @@ class MainActivity : ComponentActivity() {
         Spacer(Modifier.height(12.dp))
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
         error?.let { Text(it, color = Color(0xFFFFA8A8)) }
+        if (selected == null && selectedPerson == null && (tab == "Movies" || (tab == "Search" && searchGenre?.type == "movie"))) {
+            if (vidSrcSnapshot.busy || !vidSrcSnapshot.ready) Text(
+                if (vidSrcSnapshot.ready) "Updating VidSrc catalogue…" else "Preparing VidSrc catalogue…",
+                color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            vidSrcSnapshot.error?.let {
+                Text(it, color = Color(0xFFFFA8A8), style = MaterialTheme.typography.bodySmall)
+                if (!vidSrcSnapshot.busy) TvSecondaryButton("Retry source refresh", false) { JaVidSrcCatalog.refreshOverdue(force = true) }
+            }
+        }
         if (tab == "Settings" && selected == null) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 Text("Player controls", style = MaterialTheme.typography.titleLarge, color = Color.White)
@@ -1071,7 +1108,7 @@ class MainActivity : ComponentActivity() {
                     results = searchResponse.copy(titles = searchResponse.titles.map { marked(it) }),
                     selectedGenre = searchGenre,
                     genreTitles = outsideOther(searchGenreTitles).map { marked(it) },
-                    genreLoading = searchGenreLoading,
+                    genreLoading = searchGenreLoading || (searchGenre?.type == "movie" && !vidSrcSnapshot.ready),
                     genreLoadingMore = searchGenreLoadingMore,
                     genreHasMore = searchGenrePage in 1 until searchGenreTotalPages,
                     genrePageError = searchGenrePageError,
@@ -1099,9 +1136,9 @@ class MainActivity : ComponentActivity() {
                 if (activeView == "Popular" || activeView == "Other") {
                     val isOther = isMovieTab && activeView == "Other"
                     // The TV and Movies Popular lists share layout only, not data or scroll state.
-                    val titles = if (isOther) otherTitles else if (isMovieTab) outsideOther(popularTitles) else tvPopularTitles
+                    val titles = if (isOther) otherDisplayTitles else if (isMovieTab) outsideOther(popularTitles) else tvPopularTitles
                     val gridState = if (isOther) otherGridState else if (isMovieTab) popularGridState else tvPopularGridState
-                    val loading = if (isOther) otherLoading else if (isMovieTab) popularLoading else tvPopularLoading
+                    val loading = if (isOther) otherLoading else if (isMovieTab) popularLoading || !vidSrcSnapshot.ready else tvPopularLoading
                     val loadedPage = if (isOther) otherPage else if (isMovieTab) popularPage else tvPopularPage
                     val totalPages = if (isOther) otherTotalPages else if (isMovieTab) popularTotalPages else tvPopularTotalPages
                     val pageError = if (isOther) otherError else if (isMovieTab) popularError else tvPopularError
@@ -1121,22 +1158,23 @@ class MainActivity : ComponentActivity() {
                     ) {
                         item(span = { GridItemSpan(maxLineSpan) }, key = "popular-title") {
                             Column {
-                                Text(if (isOther) "Upcoming Movies" else if (isMovieTab) "Popular Movies" else "Popular TV Shows",
+                                Text(if (isOther) "Upcoming & CAM Movies" else if (isMovieTab) "Popular Movies" else "Popular TV Shows",
                                     style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 Text("${titles.size} titles loaded", color = Color.LightGray)
                                 if (isMovieTab) Text(
-                                    if (isOther) "Confirmed future release dates only."
-                                    else "Released by yesterday.",
+                                    if (isOther) "Upcoming releases and movies labelled CAM by VidSrc."
+                                    else "Released by yesterday, listed on VidSrc, with confirmed CAM titles excluded.",
                                     color = Color.LightGray
                                 )
                                 if (isOther && titles.isEmpty() && !loading && loadedPage > 0 && pageError == null) {
                                     Text(if (loadedPage < totalPages) "No upcoming matches on this page. Load More to keep browsing."
-                                        else "No upcoming movies found.", color = Color.LightGray)
+                                        else "No upcoming or confirmed CAM movies found.", color = Color.LightGray)
                                 }
                             }
                         }
                         gridItems(titles, key = { "popular-${it.type}-${it.id}" }) { item ->
                             JaSearchTitleCard(marked(item),
+                                badge = if (isOther) { if (item.id in vidSrcQuality.cams) "CAM" else "Upcoming" } else null,
                                 returnFocus = titleReturnFocus, returnKey = "$tab:$activeView:${item.type}:${item.id}",
                                 restoreFocus = pageFocusId == item.id,
                                 onFocusRestored = { pageFocusId = null }
@@ -1324,6 +1362,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
 @Composable private fun PosterTile(item: TitleItem, returnFocus: JaTitleReturnFocus,
     returnKey: String, onClick: () -> Unit) {
     val requester = rememberTitleReturnRequester(returnFocus, returnKey)
+    LaunchedEffect(item.id,item.type) { JaVidSrcCatalog.observe(item) }
     var focused by remember { mutableStateOf(false) }
     Column(
         Modifier.width(140.dp).focusRequester(requester)

@@ -205,7 +205,8 @@ class TmdbSearchRepository {
         bucket: JaMovieReleaseRules.Bucket? = null, today: LocalDate = LocalDate.now()): JaTitlePage {
         val results = json.optJSONArray("results") ?: error("TMDB returned an invalid title page")
         val titles = results.objects().filter {
-            type != "movie" || bucket == null || JaMovieReleaseRules.classify(it.optString("release_date"), today) == bucket
+            type != "movie" || bucket == null || (JaMovieReleaseRules.classify(it.optString("release_date"), today) == bucket &&
+                (bucket != JaMovieReleaseRules.Bucket.RELEASED || JaVidSrcCatalog.includeMovie(it.optInt("id"))))
         }.mapNotNull { asTitle(it, type) }
             .distinctBy { it.type to it.id }
         // TMDB limits listing/discover pagination; don't request beyond page 500.

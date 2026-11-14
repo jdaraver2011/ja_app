@@ -301,6 +301,7 @@ private fun JaSearchButton(
 @Composable
 internal fun JaSearchTitleCard(
     title: TitleItem,
+    badge: String? = null,
     modifier: Modifier = Modifier,
     returnFocus: JaTitleReturnFocus? = null,
     returnKey: String? = null,
@@ -308,6 +309,7 @@ internal fun JaSearchTitleCard(
     onFocusRestored: () -> Unit = {},
     onClick: () -> Unit
 ) {
+    LaunchedEffect(title.id,title.type,badge) { if (badge != "Upcoming") JaVidSrcCatalog.observe(title) }
     val ownRequester = rememberTitleReturnRequester(returnFocus, returnKey)
     LaunchedEffect(restoreFocus) {
         if (restoreFocus) {
@@ -333,6 +335,8 @@ internal fun JaSearchTitleCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
+            if (badge != null) Text(badge, color = searchAmber, fontSize = 12.sp,
+                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             AsyncImage(
                 model = title.posterUrl,
                 contentDescription = title.title,
