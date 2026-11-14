@@ -14,13 +14,12 @@ import org.json.JSONArray
 import java.net.URLEncoder
 
 
-/** Ordered genre row; each TMDB ID appears in only the first matching row. */
+/** Ordered genre row; a title may appear in multiple matching genre rows. */
 data class GenreRow(val name: String, val titles: List<TitleItem>)
 
 private data class GenreQuery(val name: String, val genreId: Int)
 
-// Display order is alphabetical. Assignment priority is deliberately different:
-// specific genres win over broad labels such as Comedy and Drama.
+// Display order is alphabetical. Each genre has independent membership.
 private val movieGenres = listOf(
     GenreQuery("Action", 28), GenreQuery("Adventure", 12), GenreQuery("Animation", 16),
     GenreQuery("Comedy", 35), GenreQuery("Crime", 80), GenreQuery("Documentary", 99),
@@ -38,16 +37,9 @@ private val tvGenres = listOf(
     GenreQuery("Sci-Fi & Fantasy", 10765), GenreQuery("Soap", 10766),
     GenreQuery("Talk", 10767), GenreQuery("War & Politics", 10768), GenreQuery("Western", 37)
 )
-private val moviePriority = listOf(
-    99, 16, 27, 10402, 37, 10752, 36, 10770, 878, 14, 80, 9648,
-    28, 12, 10751, 10749, 53, 35, 18
-)
-private val tvPriority = listOf(
-    99, 16, 10762, 10763, 10767, 10764, 37, 10768, 10765,
-    10759, 80, 9648, 10751, 10766, 35, 18
-)
 
 class TmdbRepository {
+    private var movieGenreDate = java.time.LocalDate.now()
     private val genreCache = mutableMapOf<String, List<GenreRow>>()
     private val freshGenres = JaTimedCache<String, List<GenreRow>>(2, 600_000L)
     private val seasonCache = JaTimedCache<Int, List<Int>>(24, 300_000L)
@@ -84,34 +76,33 @@ class TmdbRepository {
         return result.optString("imdb_id").takeIf { it.matches(Regex("tt[0-9]+")) }
     }
 
-    /**
-     * Option C: strict primary-genre assignment with adaptive discovery.
-     * Every title belongs exclusively to its highest-priority official TMDB
-     * genre, regardless of which discover query returned it. Never rebalance
-     * titles into lower-priority genres to fill a row.
-     *
-     * Request three pages per genre initially, then at most six additional
-     * pages per underfilled genre. Rows may remain short if priority rules
-     * assign their candidates elsewhere.
+    /** Load each genre independently, up to 50 distinct titles per row.
+     * A title is never consumed by an earlier genre. Movie discovery keeps
+     * the same release cutoff as Popular and Search genre browsing.
      */
     suspend fun genreRows(type: String, onPartial: (List<GenreRow>) -> Unit = {}): List<GenreRow> {
         require(type == "movie" || type == "tv")
-        freshGenres.get(type)?.let { onPartial(it); return it }
+        val today = java.time.LocalDate.now()
+        if (type == "movie" && movieGenreDate != today) {
+            movieGenreDate = today
+            genreCache.remove(type)
+        }
+        val freshKey = if (type == "movie") "$type:$today" else type
+        freshGenres.get(freshKey)?.let { onPartial(it); return it }
         val categories = if (type == "movie") movieGenres else tvGenres
-        val priority = if (type == "movie") moviePriority else tvPriority
         val validIds = categories.map { it.genreId }.toSet()
-        val candidates = linkedMapOf<Int, TitleItem>()
-        val memberships = mutableMapOf<Int, Set<Int>>()
         val nextPage = categories.associate { it.genreId to 1 }.toMutableMap()
         val lastPage = categories.associate { it.genreId to 9 }.toMutableMap()
         val maxPages = 9
         val targetCount = 50
+        val catalog = JaGenreCatalog<TitleItem>(categories.map { it.genreId }.toIntArray(), targetCount)
 
         suspend fun collect(genreId: Int, pageCount: Int) {
             repeat(pageCount) {
                 val page = nextPage.getValue(genreId)
                 if (page > minOf(maxPages, lastPage.getValue(genreId))) return
-                val response = fetch("discover/$type?sort_by=popularity.desc&include_adult=false&with_genres=$genreId&page=$page")
+                val releaseFilter = if (type == "movie") "&region=US&with_release_type=4%7C6&release_date.lte=${today.minusDays(1)}" else ""
+                val response = fetch("discover/$type?sort_by=popularity.desc&include_adult=false&with_genres=$genreId&page=$page$releaseFilter")
                 nextPage[genreId] = page + 1
                 lastPage[genreId] = minOf(maxPages, response.optInt("total_pages", 1))
                 val results = response.optJSONArray("results") ?: return
@@ -124,23 +115,15 @@ class TmdbRepository {
                         .map { rawIds.optInt(it) }
                         .filter { it in validIds }
                         .toSet()
-                    if (ids.isEmpty()) continue
-                    candidates.putIfAbsent(id, parse(obj, type))
-                    memberships[id] = memberships[id].orEmpty() + ids
+                    if (genreId !in ids) continue
+                    catalog.add(genreId, id, parse(obj, type))
                 }
                 if (results.length() == 0) return
             }
         }
 
-        fun allocate(): Map<Int, List<TitleItem>> {
-            val buckets = categories.associate { it.genreId to mutableListOf<TitleItem>() }
-            for ((id, item) in candidates) {
-                val genres = memberships[id].orEmpty()
-                val primary = priority.firstOrNull { it in genres } ?: continue
-                val row = buckets.getValue(primary)
-                if (row.size < targetCount) row.add(item)
-            }
-            return buckets
+        fun allocate(): Map<Int, List<TitleItem>> = categories.associate {
+            it.genreId to catalog.titles(it.genreId)
         }
 
         val limit = Semaphore(3)
@@ -191,7 +174,7 @@ class TmdbRepository {
         }
         genreCache[type] = rows
         // Partial network failures may be displayed, but remain eligible for retry.
-        if (firstError == null) freshGenres.put(type, rows)
+        if (firstError == null) freshGenres.put(freshKey, rows)
         onPartial(rows)
         return rows
     }

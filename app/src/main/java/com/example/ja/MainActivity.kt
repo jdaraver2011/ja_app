@@ -163,10 +163,25 @@ class MainActivity : ComponentActivity() {
     fun marked(item: TitleItem) = item.copy(watched = WatchedStore.key(item.id, item.type) in watched)
     var pendingEpisodeFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var pendingCastFocus by remember { mutableStateOf<Pair<String, Int>?>(null) }
-    val repo = remember { TmdbRepository() }
+    var catalogueDate by remember { mutableStateOf(java.time.LocalDate.now()) }
+    // Re-evaluate releases when returning to JA and while it remains open overnight.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) catalogueDate = java.time.LocalDate.now()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L)
+            catalogueDate = java.time.LocalDate.now()
+        }
+    }
+    val repo = remember(catalogueDate) { TmdbRepository() }
     val detailsRepo = remember { TmdbDetailsRepository() }
     val peopleRepo = remember { TmdbPersonRepository() }
-    val searchRepo = remember { TmdbSearchRepository() }
+    val searchRepo = remember(catalogueDate) { TmdbSearchRepository() }
     val provider = remember { PlaybackRegistry() }
     val serverDomainLedger = remember { ServerDomainLedger(appContext) }
     val serverPlaybackHistory = remember { ServerPlaybackHistory(appContext) }
@@ -199,12 +214,22 @@ class MainActivity : ComponentActivity() {
     var genresLoading by remember { mutableStateOf(false) }
     // Movies can switch between the existing genre rows and a paged popular grid.
     var moviesView by remember { mutableStateOf("Popular") }
-    val popularGridState = rememberLazyGridState()
-    var popularTitles by remember { mutableStateOf(emptyList<TitleItem>()) }
-    var popularPage by remember { mutableIntStateOf(0) }
-    var popularTotalPages by remember { mutableIntStateOf(1) }
-    var popularLoading by remember { mutableStateOf(false) }
-    var popularError by remember { mutableStateOf<String?>(null) }
+    val popularGridState = key(catalogueDate) { rememberLazyGridState() }
+    var popularTitles by remember(catalogueDate) { mutableStateOf(emptyList<TitleItem>()) }
+    var popularPage by remember(catalogueDate) { mutableIntStateOf(0) }
+    var popularTotalPages by remember(catalogueDate) { mutableIntStateOf(1) }
+    var popularLoading by remember(catalogueDate) { mutableStateOf(false) }
+    var popularError by remember(catalogueDate) { mutableStateOf<String?>(null) }
+    val otherGridState = key(catalogueDate) { rememberLazyGridState() }
+    var otherTitles by remember(catalogueDate) { mutableStateOf(emptyList<TitleItem>()) }
+    var otherPage by remember(catalogueDate) { mutableIntStateOf(0) }
+    var otherTotalPages by remember(catalogueDate) { mutableIntStateOf(1) }
+    var otherLoading by remember(catalogueDate) { mutableStateOf(false) }
+    var otherError by remember(catalogueDate) { mutableStateOf<String?>(null) }
+    val otherMovieIds = remember(otherTitles) { otherTitles.map { it.id }.toSet() }
+    fun outsideOther(titles: List<TitleItem>): List<TitleItem> = titles.filter {
+        JaMovieReleaseRules.includeOutsideOther(it.type, it.id, otherMovieIds)
+    }
     // TV has its own Popular/Genres toggle, paged results and scroll state.
     // Keep the original TV genre rows and all Movies/Search state intact.
     var tvView by remember { mutableStateOf("Popular") }
@@ -381,20 +406,40 @@ class MainActivity : ComponentActivity() {
     fun loadMorePopular() {
         if (popularLoading || popularPage >= popularTotalPages || popularPage >= 500) return
         val nextPage = popularPage + 1
+        val requestDate = catalogueDate
         popularLoading = true
         popularError = null
         scope.launch {
             try {
                 val found = searchRepo.popularMoviesPage(nextPage)
+                if (java.time.LocalDate.now() != requestDate) return@launch
                 popularTitles = (popularTitles + found.titles).distinctBy { it.type to it.id }
                 popularPage = found.page
                 popularTotalPages = if (found.titles.isEmpty()) found.page else found.totalPages
                 Log.i("JA_MOVIES", "POPULAR_PAGE page=${found.page} total=${popularTitles.size}")
             } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
             catch (ex: Exception) {
-                popularError = "Couldn't load popular movies: ${ex.message}"
+                if (java.time.LocalDate.now() == requestDate) popularError = "Couldn't load popular movies: ${ex.message}"
                 Log.w("JA_MOVIES", "POPULAR_LOAD_FAILED page=$nextPage", ex)
-            } finally { popularLoading = false }
+            } finally { if (java.time.LocalDate.now() == requestDate) popularLoading = false }
+        }
+    }
+    fun loadMoreOther() {
+        if (otherLoading || otherPage >= otherTotalPages || otherPage >= 500) return
+        val nextPage = otherPage + 1
+        val requestDate = catalogueDate
+        otherLoading = true; otherError = null
+        scope.launch {
+            try {
+                val found = searchRepo.otherMoviesPage(nextPage)
+                if (java.time.LocalDate.now() != requestDate) return@launch
+                otherTitles = (otherTitles + found.titles).distinctBy { it.id }
+                otherPage = found.page
+                // A filtered batch may be empty while later source pages still match.
+                otherTotalPages = found.totalPages
+            } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+            catch (ex: Exception) { if (java.time.LocalDate.now() == requestDate) otherError = "Couldn't load Other movies: ${ex.message}" }
+            finally { if (java.time.LocalDate.now() == requestDate) otherLoading = false }
         }
     }
     fun loadMorePopularTV() {
@@ -416,10 +461,12 @@ class MainActivity : ComponentActivity() {
             } finally { tvPopularLoading = false }
         }
     }
-    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView) {
+    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate) {
         when (tab) {
             "Movies" -> if (moviesView == "Popular" && popularPage == 0 && !popularLoading) {
                 loadMorePopular()
+            } else if (moviesView == "Other" && otherPage == 0 && !otherLoading) {
+                loadMoreOther()
             }
             "TV" -> if (tvView == "Popular" && tvPopularPage == 0 && !tvPopularLoading) {
                 loadMorePopularTV()
@@ -428,7 +475,7 @@ class MainActivity : ComponentActivity() {
     }
     // Fetch the existing genre rows only when the corresponding Genres view is selected.
     // Popular switching keeps the previously fetched pages and individual grid scroll positions.
-    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView) {
+    LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate) {
         refreshHistory()
         when (tab) {
             "Movies", "TV" -> {
@@ -992,7 +1039,7 @@ class MainActivity : ComponentActivity() {
                     error = searchError,
                     results = searchResponse.copy(titles = searchResponse.titles.map { marked(it) }),
                     selectedGenre = searchGenre,
-                    genreTitles = searchGenreTitles.map { marked(it) },
+                    genreTitles = outsideOther(searchGenreTitles).map { marked(it) },
                     genreLoading = searchGenreLoading,
                     genreLoadingMore = searchGenreLoadingMore,
                     genreHasMore = searchGenrePage in 1 until searchGenreTotalPages,
@@ -1009,7 +1056,7 @@ class MainActivity : ComponentActivity() {
                 val isMovieTab = tab == "Movies"
                 val activeView = if (isMovieTab) moviesView else tvView
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Popular", "Genres").forEach { view ->
+                    (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres")).forEach { view ->
                         TvSecondaryButton(
                             text = view,
                             selected = activeView == view,
@@ -1018,14 +1065,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                if (activeView == "Popular") {
+                if (activeView == "Popular" || activeView == "Other") {
+                    val isOther = isMovieTab && activeView == "Other"
                     // The TV and Movies Popular lists share layout only, not data or scroll state.
-                    val titles = if (isMovieTab) popularTitles else tvPopularTitles
-                    val gridState = if (isMovieTab) popularGridState else tvPopularGridState
-                    val loading = if (isMovieTab) popularLoading else tvPopularLoading
-                    val loadedPage = if (isMovieTab) popularPage else tvPopularPage
-                    val totalPages = if (isMovieTab) popularTotalPages else tvPopularTotalPages
-                    val pageError = if (isMovieTab) popularError else tvPopularError
+                    val titles = if (isOther) otherTitles else if (isMovieTab) outsideOther(popularTitles) else tvPopularTitles
+                    val gridState = if (isOther) otherGridState else if (isMovieTab) popularGridState else tvPopularGridState
+                    val loading = if (isOther) otherLoading else if (isMovieTab) popularLoading else tvPopularLoading
+                    val loadedPage = if (isOther) otherPage else if (isMovieTab) popularPage else tvPopularPage
+                    val totalPages = if (isOther) otherTotalPages else if (isMovieTab) popularTotalPages else tvPopularTotalPages
+                    val pageError = if (isOther) otherError else if (isMovieTab) popularError else tvPopularError
                     var pageFocusId by remember(tab, activeView) { mutableStateOf<Int?>(null) }
                     LaunchedEffect(pageFocusId) {
                         val id = pageFocusId ?: return@LaunchedEffect
@@ -1042,14 +1090,23 @@ class MainActivity : ComponentActivity() {
                     ) {
                         item(span = { GridItemSpan(maxLineSpan) }, key = "popular-title") {
                             Column {
-                                Text(if (isMovieTab) "Popular Movies" else "Popular TV Shows",
+                                Text(if (isOther) "Other Movies" else if (isMovieTab) "Popular Movies" else "Popular TV Shows",
                                     style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 Text("${titles.size} titles loaded", color = Color.LightGray)
+                                if (isMovieTab) Text(
+                                    if (isOther) "No US digital or TV release confirmed by yesterday. Playback may be unavailable."
+                                    else "US digital or TV release dated by yesterday.",
+                                    color = Color.LightGray
+                                )
+                                if (isOther && titles.isEmpty() && !loading && loadedPage > 0 && pageError == null) {
+                                    Text(if (loadedPage < totalPages) "No matches in this batch. Load More to keep browsing."
+                                        else "No Other movies found.", color = Color.LightGray)
+                                }
                             }
                         }
                         gridItems(titles, key = { "popular-${it.type}-${it.id}" }) { item ->
                             JaSearchTitleCard(marked(item),
-                                returnFocus = titleReturnFocus, returnKey = "$tab:Popular:${item.type}:${item.id}",
+                                returnFocus = titleReturnFocus, returnKey = "$tab:$activeView:${item.type}:${item.id}",
                                 restoreFocus = pageFocusId == item.id,
                                 onFocusRestored = { pageFocusId = null }
                             ) { open(item) }
@@ -1072,7 +1129,7 @@ class MainActivity : ComponentActivity() {
                                             if (!loading) {
                                                 val index = lastLoadedRowIndex(gridState, titles.size, 1)
                                                 pageFocusId = titles.getOrNull(index)?.id
-                                                if (isMovieTab) loadMorePopular() else loadMorePopularTV()
+                                                if (isOther) loadMoreOther() else if (isMovieTab) loadMorePopular() else loadMorePopularTV()
                                             }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = accent)
@@ -1094,7 +1151,7 @@ class MainActivity : ComponentActivity() {
                                 Spacer(Modifier.height(8.dp))
                                 val rowState = genreScrollStates.getOrPut("$tab:${row.name}") { LazyListState() }
                                 LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    items(row.titles, key = { "${it.type}-${it.id}" }) { item ->
+                                    items(outsideOther(row.titles), key = { "${it.type}-${it.id}" }) { item ->
                                         PosterTile(marked(item), titleReturnFocus, "$tab:Genres:${row.name}:${item.type}:${item.id}") { open(item) }
                                     }
                                 }

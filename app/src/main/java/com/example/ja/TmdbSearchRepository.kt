@@ -14,8 +14,11 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import java.time.LocalDate
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-/** Dedicated TMDB search adapter. The stable catalog and player repositories are unchanged. */
+/** TMDB search and paged browsing adapter. */
 enum class JaSearchMode(val label: String) {
     ALL("All"), TITLES("Titles"), ACTORS("Actors"), DIRECTORS("Directors"), GENRES("Genres")
 }
@@ -42,11 +45,19 @@ data class JaTitlePage(
     val page: Int,
     val totalPages: Int
 ) {
-    val hasMore: Boolean get() = page < totalPages && titles.isNotEmpty()
+    val hasMore: Boolean get() = page < totalPages
 }
 
 class TmdbSearchRepository {
     private val http = JaTmdbHttp.client
+    private val movieReleases = JaMovieReleaseRepository()
+    private val otherMutex = Mutex()
+    private var otherDate: LocalDate? = null
+    private var otherSourcePage = 1
+    private var otherSourceTotal = 500
+    private val otherPending = mutableListOf<TitleItem>()
+    private val otherSeen = mutableSetOf<Int>()
+    private val otherPages = mutableMapOf<Int, JaTitlePage>()
     private var genreCache: List<JaSearchGenre>? = null
     // A person can be primarily known for acting and also direct films or TV episodes.
     // Cache verified Director credits so repeated searches don't re-fetch every profile.
@@ -201,18 +212,65 @@ class TmdbSearchRepository {
     }
 
     private fun titlePage(json: JSONObject, type: String, requestedPage: Int): JaTitlePage {
-        val titles = json.optJSONArray("results").objects().mapNotNull { asTitle(it, type) }
+        val results = json.optJSONArray("results") ?: error("TMDB returned an invalid title page")
+        val titles = results.objects().mapNotNull { asTitle(it, type) }
             .distinctBy { it.type to it.id }
         // TMDB limits listing/discover pagination; don't request beyond page 500.
         val total = json.optInt("total_pages", requestedPage).coerceIn(1, 500)
         return JaTitlePage(titles, json.optInt("page", requestedPage).coerceIn(1, 500), total)
     }
 
-    /** TMDB's standard movie/popular list: fetch one 20-result page at a time. */
+    /** Popularity-sorted movies with a qualifying US digital/TV release by yesterday. */
     suspend fun popularMoviesPage(page: Int): JaTitlePage {
         require(page in 1..500) { "Invalid TMDB movie page" }
-        val json = fetch("movie/popular", mapOf("page" to page.toString(), "include_adult" to "false"))
+        val json = fetch("discover/movie", movieReleaseParams() + mapOf(
+            "page" to page.toString(), "include_adult" to "false", "sort_by" to "popularity.desc"
+        ))
         return titlePage(json, "movie", page)
+    }
+
+    /** Complement of the release rule within TMDB's browsable popularity catalogue.
+     * At most three raw pages per action; empty filtered batches can still have more.
+     * Commit cursor changes only after all lookups succeed, so Retry loses no titles.
+     */
+    suspend fun otherMoviesPage(page: Int): JaTitlePage = otherMutex.withLock {
+        require(page in 1..500)
+        val today = LocalDate.now()
+        if (otherDate != today) {
+            otherDate = today; otherSourcePage = 1; otherSourceTotal = 500
+            otherPending.clear(); otherSeen.clear(); otherPages.clear()
+        }
+        otherPages[page]?.let { return@withLock it }
+        require(page == otherPages.size + 1) { "Load Other pages in order" }
+        var cursor = otherSourcePage
+        var total = otherSourceTotal
+        val pending = otherPending.toMutableList()
+        val seen = otherSeen.toMutableSet()
+        var scanned = 0
+        while (pending.size < 20 && cursor <= total && scanned < 3) {
+            val raw = titlePage(fetch("movie/popular", mapOf("page" to cursor.toString(),
+                "include_adult" to "false")), "movie", cursor)
+            val limit = Semaphore(4)
+            val classified = coroutineScope {
+                raw.titles.map { title -> async {
+                    limit.withPermit { title to movieReleases.released(title.id, today) }
+                } }.awaitAll()
+            }
+            classified.forEach { (title, released) ->
+                if (!released && seen.add(title.id)) pending.add(title)
+            }
+            total = raw.totalPages
+            cursor++; scanned++
+        }
+        val titles = pending.take(20)
+        val remaining = pending.drop(titles.size)
+        val hasMore = remaining.isNotEmpty() || cursor <= total
+        val result = JaTitlePage(titles, page, if (hasMore) 500 else page)
+        otherSourcePage = cursor; otherSourceTotal = total
+        otherPending.clear(); otherPending.addAll(remaining)
+        otherSeen.clear(); otherSeen.addAll(seen)
+        otherPages[page] = result
+        result
     }
 
     /** TMDB's standard TV/popular list: numeric TMDB IDs and 20-result pages. */
@@ -226,7 +284,7 @@ class TmdbSearchRepository {
     suspend fun genreTitlesPage(genre: JaSearchGenre, page: Int): JaTitlePage {
         require(genre.type == "movie" || genre.type == "tv")
         require(page in 1..500) { "Invalid TMDB genre page" }
-        val json = fetch("discover/${genre.type}", mapOf(
+        val json = fetch("discover/${genre.type}", (if (genre.type == "movie") movieReleaseParams() else emptyMap()) + mapOf(
             "with_genres" to genre.id.toString(),
             "sort_by" to "popularity.desc", "include_adult" to "false", "page" to page.toString()
         ))
