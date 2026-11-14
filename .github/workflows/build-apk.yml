@@ -87,6 +87,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-catalog-refresh-tests" app/src/main/java/com/example/ja/JaCatalogRefresh.java tests/JaCatalogRefreshTest.java
           java -cp "$RUNNER_TEMP/ja-catalog-refresh-tests" com.example.ja.JaCatalogRefreshTest
+      - name: Test VidSrc feed parsing and freshness
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-vidsrc-tests" app/src/main/java/com/example/ja/JaVidSrcRules.java tests/JaVidSrcRulesTest.java
+          java -cp "$RUNNER_TEMP/ja-vidsrc-tests" com.example.ja.JaVidSrcRulesTest
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
@@ -95,7 +99,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-1.1.6-review16-debug
+          name: JA-1.1.6-review17-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
