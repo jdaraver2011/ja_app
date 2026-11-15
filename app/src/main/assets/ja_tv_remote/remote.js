@@ -15,6 +15,7 @@
     let videos;
     try { videos = document.querySelectorAll('video'); } catch (_) { return; }
     for (const video of videos) {
+      if (video.ownerDocument.querySelector('.jw-btn, .jw-seek, .jwplayer')) continue;
       if (configuredSubtitleVideos.has(video)) continue;
       configuredSubtitleVideos.add(video);
       let active = true;
@@ -595,6 +596,7 @@
       send({event:'CC_SEARCH_FOCUSED', label});
       return;
     }
+    manualPreference(kind, label);
     // Click nearest observed clickable row for both CC and Settings.
     try { item.click(); } catch (e) { send({event:'MENU_ACTIVATION_ERROR', kind, label, error:e?.name || String(e)}); return; }
     clearMenuFocus(); menuSelection = -1; ccSelectMode = false;
@@ -1261,27 +1263,44 @@
     hideWhenPlaying();
     updateCenterVisibility();
   }
-  let qualityUserTouched = false;
-  document.addEventListener('pointerdown', event => {
-    if (event.isTrusted && event.target?.closest?.('.jw-menu, .jw-settings-menu, .jw-btn'))
-      qualityUserTouched = true;
-  }, true);
+  let qualityUserTouched = false, captionsUserTouched = false;
+  const adapterReports = new Set();
+  function preferenceReport(event, detail) {
+    const key = event + ':' + (detail.adapter || detail.reason || '');
+    if (adapterReports.has(key)) return;
+    adapterReports.add(key); send({event, ...detail});
+  }
+  function preferenceApi(video) {
+    try { return JaJwPreferences.discover(video, window.wrappedJSObject, document, preferenceReport); }
+    catch (error) { preferenceReport('PLAYER_API_UNAVAILABLE',{reason:'DISCOVERY_EXCEPTION'}); return null; }
+  }
+  function manualPreference(kind, label) {
+    if(kind==='SETTINGS' && /^(Auto|\d{3,4}p)$/i.test(label.trim())) {
+      qualityUserTouched=true;send({event:'QUALITY_MANUAL_CHOICE',label});
+    }
+    if(kind==='CC' && !/^(Subtitles?|Options)$/i.test(label.trim())) {
+      captionsUserTouched=true;send({event:'CAPTIONS_MANUAL_CHOICE',label});
+    }
+  }
+  document.addEventListener('click', event => {
+    if(!event.isTrusted)return;
+    const row=event.target?.closest?.('.jw-row, .jw-result');
+    const menu=row?.closest('.jw-menu');if(!menu)return;
+    manualPreference(menuKind(menu), menuLabel(row));
+  },true);
   const outputQuality = JaOutputQuality.create({
-    video: currentVideo,
-    api: video => {
-      if (!isVerifiedJwContext()) return null;
-      const host = video?.closest('.jwplayer[id]');
-      const page = window.wrappedJSObject;
-      if (!host || !page || typeof page.jwplayer !== 'function') return null;
-      return page.jwplayer(host.id);
-    },
-    report: detail => send(detail),
-    userBusy: () => defaultsUserMenuTouched || qualityUserTouched
+    video: currentVideo, api: preferenceApi,
+    report: detail => send(detail), userBusy: () => qualityUserTouched
   });
-  window.addEventListener('pagehide', () => outputQuality.cancel());
+  const captionDefaults = JaJwPreferences.captions({
+    video: currentVideo, api: preferenceApi,
+    report: detail => send(detail), userBusy: () => captionsUserTouched
+  });
+  window.addEventListener('pagehide', () => {outputQuality.cancel();captionDefaults.cancel();});
 
   async function handle(message) {
     const action = message?.action;
+    if (action === 'initializePlaybackPreferences') { captionDefaults.start(); return; }
     if (action === 'matchOutputQuality') { outputQuality.request(message.height); return; }
     if (action === 'hideTitleChrome') { hidePlayerTitleChrome(); return; }
     if (action && /^controls(?:Open|Next|Prev|Select|Down|Up|Close)$/.test(action)) {
@@ -1712,7 +1731,7 @@
       }
     };
     settleMenus();
-    startupLog(complete ? 'STARTUP_DEFAULTS_COMPLETE' : 'STARTUP_DEFAULTS_INCOMPLETE',{
+    startupLog(complete ? 'STARTUP_AUDIO_COMPLETE' : 'STARTUP_AUDIO_INCOMPLETE',{
       reason, qualityRequested, qualityVerified, qualitySkipped, qualityTarget,
       qualityAttempts, ccRequested, audioChecked, startupClosedMenus
     });
@@ -1751,7 +1770,7 @@
         startupLog('DEFAULT_QUALITY_SKIPPED', {
           reason:'STARTUP_PRESERVES_AUTO_OUTPUT_POLICY_SEPARATE', qualityChanges:0
         });
-        advanceStartup('ccOpen');
+        advanceStartup('audio');
         return;
       case 'qualitySettle': {
         if (now-phaseSince < 1200) return;
@@ -1861,7 +1880,7 @@
       case 'done': {
         // Intentionally leaving Auto unchanged is success, not a failed
         // attempt to enforce a fixed quality value.
-        const defaultsComplete=(qualitySkipped || qualityVerified) && ccRequested;
+        const defaultsComplete=qualitySkipped || qualityVerified;
         finishStartupPreferences(defaultsComplete,
           defaultsComplete ? '' : 'SOME_PREFERENCES_UNAVAILABLE_OR_UNVERIFIED');
         return;

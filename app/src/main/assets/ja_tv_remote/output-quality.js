@@ -25,7 +25,7 @@ var JaOutputQuality = (() => {
     now = () => Date.now(), schedule = (fn, ms) => setTimeout(fn, ms),
     unschedule = id => clearTimeout(id)}) {
     let timer = null, target = 0, started = 0, requested = null, done = true;
-    let lastPosition = null, advancing = 0, verified = 0, boundVideo = null;
+    let lastPosition = null, advancing = 0, verified = 0, boundVideo = null, mutations = 0, lastMutation = 0;
     const emit = (event, extra = {}) => report({event, outputHeight: target, ...extra});
     function cancel() { if (timer !== null) unschedule(timer); timer = null; done = true; }
     function finish(event, extra) { cancel(); emit(event, extra); }
@@ -62,8 +62,8 @@ var JaOutputQuality = (() => {
           requested = {...choice, previous: selected};
           emit('QUALITY_MATCH_REQUESTED', {quality:choice.label, index:choice.index,
             exact:choice.resolution === target, alreadySelected:selected === choice.index});
-          // Only one API mutation per playback/target. Avoid startup reload/retry loops.
-          if (selected !== choice.index) player.setCurrentQuality(choice.index);
+          // At most two requests per target; retry only after a bounded settling interval.
+          if (selected !== choice.index) { player.setCurrentQuality(choice.index); mutations++; lastMutation=now(); }
         } else {
           const currentChoice = choices(levels).find(x => x.index === requested.index);
           if (!currentChoice || currentChoice.resolution !== requested.resolution) {
@@ -77,6 +77,10 @@ var JaOutputQuality = (() => {
           } else {
             verified = 0;
             if (selected !== requested.previous) { finish('QUALITY_MATCH_USER_OR_PLAYER_OVERRIDE'); return; }
+            if (mutations < 2 && now()-lastMutation >= 5000) {
+              player.setCurrentQuality(requested.index);mutations++;lastMutation=now();
+              emit('QUALITY_MATCH_RETRY',{quality:requested.label,attempt:mutations});
+            }
           }
         }
       } catch (error) { finish('QUALITY_MATCH_API_ERROR', {error:String(error?.name || 'Error').slice(0,40)}); return; }
@@ -87,7 +91,7 @@ var JaOutputQuality = (() => {
       height = Number(height);
       if (!Number.isInteger(height) || height < 360 || height > 4320 || height === target) return;
       cancel(); target = height; started = now(); requested = null; boundVideo = null;
-      lastPosition = null; advancing = 0; verified = 0; done = false;
+      lastPosition = null; advancing = 0; verified = 0; mutations = 0; lastMutation = 0; done = false;
       emit('QUALITY_MATCH_ARMED'); later();
     }
     return {request, cancel};
