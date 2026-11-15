@@ -140,6 +140,7 @@ private class JaRemoteBridge {
     private var activePort: WebExtension.Port? = null
     private var hideTitlePending = false
     private var statisticsLogCount = 0
+    private val qualityTargets = mutableMapOf<WebExtension.Port, Int>()
     private val playbackWindows = mutableMapOf<WebExtension.Port, JaPlaybackWindow>()
     private val frameWarmup = JaFrameStatsWarmup()
 
@@ -213,6 +214,7 @@ private class JaRemoteBridge {
                                     override fun onDisconnect(port: WebExtension.Port) {
                                         ports.remove(port)
                                         playbackWindows.remove(port)
+                                        qualityTargets.remove(port)
                                         frameWarmup.remove(port)
                                         if (activePort === port) activePort = null
                                         Log.i("JA_TV_BRIDGE", "FRAME_DISCONNECTED ports=${ports.size}")
@@ -259,7 +261,20 @@ private class JaRemoteBridge {
         samples.forEach { onVideoStatistics?.invoke(it.frames, it.position, it.width, it.height) }
     }
 
-    fun clear() { ports.clear(); playbackWindows.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
+    fun matchQuality(height: Int, confirmedDocument: String?) {
+        if (height !in 360..4320 || confirmedDocument.isNullOrBlank()) return
+        // Exact confirmed document only. Never broadcast a quality change to ad/outer frames.
+        for (port in ports.toList()) {
+            if (port.sender.url != confirmedDocument || qualityTargets[port] == height) continue
+            try {
+                port.postMessage(JSONObject().put("action", "matchOutputQuality").put("height", height))
+                qualityTargets[port] = height
+                Log.i("JA_QUALITY", "QUALITY_TARGET_SENT outputHeight=$height exactDocument=true")
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun clear() { qualityTargets.clear(); ports.clear(); playbackWindows.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
 }
 
 /**
@@ -470,6 +485,7 @@ fun GeckoExperimentalPlayer(
     onMediaStarted: () -> Unit = {},
     onVideoStatistics: (Int, Double, Int, Int) -> Unit = { _, _, _, _ -> },
     frameRateMatcher: JaTvFrameRateMatcher? = null,
+    matchStreamQuality: Boolean = false,
     onFatalError: (String) -> Unit = {},
     // Independent GeckoView-level signal that media is playing. This only
     // suppresses the *unconfirmed* timeout banner: it must NOT mark the
@@ -487,6 +503,7 @@ fun GeckoExperimentalPlayer(
     val latestOnVideoStatistics by rememberUpdatedState(onVideoStatistics)
     // Always use the matcher from the current PlayerScreen generation.
     val latestFrameRateMatcher by rememberUpdatedState(frameRateMatcher)
+    val latestMatchStreamQuality by rememberUpdatedState(matchStreamQuality)
     val latestOnFatalError by rememberUpdatedState(onFatalError)
     val latestOnMediaActivity by rememberUpdatedState(onMediaActivity)
     val latestOnTopLevelRedirect by rememberUpdatedState(onTopLevelRedirect)
@@ -546,7 +563,14 @@ fun GeckoExperimentalPlayer(
         }
         // The title's VIDEO_STARTED event is an explicit confirmation from
         // the foreground source. Do not change the display for ads/pre-roll.
-        if (confirmed) latestFrameRateMatcher?.observe(frames, seconds, width, height)
+        if (confirmed) {
+            latestFrameRateMatcher?.observe(frames, seconds, width, height)
+            if (latestMatchStreamQuality && isTelevision && vidFastBridge == null) {
+                latestFrameRateMatcher?.confirmedQualityHeight()?.let { outputHeight ->
+                    remoteBridge.matchQuality(outputHeight, sourceStatusBridge.confirmedDocumentUrl)
+                }
+            }
+        }
         // Preserve other optional statistics consumers; no duplicate matcher call.
         latestOnVideoStatistics(frames, seconds, width, height)
     }

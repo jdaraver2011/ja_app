@@ -206,6 +206,15 @@ class JaTvFrameRateMatcher(
             "targetModeId=${desired?.modeId ?: 0} result=$state")
     }
 
+    /** A requested mode alone is insufficient: stream quality follows verified physical output. */
+    fun confirmedQualityHeight(): Int? {
+        if (!enabled || closed || !preferSourceResolution || !activity.hasWindowFocus()) return null
+        val desired = requestedMode ?: return null
+        val active = outputDisplay.mode
+        if (active.modeId != desired.modeId) return null
+        return minOf(active.physicalWidth, active.physicalHeight).takeIf { it in 360..4320 }
+    }
+
     fun close() {
         if (closed) return
         Log.i(tag, "FRAME_RATE_MATCHER_CLOSED stats=$statisticsReceived " +

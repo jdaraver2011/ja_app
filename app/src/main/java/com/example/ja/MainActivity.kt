@@ -225,6 +225,7 @@ class MainActivity : ComponentActivity() {
     // Explicit prior choices persist. Both matching options default on for TV.
     var matchTvFrameRate by remember { mutableStateOf(settings.matchTvFrameRate) }
     var matchTvResolution by remember { mutableStateOf(settings.matchTvResolution) }
+    var matchStreamQuality by remember { mutableStateOf(settings.matchStreamQuality) }
     var adBlockerMode by remember { mutableStateOf(settings.adBlockerMode) }
     val blockerStatus by JaGeckoAdBlockers.status.collectAsState()
     var blockerTools by remember { mutableStateOf<JaGeckoAdBlockers.ManagementPages?>(null) }
@@ -868,6 +869,7 @@ class MainActivity : ComponentActivity() {
             showDiagnostics = showPlayerDiagnostics,
             matchTvFrameRate = matchTvFrameRate,
             matchTvResolution = matchTvResolution,
+            matchStreamQuality = matchStreamQuality,
             adBlockerMode = adBlockerMode,
             currentSourceLabel = playbackChoices.getOrNull(playbackChoiceIndex)?.label ?: "Source",
             currentSourceId = playingSourceId,
@@ -998,6 +1000,14 @@ class MainActivity : ComponentActivity() {
                         "The prior display preference is restored on exit.",
                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall
                 )
+                TvSettingsToggle("Match stream quality to TV output (experimental)",
+                    matchStreamQuality, enabled = matchTvFrameRate && matchTvResolution) {
+                    matchStreamQuality = it; settings.matchStreamQuality = it
+                }
+                Text("Selects matching quality on supported players after the TV mode is applied. " +
+                    "Uses the best available quality below the output resolution when an exact match is missing. " +
+                    "Restart playback after changing this setting.",
+                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(16.dp))
                 Text("Embedded player ad blocking", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text(
@@ -1300,7 +1310,8 @@ class MainActivity : ComponentActivity() {
                                 Text(row.name, style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 Spacer(Modifier.height(8.dp))
                                 val rowState = genreScrollStates.getOrPut("$tab:${row.name}") { LazyListState() }
-                                LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
                                     items(outsideOther(row.titles), key = { "${it.type}-${it.id}" }) { item ->
                                         PosterTile(marked(item), titleReturnFocus, "$tab:Genres:${row.name}:${item.type}:${item.id}") { open(item) }
                                     }
@@ -1481,6 +1492,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     showDiagnostics: Boolean = false,
     matchTvFrameRate: Boolean = false,
     matchTvResolution: Boolean = false,
+    matchStreamQuality: Boolean = false,
     adBlockerMode: String = JaGeckoAdBlockers.UBLOCK,
     currentSourceLabel: String = "Source",
     currentSourceId: String = "unknown",
@@ -1629,6 +1641,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     showDiagnostics = showDiagnostics,
                     adBlockerMode = adBlockerMode,
                     diagnosticsLabel = currentSourceLabel,
+                    matchStreamQuality = matchStreamQuality && matchTvFrameRate && matchTvResolution,
                     onEmbedLoadRequested = {
                         if (!embedLoadRequested) {
                             embedLoadRequested = true
@@ -1730,6 +1743,9 @@ private class PlayerControlSettings(context: Context) {
     var matchTvResolution: Boolean
         get() = isTelevision && prefs.getBoolean("tv_match_resolution", true)
         set(value) { prefs.edit().putBoolean("tv_match_resolution", value).apply() }
+    var matchStreamQuality: Boolean
+        get() = isTelevision && prefs.getBoolean("tv_match_stream_quality", true)
+        set(value) { prefs.edit().putBoolean("tv_match_stream_quality", value).apply() }
     var adBlockerMode: String
         get() = JaGeckoAdBlockers.normalized(prefs.getString("ad_blocker_mode", JaGeckoAdBlockers.UBLOCK) ?: JaGeckoAdBlockers.UBLOCK)
         set(value) { prefs.edit().putString("ad_blocker_mode", JaGeckoAdBlockers.normalized(value)).apply() }
