@@ -23,7 +23,9 @@ var JaJwPreferences = (() => {
     }
     const menuRows = kind => {
       const menus = Array.from(doc.querySelectorAll('.jw-menu'));
-      const menu = menus.find(m => kind === 'quality' ? /\bQuality\b/i.test(m.textContent || '') :
+      const menu = menus.find(m => kind === 'quality' ?
+        Array.from(m.querySelectorAll('.jw-sec')).some(heading =>
+          /^quality$/i.test((heading.textContent || '').trim())) :
         /\bSubtitles?\b/i.test(m.textContent || '') && !!m.querySelector('.jw-tab'));
       if (!menu) return [];
       return Array.from(menu.querySelectorAll('.jw-row-label')).filter(x => kind === 'quality' ?
