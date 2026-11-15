@@ -140,6 +140,7 @@ private class JaRemoteBridge {
     private var activePort: WebExtension.Port? = null
     private var hideTitlePending = false
     private var statisticsLogCount = 0
+    private val captionTargets = mutableSetOf<WebExtension.Port>()
     private val qualityTargets = mutableMapOf<WebExtension.Port, Int>()
     private val playbackWindows = mutableMapOf<WebExtension.Port, JaPlaybackWindow>()
     private val frameWarmup = JaFrameStatsWarmup()
@@ -215,6 +216,7 @@ private class JaRemoteBridge {
                                         ports.remove(port)
                                         playbackWindows.remove(port)
                                         qualityTargets.remove(port)
+                                        captionTargets.remove(port)
                                         frameWarmup.remove(port)
                                         if (activePort === port) activePort = null
                                         Log.i("JA_TV_BRIDGE", "FRAME_DISCONNECTED ports=${ports.size}")
@@ -261,6 +263,18 @@ private class JaRemoteBridge {
         samples.forEach { onVideoStatistics?.invoke(it.frames, it.position, it.width, it.height) }
     }
 
+    fun initializeCaptions(confirmedDocument: String?) {
+        if (confirmedDocument.isNullOrBlank()) return
+        for (port in ports.toList()) {
+            if (port.sender.url != confirmedDocument || port in captionTargets) continue
+            try {
+                port.postMessage(JSONObject().put("action", "initializePlaybackPreferences"))
+                captionTargets.add(port)
+                Log.i("JA_QUALITY", "CAPTIONS_TARGET_SENT exactDocument=true")
+            } catch (_: Exception) { }
+        }
+    }
+
     fun matchQuality(height: Int, confirmedDocument: String?) {
         if (height !in 360..4320 || confirmedDocument.isNullOrBlank()) return
         // Exact confirmed document only. Never broadcast a quality change to ad/outer frames.
@@ -274,7 +288,7 @@ private class JaRemoteBridge {
         }
     }
 
-    fun clear() { qualityTargets.clear(); ports.clear(); playbackWindows.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
+    fun clear() { captionTargets.clear(); qualityTargets.clear(); ports.clear(); playbackWindows.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
 }
 
 /**
@@ -565,6 +579,7 @@ fun GeckoExperimentalPlayer(
         // the foreground source. Do not change the display for ads/pre-roll.
         if (confirmed) {
             latestFrameRateMatcher?.observe(frames, seconds, width, height)
+            if (vidFastBridge == null) remoteBridge.initializeCaptions(sourceStatusBridge.confirmedDocumentUrl)
             if (latestMatchStreamQuality && isTelevision && vidFastBridge == null) {
                 latestFrameRateMatcher?.confirmedQualityHeight()?.let { outputHeight ->
                     remoteBridge.matchQuality(outputHeight, sourceStatusBridge.confirmedDocumentUrl)
