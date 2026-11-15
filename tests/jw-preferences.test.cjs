@@ -17,23 +17,14 @@ const video={closest:()=>null};
 const doc={querySelectorAll:s=>s==='video'?[video]:s==='.jw-menu'?menus:s.includes('button.jw-btn')?[{getAttribute:()=> 'Settings',click:()=>open=true}]:[],
  querySelector:s=>s==='.jw-btn, .jw-seek'?{}:null,createElement:()=>({setAttribute(){}}),head:{appendChild(){}},
  documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)}};
-let adapter=discover(video,{},doc,()=>{});
-const oldTimeout=global.setTimeout;global.setTimeout=fn=>{scheduled=fn;return 1;};
+let adapter=discover(video,{},doc,()=>{},label=>{
+ open=true;const item=qrows.find(x=>x.label===label);item.click();open=false;
+});
 assert.equal(adapter.getCurrentQuality(),0);adapter.setCurrentQuality(3);assert.equal(adapter.getCurrentQuality(),3);
-assert.equal(commits,1);assert.equal(attrs.get('data-ja-quality-transaction'),'true');scheduled();assert.equal(open,false);assert.equal(cleaned,1);assert.equal(attrs.size,0);
-open=true;scheduled=null;adapter.setCurrentQuality(2);assert.equal(open,true);assert.equal(scheduled,null,'Do not close a user-owned menu');
-open=false;global.setTimeout=oldTimeout;
+assert.equal(commits,1);
 assert.equal(adapter.getCurrentCaptions(),-1);adapter.setCurrentCaptions(0);assert.equal(adapter.getCurrentCaptions(),0);
 assert.equal(quality.select(adapter.getQualityLevels(),1080).index,3);
-// A pre-existing checkmark must still commit through the custom player's open-menu path.
-qrows.forEach(x=>x.active=false);qrows[3].active=true;open=false;
-video.paused=false;video.ended=false;video.readyState=4;video.videoWidth=1920;video.videoHeight=1080;video.currentTime=1;
-let qualityTick=null,clock=0;const previousCommits=commits;
-global.setTimeout=fn=>{scheduled=fn;return 1;};
-const controller=quality.create({video:()=>video,api:()=>adapter,report:()=>{},now:()=>clock,schedule:fn=>{qualityTick=fn;return 1;},unschedule:()=>qualityTick=null});
-controller.request(1080);
-for(let i=0;i<3;i++){clock+=1000;video.currentTime++;const fn=qualityTick;qualityTick=null;fn?.();}
-assert.equal(commits,previousCommits+1,'Checked custom row must be reactivated once');scheduled();controller.cancel();global.setTimeout=oldTimeout;
+adapter.setCurrentQuality(3);assert.equal(commits,2,'Checked row still delegates activation');
 assert.equal(discover(video,{}, {...doc,querySelectorAll:s=>s==='video'?[{},{}]:[]},()=>{}),null);
 const jw={getContainer:()=>({contains:v=>v===video})};assert.equal(discover(video,{jwplayer:()=>jw},doc,()=>{}),jw);
 function fixture(){let time=0,fn=null,index=1,calls=0,ready=false,busy=false;const events=[];

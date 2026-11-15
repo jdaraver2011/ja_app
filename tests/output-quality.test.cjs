@@ -32,3 +32,17 @@ f=fixture();f.q.request(1080);f.q.cancel();f.step(5);assert.equal(f.calls,0);ass
 f=fixture();f.q.request(0);f.q.request(9999);f.step(5);assert.equal(f.calls,0);assert.equal(f.events.length,0);
 f=fixture();f.v.paused=true;f.q.request(1080);f.step(35);assert.equal(f.calls,0);assert.equal(f.pending,false);
 console.log('PASS: selection, crop handling, confirmation, no API, ignored request, manual override, replacement, cancellation, invalid target and paused startup');
+(async()=>{
+ let time=0,fn=null,selected=0,resolveCommit;const events=[];
+ const video={paused:false,ended:false,readyState:4,videoWidth:1920,videoHeight:1080,currentTime:1};
+ const player={qualityEvidence:'CUSTOM_MENU_SELECTION',getQualityLevels:()=>levels,getCurrentQuality:()=>selected,
+ setCurrentQuality:i=>{selected=i;return new Promise(resolve=>resolveCommit=resolve);}};
+ const c=create({video:()=>video,api:()=>player,report:e=>events.push(e),now:()=>time,
+ schedule:f=>{fn=f;return 1;},unschedule:()=>fn=null});
+ function step(n){for(let i=0;i<n;i++){time+=1000;video.currentTime++;const f=fn;fn=null;f?.();}}
+ c.request(1080);step(8);assert.ok(!events.some(e=>e.event==='QUALITY_MENU_SELECTION_CONFIRMED'));
+ resolveCommit();await Promise.resolve();step(4);
+ assert.equal(events.at(-1).event,'QUALITY_MENU_SELECTION_CONFIRMED');
+ assert.equal(events.at(-1).evidence,'CUSTOM_MENU_SELECTION');
+ console.log('PASS: asynchronous commit must settle before menu-state confirmation; no stream-verification claim');
+})().catch(e=>{console.error(e);process.exitCode=1;});
