@@ -47,7 +47,7 @@ var JaOutputQuality = (() => {
         const position = Number(v.currentTime);
         advancing = lastPosition !== null && position > lastPosition && position-lastPosition < 3 ? advancing+1 : 0;
         lastPosition = position;
-        if (advancing < 2) { later(); return; }
+        if (advancing < 4) { later(); return; }
         const player = api(v);
         if (!player || typeof player.getQualityLevels !== 'function' ||
             typeof player.getCurrentQuality !== 'function' || typeof player.setCurrentQuality !== 'function') {

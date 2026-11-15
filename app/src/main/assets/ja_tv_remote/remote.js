@@ -533,8 +533,16 @@
   function focusQualityRow(item) {
     try {item.scrollIntoView({block:'nearest'});item.focus({preventScroll:true});} catch (_) {}
   }
-  function qualityPlaybackSnapshot(origin,stage) {
-    const video=currentVideo();if(!video)return;
+  let qualityIntentVersion=0;
+  for(const event of ['pointerdown','touchstart','keydown'])
+    document.addEventListener(event,e=>{if(e.isTrusted)qualityIntentVersion++;},{capture:true,passive:true});
+  function qualityVideo() {
+    const active=currentVideo();if(active)return active;
+    const list=videos();return list.length===1?list[0]:null;
+  }
+  function qualityPlaybackSnapshot(origin,stage,previous) {
+    const video=qualityVideo();
+    if(!video){send({event:'QUALITY_PLAYBACK_STATE_UNAVAILABLE',origin,stage,reason:'NO_VIDEO'});return;}
     try{
       const q=video.getVideoPlaybackQuality?.();
       let hash=2166136261;
@@ -544,6 +552,7 @@
         buffered.push([video.buffered.start(i),video.buffered.end(i)]);
       send({event:'QUALITY_PLAYBACK_STATE',origin,stage,
         sourceFingerprint:(hash>>>0).toString(16),position:video.currentTime,
+        videoChanged:!!previous && video!==previous, connected:video.isConnected,
         width:video.videoWidth,height:video.videoHeight,paused:video.paused,
         readyState:video.readyState,networkState:video.networkState,
         total:q?.totalVideoFrames,dropped:q?.droppedVideoFrames,buffered});
@@ -551,15 +560,24 @@
   }
   const qualitySampleTimers=new Set();
   function activateQualityRow(item,origin) {
+    const before=qualityVideo();
+    const guard=origin==='automatic'?JaQualityResume.arm(before,qualityIntentVersion):null;
     focusQualityRow(item);
-    qualityPlaybackSnapshot(origin,'before');
+    qualityPlaybackSnapshot(origin,'before',before);
     item.click();
-    qualityPlaybackSnapshot(origin,'after-click');
-    const video=currentVideo();
-    for(const ms of [2000,8000]){
+    qualityPlaybackSnapshot(origin,'after-click',before);
+    for(const ms of [500,1500,3000,8000]){
       const timer=setTimeout(()=>{
         qualitySampleTimers.delete(timer);
-        if(currentVideo()===video)qualityPlaybackSnapshot(origin,'after-'+ms+'ms');
+        qualityPlaybackSnapshot(origin,'after-'+ms+'ms',before);
+        const active=qualityVideo();
+        if(qualityDocumentActive && JaQualityResume.sample(guard,active,qualityIntentVersion,!document.hidden)){
+          send({event:'QUALITY_RESUME_REQUESTED',stage:'after-'+ms+'ms',videoChanged:active!==before});
+          try{Promise.resolve(active.play()).then(
+            ()=>send({event:'QUALITY_RESUME_RESULT',paused:active.paused}),
+            e=>send({event:'QUALITY_RESUME_FAILED',error:e?.name||'Error'}));}
+          catch(e){send({event:'QUALITY_RESUME_FAILED',error:e?.name||'Error'});}
+        }
       },ms);
       qualitySampleTimers.add(timer);
     }
@@ -1339,7 +1357,7 @@
   qualityMaskStyle.textContent='html[data-ja-quality-transaction="true"] .jw-menu { clip-path:inset(100%)!important; pointer-events:none!important; }';
   (document.head||document.documentElement).appendChild(qualityMaskStyle);
   const qualityActivation=JaQualityActivation.create({
-    valid:video=>qualityDocumentActive && !qualityUserTouched && currentVideo()===video,
+    valid:video=>qualityDocumentActive && !qualityUserTouched && qualityVideo()===video,
     mask:value=>{if(value)document.documentElement.setAttribute('data-ja-quality-transaction','true');else document.documentElement.removeAttribute('data-ja-quality-transaction');},
     open:()=>{
       if(openJwMenu())return false;
@@ -1371,6 +1389,7 @@
 
   async function handle(message) {
     const action = message?.action;
+    if (['toggle','back10','forward10','controlsOpen','controlsNext','controlsPrev','controlsSelect','controlsClose','controlsUp','controlsDown'].includes(action))qualityIntentVersion++;
     if (action === 'initializePlaybackPreferences') { captionDefaults.start(); return; }
     if (action === 'matchOutputQuality') { outputQuality.request(message.height); return; }
     if (action === 'hideTitleChrome') { hidePlayerTitleChrome(); return; }
