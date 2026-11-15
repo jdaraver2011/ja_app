@@ -7,7 +7,7 @@
         android:label="JA"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:banner="@drawable/tv_banner"
+        android:banner="@drawable/tv_banner_logo"
         android:usesCleartextTraffic="true"
         android:allowBackup="false"
         android:hardwareAccelerated="true">
