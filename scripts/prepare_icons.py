@@ -3,7 +3,7 @@ Run from the repository root with Pillow installed: python scripts/prepare_icons
 The source artwork is retained unchanged in branding/ja-icon-original.png.
 """
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / 'app/src/main/res'
@@ -53,15 +53,8 @@ values.mkdir(parents=True, exist_ok=True)
     <color name="ic_launcher_background">#000000</color>
 </resources>
 ''')
-banner = Image.new('RGB', (320, 180), 'black')
-banner.paste(art.resize((144, 144), Image.Resampling.LANCZOS), (22, 18))
-draw = ImageDraw.Draw(banner)
-try:
-    font = ImageFont.truetype('DejaVuSans-Bold.ttf', 48)
-except OSError:
-    font = ImageFont.load_default(size=48)
-draw.text((232, 90), 'JA', font=font, fill=(90, 255, 0), anchor='mm')
-banner_path = RES / 'drawable-xhdpi'
+# A fixed 16:9 drawable reuses the existing logo and adds no plain-text wordmark.
+banner_path = RES / 'drawable'
 banner_path.mkdir(parents=True, exist_ok=True)
-banner.save(banner_path / 'tv_banner.png')
-print('Prepared launcher resources for five densities, adaptive icons and TV banner.')
+(banner_path / 'tv_banner_logo.xml').write_text('<?xml version="1.0" encoding="utf-8"?>\n<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n    <item android:width="160dp" android:height="90dp">\n        <layer-list>\n            <item android:drawable="@color/ic_launcher_background" />\n            <item android:width="121.5dp" android:height="121.5dp"\n                android:gravity="center" android:drawable="@mipmap/ic_launcher_foreground" />\n        </layer-list>\n    </item>\n</layer-list>\n')
+print('Prepared launcher resources for five densities, adaptive icons and logo-only TV banner.')
