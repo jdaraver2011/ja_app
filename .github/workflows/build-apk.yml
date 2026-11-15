@@ -36,6 +36,8 @@ jobs:
           node tests/source-status.test.cjs
           node tests/video-lookup.test.cjs
           node tests/vidfast-api.test.cjs
+          node tests/overlay-guard.test.cjs
+          node tests/overlay-workload.bench.cjs
       - name: Configure build
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
@@ -96,6 +98,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-vidfast-tests" app/src/main/java/com/example/ja/JaVidFastTimeline.java tests/JaVidFastTimelineTest.java
           java -cp "$RUNNER_TEMP/ja-vidfast-tests" com.example.ja.JaVidFastTimelineTest
+      - name: Test playback performance windows
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-perf-tests" app/src/main/java/com/example/ja/JaPlaybackWindow.java tests/JaPlaybackWindowTest.java
+          java -cp "$RUNNER_TEMP/ja-perf-tests" com.example.ja.JaPlaybackWindowTest
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
@@ -104,7 +110,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-1.1.6-review18-debug
+          name: JA-1.1.6-review19-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
