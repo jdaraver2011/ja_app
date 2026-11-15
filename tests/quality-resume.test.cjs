@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const {arm,sample}=require('../app/src/main/assets/ja_tv_remote/quality-resume.js');
+const playing={paused:false,ended:false,isConnected:true,videoWidth:1920,videoHeight:1080,readyState:4};
+let guard=arm(playing,1),paused={...playing,paused:true};
+assert.equal(sample(guard,playing,1,true),false);
+assert.equal(sample(guard,paused,1,true),true);
+assert.equal(sample(guard,paused,1,true),false,'At most one resume attempt');
+guard=arm(playing,1);assert.equal(sample(guard,paused,2,true),false);assert.equal(sample(guard,paused,1,true),false,'User intent cancels permanently');
+assert.equal(sample(arm(paused,1),paused,1,true),false,'Never resume an initially paused video');
+assert.equal(sample(arm(playing,1),{...paused,ended:true},1,true),false);
+assert.equal(sample(arm(playing,1),paused,1,false),false,'Do not resume background playback');
+assert.equal(sample(arm(playing,1),{...paused,isConnected:false},1,true),false);
+assert.equal(sample(arm(playing,1),{...paused,readyState:1},1,true),false);
+assert.equal(sample(arm(playing,1),{...paused,videoWidth:320,videoHeight:180},1,true),false);
+console.log('PASS: quality-induced pause eligibility, one-shot bound, manual intent, initial pause, ended/background/disconnected/not-ready/tiny video exclusions');

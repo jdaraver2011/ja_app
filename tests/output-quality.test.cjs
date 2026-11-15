@@ -26,8 +26,8 @@ f.q.request(1080);f.step(3);assert.equal(f.calls,1);
 f=fixture({available:false});f.q.request(1080);f.step(35);assert.equal(f.calls,0);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_UNAVAILABLE');assert.equal(f.pending,false);
 f=fixture({accept:false});f.q.request(1080);f.step(35);assert.equal(f.calls,2);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_UNVERIFIED');
 f=fixture({busy:true});f.q.request(1080);f.step();assert.equal(f.calls,0);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_USER_CONTROL');
-f=fixture();f.q.request(1080);f.step(3);f.setIndex(2);f.step();assert.equal(f.calls,1);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_USER_OR_PLAYER_OVERRIDE');
-f=fixture();f.q.request(1080);f.step(3);f.replace();f.step();assert.equal(f.events.at(-1).event,'QUALITY_MATCH_VIDEO_CHANGED');
+f=fixture();f.q.request(1080);f.step(5);f.setIndex(2);f.step();assert.equal(f.calls,1);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_USER_OR_PLAYER_OVERRIDE');
+f=fixture();f.q.request(1080);f.step(5);f.replace();f.step();assert.equal(f.events.at(-1).event,'QUALITY_MATCH_VIDEO_CHANGED');
 f=fixture();f.q.request(1080);f.q.cancel();f.step(5);assert.equal(f.calls,0);assert.equal(f.pending,false);
 f=fixture();f.q.request(0);f.q.request(9999);f.step(5);assert.equal(f.calls,0);assert.equal(f.events.length,0);
 f=fixture();f.v.paused=true;f.q.request(1080);f.step(35);assert.equal(f.calls,0);assert.equal(f.pending,false);
@@ -41,7 +41,7 @@ console.log('PASS: selection, crop handling, confirmation, no API, ignored reque
  schedule:f=>{fn=f;return 1;},unschedule:()=>fn=null});
  function step(n){for(let i=0;i<n;i++){time+=1000;video.currentTime++;const f=fn;fn=null;f?.();}}
  c.request(1080);step(8);assert.ok(!events.some(e=>e.event==='QUALITY_MENU_SELECTION_CONFIRMED'));
- resolveCommit();await Promise.resolve();step(4);
+ resolveCommit();await Promise.resolve();step(6);
  assert.equal(events.at(-1).event,'QUALITY_MENU_SELECTION_CONFIRMED');
  assert.equal(events.at(-1).evidence,'CUSTOM_MENU_SELECTION');
  console.log('PASS: asynchronous commit must settle before menu-state confirmation; no stream-verification claim');
