@@ -28,12 +28,13 @@
   const hidden = new WeakSet();
   let port = null;
   let reconnectScheduled = false;
-  let lastScan = 0;
-  let pendingScan = false;
+  let live = true;
+  let reconnectTimer = null;
   let sentFrames = 0;
 
-  function send(kind, detail) {
-    const message = { event: kind, host, detail: (detail || '').slice(0, 90) };
+  function send(kind, detail, metrics = {}) {
+    if (!live) return;
+    const message = { event: kind, host, detail: (detail || '').slice(0, 90), ...metrics };
     try {
       if (!port) {
         port = browser.runtime.connectNative('ja_overlay_guard');
@@ -44,7 +45,7 @@
       port = null;
       if (!reconnectScheduled) {
         reconnectScheduled = true;
-        setTimeout(() => { reconnectScheduled = false; }, 1800);
+        reconnectTimer = setTimeout(() => { reconnectScheduled = false; }, 1800);
       }
     }
   }
@@ -145,6 +146,7 @@
   }
 
   function handleChildFrame(event) {
+    if (!live || document.hidden) return;
     const data = event.data;
     if (!data || data.__jaGuard115u !== true || data.kind !== 'SCAM_FRAME') return;
     if (!data.detail || !distinctMarker.test(data.detail)) return;
@@ -171,43 +173,113 @@
   }
   window.addEventListener('message', handleChildFrame, false);
 
-  function scan() {
-    if (!document.body) return;
-    lastScan = Date.now();
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let textNode;
-    let inspected = 0;
-    let removed = 0;
-    while ((textNode = walker.nextNode()) && inspected++ < 3200 && removed < 7) {
-      const content = (textNode.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!content || content.length > 240) continue;
-      if (!isScamText(content)) continue;
-      const parent = textNode.parentElement;
-      if (!parent || !visible(parent)) continue;
-      // "Streaming now" can be ordinary site text. Only flag that exact
-      // misleading prompt on its observed host, not on a video details page.
-      if (/streaming now:/i.test(content) && !sourceIsVidspark) continue;
-      const panel = panelFor(textNode);
-      if (panel && hide(panel, 'OVERLAY_BLOCKED', content)) {
-        removed++;
-        removeNearbyBackdrop(panel);
-        if (sourceIsVidspark) notifyParent(content);
-      }
+  // Review19: changed subtrees first; bounded full sweeps remain a safety net.
+  // A time budget is cooperative: a single browser DOM operation cannot be preempted.
+  const SLICE_NODES = 160, SLICE_MS = 4, MAX_ROOTS = 64;
+  let roots = [], active = null, workTimer = null, sweepTimer = null, metricsTimer = null;
+  let overflow = false;
+  const metrics = {slices:0, nodes:0, fullScans:0, mutationRoots:0, scanMs:0, maxSliceMs:0};
+
+  function inspectText(textNode) {
+    const content = (textNode.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!content || content.length > 240 || !isScamText(content)) return;
+    const parent = textNode.parentElement;
+    if (!parent || !visible(parent)) return;
+    if (/streaming now:/i.test(content) && !sourceIsVidspark) return;
+    const panel = panelFor(textNode);
+    if (panel && hide(panel, 'OVERLAY_BLOCKED', content)) {
+      removeNearbyBackdrop(panel);
+      if (sourceIsVidspark) notifyParent(content);
     }
   }
-
-  function scheduleScan() {
-    if (pendingScan) return;
-    pendingScan = true;
-    setTimeout(() => {
-      pendingScan = false;
-      if (Date.now() - lastScan < 250) return;
-      scan();
-    }, 220);
+  function arm(delay = 220) {
+    if (!live || document.hidden || workTimer !== null) return;
+    workTimer = setTimeout(runSlice, delay);
   }
-  const observer = new MutationObserver(scheduleScan);
-  observer.observe(document, { childList: true, subtree: true, characterData: true });
-  document.addEventListener('DOMContentLoaded', scheduleScan, { once: true });
-  scheduleScan();
-  setInterval(scheduleScan, 1700);
+  function enqueue(root, mutation = false) {
+    if (!live || document.hidden || !root || !root.isConnected) return;
+    if (root.nodeType !== 1 && root.nodeType !== 3) return;
+    // A pending ancestor already includes the new work. Requeue mutations to
+    // the active root, since the changed node may be behind its walker cursor.
+    if (roots.some(old => old === root || old.contains?.(root))) return;
+    roots = roots.filter(old => !root.contains?.(old));
+    if (roots.length >= MAX_ROOTS) { overflow = true; arm(); return; }
+    roots.push(root);
+    if (mutation) metrics.mutationRoots++;
+    arm();
+  }
+  function sweep() {
+    if (!live || document.hidden || !document.body || active || roots.length) return;
+    metrics.fullScans++;
+    enqueue(document.body);
+  }
+  function runSlice() {
+    workTimer = null;
+    if (!live || document.hidden) return;
+    const began = performance.now();
+    let inspected = 0;
+    while (inspected < SLICE_NODES && performance.now() - began < SLICE_MS) {
+      if (!active) {
+        const root = roots.shift();
+        if (!root) break;
+        if (!root.isConnected) continue;
+        active = {root, text:root.nodeType === 3,
+          walker:root.nodeType === 3 ? null : document.createTreeWalker(root, NodeFilter.SHOW_TEXT)};
+      }
+      if (!active.root.isConnected) { active = null; continue; }
+      const node = active.text ? active.root : active.walker.nextNode();
+      if (active.text || !node) active = null;
+      if (!node) continue;
+      inspected++; metrics.nodes++;
+      if (node.isConnected) inspectText(node);
+    }
+    const elapsed = performance.now() - began;
+    metrics.slices++; metrics.scanMs += elapsed;
+    metrics.maxSliceMs = Math.max(metrics.maxSliceMs, elapsed);
+    if (!active && !roots.length && overflow) {
+      overflow = false; sweep();
+    }
+    if (active || roots.length) arm(16);
+  }
+  const observer = new MutationObserver(records => {
+    if (!live || document.hidden) return;
+    let handled = 0;
+    for (const record of records) {
+      if (++handled > SLICE_NODES) { overflow = true; arm(); break; }
+      if (record.type === 'characterData' || record.type === 'attributes') enqueue(record.target, true);
+      else for (const node of record.addedNodes || []) {
+        if (++handled > SLICE_NODES) { overflow = true; arm(); break; }
+        enqueue(node, true);
+        if (overflow) break;
+      }
+      if (overflow) break;
+    }
+  });
+  function reportMetrics() {
+    if (live && !document.hidden && metrics.slices) send('GUARD_PERF', 'cumulative', {
+      ...metrics, scanMs:Math.round(metrics.scanMs), maxSliceMs:Math.round(metrics.maxSliceMs * 100) / 100
+    });
+  }
+  function pause() {
+    observer.disconnect();
+    clearTimeout(workTimer); clearTimeout(reconnectTimer);
+    clearInterval(sweepTimer); clearInterval(metricsTimer);
+    workTimer = sweepTimer = metricsTimer = reconnectTimer = null;
+    active = null; roots = []; overflow = false; reconnectScheduled = false;
+    try { port?.disconnect(); } catch (_) {}
+    port = null;
+  }
+  function resume() {
+    if (!live || document.hidden || sweepTimer !== null) return;
+    observer.observe(document, {childList:true, subtree:true, characterData:true,
+      attributes:true, attributeFilter:['class','style','hidden']});
+    sweep();
+    sweepTimer = setInterval(sweep, 10000);
+    metricsTimer = setInterval(reportMetrics, 30000);
+  }
+  document.addEventListener('DOMContentLoaded', sweep, {once:true});
+  document.addEventListener('visibilitychange', () => document.hidden ? pause() : resume());
+  window.addEventListener('pagehide', () => { reportMetrics(); live = false; pause(); });
+  window.addEventListener('pageshow', () => { live = true; resume(); });
+  resume();
 })();
