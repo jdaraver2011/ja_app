@@ -102,6 +102,14 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-perf-tests" app/src/main/java/com/example/ja/JaPlaybackWindow.java tests/JaPlaybackWindowTest.java
           java -cp "$RUNNER_TEMP/ja-perf-tests" com.example.ja.JaPlaybackWindowTest
+      - name: Test confirmed frame-rate warmup
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-warmup-tests" app/src/main/java/com/example/ja/JaFrameStatsWarmup.java app/src/main/java/com/example/ja/JaFrameRateSampler.java tests/JaFrameStatsWarmupTest.java
+          java -cp "$RUNNER_TEMP/ja-warmup-tests" com.example.ja.JaFrameStatsWarmupTest
+      - name: Test catalogue pagination
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-pagination-tests" app/src/main/java/com/example/ja/JaCatalogBatch.java app/src/main/java/com/example/ja/JaGenreCatalog.java tests/JaCatalogBatchTest.java
+          java -cp "$RUNNER_TEMP/ja-pagination-tests" com.example.ja.JaCatalogBatchTest
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
@@ -110,7 +118,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-1.1.6-review19-debug
+          name: JA-1.1.6-review20-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
