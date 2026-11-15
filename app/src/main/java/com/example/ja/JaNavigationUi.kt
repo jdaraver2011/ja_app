@@ -24,6 +24,7 @@ class JaTitleReturnFocus {
         private set
     fun opened(key: String) { origin = key; pending = null }
     fun returned() { pending = origin }
+    fun focus(key: String) { pending = key }
     fun restored(key: String) { if (pending == key) pending = null }
     fun clear() { origin = null; pending = null }
 }

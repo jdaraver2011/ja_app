@@ -15,7 +15,10 @@ import java.net.URLEncoder
 
 
 /** Ordered genre row; a title may appear in multiple matching genre rows. */
-data class GenreRow(val name: String, val titles: List<TitleItem>)
+data class GenreRow(val name: String, val titles: List<TitleItem>, val genreId: Int = 0,
+    val nextPage: Int = 1, val totalPages: Int = 500) {
+    val hasMore: Boolean get() = genreId > 0 && nextPage <= minOf(totalPages,500)
+}
 
 private data class GenreQuery(val name: String, val genreId: Int)
 
@@ -76,7 +79,7 @@ class TmdbRepository {
         return result.optString("imdb_id").takeIf { it.matches(Regex("tt[0-9]+")) }
     }
 
-    /** Load each genre independently, up to 50 distinct titles per row.
+    /** Load each genre independently toward 50 distinct titles, retaining the full final page.
      * A title is never consumed by an earlier genre. Movie discovery keeps
      * the same release cutoff as Popular and Search genre browsing.
      */
@@ -93,9 +96,10 @@ class TmdbRepository {
         val validIds = categories.map { it.genreId }.toSet()
         val nextPage = categories.associate { it.genreId to 1 }.toMutableMap()
         val lastPage = categories.associate { it.genreId to 9 }.toMutableMap()
+        val totalPages = categories.associate { it.genreId to 500 }.toMutableMap()
         val maxPages = 9
         val targetCount = 50
-        val catalog = JaGenreCatalog<TitleItem>(categories.map { it.genreId }.toIntArray(), targetCount)
+        val catalog = JaGenreCatalog<TitleItem>(categories.map { it.genreId }.toIntArray(), Int.MAX_VALUE)
 
         suspend fun collect(genreId: Int, pageCount: Int) {
             repeat(pageCount) {
@@ -104,7 +108,8 @@ class TmdbRepository {
                 val releaseFilter = if (type == "movie") "&primary_release_date.lte=${JaMovieReleaseRules.releasedThrough(today)}" else ""
                 val response = fetch("discover/$type?sort_by=popularity.desc&include_adult=false&with_genres=$genreId&page=$page$releaseFilter")
                 nextPage[genreId] = page + 1
-                lastPage[genreId] = minOf(maxPages, response.optInt("total_pages", 1))
+                totalPages[genreId] = response.optInt("total_pages",1).coerceIn(1,500)
+                lastPage[genreId] = minOf(maxPages,totalPages.getValue(genreId))
                 val results = response.optJSONArray("results") ?: return
                 for (i in 0 until results.length()) {
                     val obj = results.optJSONObject(i) ?: continue
@@ -129,6 +134,9 @@ class TmdbRepository {
             it.genreId to catalog.titles(it.genreId)
         }
 
+        fun row(category: GenreQuery, titles: List<TitleItem>) = GenreRow(category.name,titles,
+            category.genreId,nextPage.getValue(category.genreId),totalPages.getValue(category.genreId))
+
         val limit = Semaphore(3)
         var successes = 0
         var firstError: Exception? = null
@@ -151,7 +159,7 @@ class TmdbRepository {
                 collectSafely(category, 1)
                 if (genreCache[type] == null) {
                     val allocated = allocate()
-                    onPartial(categories.map { GenreRow(it.name, allocated.getValue(it.genreId)) })
+                    onPartial(categories.map { row(it, allocated.getValue(it.genreId)) })
                 }
             } }.awaitAll()
         }
@@ -166,20 +174,53 @@ class TmdbRepository {
             coroutineScope { shortGenres.map { category -> async { collectSafely(category, 1) } }.awaitAll() }
             assigned = allocate()
             if (genreCache[type] == null) onPartial(categories.map {
-                GenreRow(it.name, assigned.getValue(it.genreId))
+                row(it, assigned.getValue(it.genreId))
             })
         }
         val rows = categories.map { category ->
             val fresh = assigned.getValue(category.genreId)
-            GenreRow(category.name, fresh.ifEmpty {
-                genreCache[type]?.firstOrNull { it.name == category.name }?.titles.orEmpty()
-            })
+            if(fresh.isEmpty()) genreCache[type]?.firstOrNull { it.genreId == category.genreId } ?: row(category,fresh)
+            else row(category,fresh)
         }
         genreCache[type] = rows
         // Partial network failures may be displayed, but remain eligible for retry.
         if (firstError == null) freshGenres.put(freshKey, rows)
         onPartial(rows)
         return rows
+    }
+
+    /** Continue one row from its last successfully fetched TMDB page. */
+    suspend fun moreGenre(type: String, row: GenreRow): GenreRow {
+        require(type == "movie" || type == "tv")
+        require((if(type == "movie") movieGenres else tvGenres).any { it.genreId == row.genreId })
+        if(!row.hasMore)return row
+        val batch=JaCatalogBatch(row.nextPage-1,row.totalPages,1)
+        val page=batch.nextPage
+        val today=java.time.LocalDate.now()
+        val releaseFilter=if(type == "movie") "&primary_release_date.lte=${JaMovieReleaseRules.releasedThrough(today)}" else ""
+        val response=fetch("discover/$type?sort_by=popularity.desc&include_adult=false&with_genres=${row.genreId}&page=$page$releaseFilter")
+        val items=response.optJSONArray("results") ?: error("TMDB returned an invalid genre page")
+        val added=mutableListOf<TitleItem>()
+        for(i in 0 until items.length()) {
+            val obj=items.optJSONObject(i) ?: continue
+            if(type == "movie" && JaMovieReleaseRules.classify(obj.optString("release_date"),today) != JaMovieReleaseRules.Bucket.RELEASED)continue
+            val id=obj.optInt("id");if(id<=0)continue
+            if(type == "movie" && !JaVidSrcCatalog.includeMovie(id))continue
+            val ids=obj.optJSONArray("genre_ids") ?: continue
+            if((0 until ids.length()).none { ids.optInt(it)==row.genreId })continue
+            added.add(parse(obj,type))
+        }
+        batch.accept(response.optInt("page",page),response.optInt("total_pages",page))
+        val next=row.copy(titles=(row.titles+added).distinctBy { it.type to it.id },
+            nextPage=batch.nextPage,totalPages=batch.totalPages)
+        val rows=genreCache[type].orEmpty().map { if(it.genreId==row.genreId)next else it }
+        if(rows.isNotEmpty()) {
+            genreCache[type]=rows
+            val freshKey=if(type=="movie") "$type:$today" else type
+            if(freshGenres.get(freshKey)!=null)freshGenres.put(freshKey,rows)
+        }
+        if(type=="movie")added.forEach { JaVidSrcCatalog.observe(it) }
+        return next
     }
 
     suspend fun trending(): List<TitleItem> = list(fetch("trending/all/week").getJSONArray("results"), "movie")

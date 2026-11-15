@@ -43,6 +43,8 @@ fun TitleDetailsScreen(
     pendingCastFocusId: Int? = null,
     onCastFocusRestored: () -> Unit = {},
     pendingEpisodeFocus: Pair<Int, Int>? = null,
+    pendingPlayFocus: Boolean = false,
+    onPlayFocusRestored: () -> Unit = {},
     onEpisodeFocusRestored: () -> Unit = {},
     onSetWatched: (Int, Int, Boolean) -> Unit = { _, _, _ -> },
     onPlay: () -> Unit,
@@ -61,10 +63,12 @@ fun TitleDetailsScreen(
     val detailsScrollState = rememberScrollState()
     val episodeRow = rememberLazyListState()
     val episodeFocus = remember { FocusRequester() }
+    val playFocus = remember { FocusRequester() }
     val castRow = rememberLazyListState()
     val castFocus = remember { FocusRequester() }
     val watchedMovie = WatchedStore.key(item.id, item.type) in watchedKeys
     val nextEpisode = nextUnwatchedEpisode(item.id, episodes, watchedKeys)
+    val playEnabled = item.type == "movie" || nextEpisode != null
     DisposableEffect(item.type, item.id) {
         onDispose { onSaveScrollY(detailsScrollState.value) }
     }
@@ -88,9 +92,19 @@ fun TitleDetailsScreen(
         }
     }
 
-    LaunchedEffect(pendingEpisodeFocus, episodes, detailsLoading) {
+    LaunchedEffect(pendingPlayFocus, detailsLoading, playEnabled) {
+        if(!pendingPlayFocus || detailsLoading || !playEnabled)return@LaunchedEffect
+        withFrameNanos { }
+        withFrameNanos { }
+        detailsScrollState.scrollTo(0)
+        withFrameNanos { }
+        playFocus.requestFocus()
+        onPlayFocusRestored()
+    }
+
+    LaunchedEffect(pendingEpisodeFocus, pendingPlayFocus, playEnabled, episodes, detailsLoading) {
         val target = pendingEpisodeFocus ?: return@LaunchedEffect
-        if (detailsLoading) return@LaunchedEffect
+        if (detailsLoading || (pendingPlayFocus && playEnabled)) return@LaunchedEffect
         val index = episodes.indexOfFirst { it.season == target.first && it.episode == target.second }
         if (index >= 0) {
             episodeRow.scrollToItem(index)
@@ -195,7 +209,8 @@ fun TitleDetailsScreen(
                             if (item.type == "movie") "▶  Play" else nextEpisode?.let { "▶ S${it.season} E${it.episode}" }
                                 ?: if (episodes.isEmpty()) "Loading episodes…" else "✓ Season watched",
                             primary = true, compact = compact,
-                            enabled = item.type == "movie" || nextEpisode != null, onClick = onPlay)
+                            modifier = Modifier.focusRequester(playFocus),
+                            enabled = playEnabled, onClick = onPlay)
                         if (item.type == "movie") DetailsActionButton(
                             if (watchedMovie) "✓ Watched · Mark unwatched" else "Mark watched",
                             compact = compact, onClick = { onSetWatched(0, 0, !watchedMovie) })
@@ -372,6 +387,7 @@ private fun DetailsActionButton(
     text: String,
     primary: Boolean = false,
     compact: Boolean = false,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
@@ -389,7 +405,7 @@ private fun DetailsActionButton(
             horizontal = if (compact) 9.dp else 16.dp,
             vertical = if (compact) 6.dp else 9.dp
         ),
-        modifier = Modifier.onFocusChanged { focused = it.isFocused }
+        modifier = modifier.onFocusChanged { focused = it.isFocused }
     ) {
         Text(text, fontWeight = FontWeight.SemiBold, fontSize = if (compact) 12.sp else 14.sp, maxLines = 1)
     }

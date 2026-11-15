@@ -72,7 +72,7 @@ class JaTvFrameRateMatcher(
                 "attempted=$attempted frames=$totalFrames position=$positionSeconds " +
                 "video=${videoWidth}x$videoHeight")
         }
-        if (!enabled || closed || totalFrames <= 0 || positionSeconds < 4.0) return
+        if (!enabled || closed || totalFrames <= 0 || positionSeconds < 0.0) return
         if (videoWidth < 480 || videoHeight < 270) return
         requestedMode?.let { mode ->
             if (!activity.hasWindowFocus()) return

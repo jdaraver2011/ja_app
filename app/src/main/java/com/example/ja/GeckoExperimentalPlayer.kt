@@ -141,6 +141,7 @@ private class JaRemoteBridge {
     private var hideTitlePending = false
     private var statisticsLogCount = 0
     private val playbackWindows = mutableMapOf<WebExtension.Port, JaPlaybackWindow>()
+    private val frameWarmup = JaFrameStatsWarmup()
 
     fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
         try {
@@ -188,7 +189,13 @@ private class JaRemoteBridge {
                                                             "droppedPercent=${String.format(java.util.Locale.US, "%.2f", sample.droppedPercent())} " +
                                                             "resolution=${width}x$height")
                                                     }
-                                                    mainHandler.post { onVideoStatistics?.invoke(frames, seconds, width, height) }
+                                                    val document = port.sender.url
+                                                    val sampledAt = android.os.SystemClock.elapsedRealtime()
+                                                    mainHandler.post {
+                                                        if (port !in ports) return@post
+                                                        frameWarmup.record(port, document, sampledAt, frames, seconds, width, height)
+                                                        onVideoStatistics?.invoke(frames, seconds, width, height)
+                                                    }
                                                 }
                                             }
                                             if (event == "CONTROL_MODE_CLOSED" && activePort === port) {
@@ -206,6 +213,7 @@ private class JaRemoteBridge {
                                     override fun onDisconnect(port: WebExtension.Port) {
                                         ports.remove(port)
                                         playbackWindows.remove(port)
+                                        frameWarmup.remove(port)
                                         if (activePort === port) activePort = null
                                         Log.i("JA_TV_BRIDGE", "FRAME_DISCONNECTED ports=${ports.size}")
                                     }
@@ -245,7 +253,13 @@ private class JaRemoteBridge {
         }
     }
 
-    fun clear() { ports.clear(); playbackWindows.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
+    fun replayConfirmedStatistics(document: String?) {
+        val samples = frameWarmup.matching(document, android.os.SystemClock.elapsedRealtime())
+        Log.i("JA_FRAME_RATE", "FRAME_RATE_WARMUP samples=${samples.size} exactDocument=true")
+        samples.forEach { onVideoStatistics?.invoke(it.frames, it.position, it.width, it.height) }
+    }
+
+    fun clear() { ports.clear(); playbackWindows.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
 }
 
 /**
@@ -265,6 +279,8 @@ private class JaSourceStatusBridge {
     private var unavailable = false
     private val handler = Handler(Looper.getMainLooper())
     private var startedPort: WebExtension.Port? = null
+    var confirmedDocumentUrl: String? = null
+        private set
     private var readyNotified = false
 
     // A cold GeckoRuntime can take time to install an extension. Only load the
@@ -313,6 +329,7 @@ private class JaSourceStatusBridge {
                                                         "VIDEO_STARTED" -> if (!started) {
                                                             started = true
                                                             startedPort = port
+                                                            confirmedDocumentUrl = port.sender.url
                                                             Log.i("JA_SOURCES", "VIDEO_STARTED frame=${report.optString("frame")}")
                                                             onStarted?.invoke()
                                                         }
@@ -594,7 +611,10 @@ fun GeckoExperimentalPlayer(
         latestOnMediaStarted()
         }
     }
-    sourceStatusBridge.onStarted = confirmMediaStarted
+    sourceStatusBridge.onStarted = {
+        confirmMediaStarted()
+        if (isTelevision) remoteBridge.replayConfirmedStatistics(sourceStatusBridge.confirmedDocumentUrl)
+    }
     vidFastBridge?.onStarted = confirmMediaStarted
     sourceStatusBridge.onUnavailable = { reason ->
         reportFatalOnce(reason, "Media unavailable: ${reason.take(72)}")

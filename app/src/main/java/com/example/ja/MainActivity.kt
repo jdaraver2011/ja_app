@@ -170,6 +170,9 @@ class MainActivity : ComponentActivity() {
         JaVidSrcCatalog.snapshot.value.generation == version.first && JaVidSrcCatalog.promotions.value == version.second
     fun marked(item: TitleItem) = item.copy(watched = WatchedStore.key(item.id, item.type) in watched)
     var pendingEpisodeFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var pendingPlayFocus by remember { mutableStateOf(false) }
+    var playbackReturnToPlay by remember { mutableStateOf(true) }
+    var playbackEpisodeTarget by remember { mutableStateOf<Pair<Int,Int>?>(null) }
     var pendingCastFocus by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val catalogueRefresh = remember { JaCatalogRefresh(java.time.LocalDate.now()) }
     var catalogueDate by remember { mutableStateOf(catalogueRefresh.day()) }
@@ -219,7 +222,7 @@ class MainActivity : ComponentActivity() {
     var showRestore by remember { mutableStateOf(settings.showRestore) }
     var showPlayerDiagnostics by remember { mutableStateOf(settings.showPlayerDiagnostics) }
     // Match frame rate by default on televisions; phones remain disabled.
-    // Explicit prior choices persist. Resolution matching is a separate opt-in.
+    // Explicit prior choices persist. Both matching options default on for TV.
     var matchTvFrameRate by remember { mutableStateOf(settings.matchTvFrameRate) }
     var matchTvResolution by remember { mutableStateOf(settings.matchTvResolution) }
     var adBlockerMode by remember { mutableStateOf(settings.adBlockerMode) }
@@ -235,6 +238,8 @@ class MainActivity : ComponentActivity() {
     val continueScrollState = rememberScrollState()
     var genreRows by remember { mutableStateOf(emptyList<GenreRow>()) }
     var genresLoading by remember { mutableStateOf(false) }
+    val genreRowLoading = remember { mutableStateMapOf<String,Boolean>() }
+    val genreRowErrors = remember { mutableStateMapOf<String,String>() }
     // Movies can switch between the existing genre rows and a paged popular grid.
     var moviesView by remember { mutableStateOf("Popular") }
     val popularGridState = key(catalogueDate, catalogueGeneration, sourceDataVersion) { rememberLazyGridState() }
@@ -442,27 +447,63 @@ class MainActivity : ComponentActivity() {
         searchGenreLoadingMore = false
         pendingSearchRestore = genreDirectoryBookmark
     }
+    fun loadMoreGenreRow(type: String, row: GenreRow) {
+        val key="$type:${row.genreId}"
+        if(genresLoading || genreRowLoading[key]==true || !row.hasMore)return
+        val requestSources=sourceDataVersion
+        val requestDate=catalogueDate
+        val requestGeneration=catalogueGeneration
+        val genreRepo=if(type=="movie")movieCatalogueRepo else repo
+        genreRowLoading[key]=true;genreRowErrors.remove(key)
+        scope.launch {
+            try {
+                val next=genreRepo.moreGenre(type,row)
+                if(java.time.LocalDate.now()!=requestDate || catalogueGeneration!=requestGeneration || !sourcesCurrent(requestSources))return@launch
+                val currentType=if(tab=="Movies")"movie" else if(tab=="TV")"tv" else ""
+                val currentView=if(tab=="Movies")moviesView else tvView
+                if(currentType==type && currentView=="Genres") {
+                    genreRows=genreRows.map { if(it.genreId==row.genreId)next else it }
+                    val previousIds=row.titles.map { it.id }.toSet()
+                    val visible=outsideOther(next.titles)
+                    val firstNew=visible.indexOfFirst { it.id !in previousIds }
+                    if(firstNew>=0) {
+                        genreScrollStates["$tab:${row.name}"]?.scrollToItem(firstNew)
+                        val title=visible[firstNew]
+                        titleReturnFocus.focus("$tab:Genres:${row.name}:${title.type}:${title.id}")
+                    }
+                }
+            }catch(cancel:kotlinx.coroutines.CancellationException){throw cancel}
+            catch(ex:Exception){genreRowErrors[key]="Couldn't load this genre. Select Retry."}
+            finally{genreRowLoading[key]=false}
+        }
+    }
     fun loadMorePopular() {
         if (!vidSrcSnapshot.ready) return
         if (popularLoading || popularPage >= popularTotalPages || popularPage >= 500) return
-        val nextPage = popularPage + 1
         val requestSources = sourceDataVersion
         val requestDate = catalogueDate
         val requestGeneration = catalogueGeneration
         popularLoading = true
         popularError = null
+        var fetchPage=popularPage+1
         scope.launch {
             try {
-                val found = searchRepo.popularMoviesPage(nextPage)
-                if (java.time.LocalDate.now() != requestDate || catalogueGeneration != requestGeneration || !sourcesCurrent(requestSources)) return@launch
-                popularTitles = (popularTitles + found.titles).distinctBy { it.type to it.id }
-                popularPage = found.page
-                popularTotalPages = found.totalPages
-                Log.i("JA_MOVIES", "POPULAR_PAGE page=${found.page} total=${popularTitles.size}")
+                val batch=JaCatalogBatch(popularPage,popularTotalPages,5)
+                while(batch.hasNext()) {
+                    fetchPage=batch.nextPage
+                    val found = searchRepo.popularMoviesPage(fetchPage)
+                    if (java.time.LocalDate.now() != requestDate || catalogueGeneration != requestGeneration || !sourcesCurrent(requestSources)) return@launch
+                    batch.accept(found.page,found.totalPages)
+                    popularTitles = (popularTitles + found.titles).distinctBy { it.type to it.id }
+                    popularPage = batch.lastPage
+                    popularTotalPages = batch.totalPages
+                    found.titles.forEach { JaVidSrcCatalog.observe(it) }
+                    Log.i("JA_MOVIES", "POPULAR_PAGE page=${found.page} total=${popularTitles.size} batchPages=5")
+                }
             } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
             catch (ex: Exception) {
                 if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration && sourcesCurrent(requestSources)) popularError = "Couldn't load popular movies: ${ex.message}"
-                Log.w("JA_MOVIES", "POPULAR_LOAD_FAILED page=$nextPage", ex)
+                Log.w("JA_MOVIES", "POPULAR_LOAD_FAILED page=$fetchPage", ex)
             } finally { if (java.time.LocalDate.now() == requestDate && catalogueGeneration == requestGeneration && sourcesCurrent(requestSources)) popularLoading = false }
         }
     }
@@ -547,7 +588,6 @@ class MainActivity : ComponentActivity() {
                     error = null
                     try { genreRows = genreRepo.genreRows(genreType) { partial ->
                         genreRows = partial
-                        genresLoading = false
                     } }
                     catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
                     catch (e: Exception) { error = e.message }
@@ -568,6 +608,7 @@ class MainActivity : ComponentActivity() {
     fun showTitle(item: TitleItem) {
         pendingCastFocus = null
         pendingEpisodeFocus = null
+        pendingPlayFocus = false
         selected = item; episodes = emptyList(); seasons = emptyList()
         JaVidSrcCatalog.observe(item)
         // Details load TMDB metadata only; no provider HTTP or hidden-video tests.
@@ -601,6 +642,7 @@ class MainActivity : ComponentActivity() {
     }
     fun openPerson(person: TmdbPersonCredit) {
         pendingEpisodeFocus = null
+        pendingPlayFocus = false
         pendingCastFocus = null
         if (tab == "Search" && selected == null && selectedPerson == null) {
             searchReturnBookmark = searchGridState.firstVisibleItemIndex to searchGridState.firstVisibleItemScrollOffset
@@ -647,7 +689,9 @@ class MainActivity : ComponentActivity() {
     fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L, restart: Boolean = false) {
         // Direct playback: no HTTP preflight, no detached verification, and no
         // preference/HTTP ranking. Each failed player falls back locally.
-        if (item.type == "tv") pendingEpisodeFocus = s to e
+        playbackEpisodeTarget = if(item.type=="tv")s to e else null
+        pendingEpisodeFocus = null
+        pendingPlayFocus = false
         resumePositionMs = startAtMs
         restartFromBeginning = restart
         playbackSessionId += 1
@@ -752,6 +796,12 @@ class MainActivity : ComponentActivity() {
         playbackChoiceIndex = next
         playback = target.source
     }
+    fun closePlayback() {
+        playback = null
+        pendingPlayFocus = playbackReturnToPlay
+        pendingEpisodeFocus = playbackEpisodeTarget
+        refreshHistory()
+    }
     LaunchedEffect(tab, selected?.id, selectedPerson?.id, playback, searchGenre, blockerTools) {
         exitGate.reset()
     }
@@ -760,8 +810,7 @@ class MainActivity : ComponentActivity() {
         when {
             playback != null -> {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=ANDROID_BACK")
-                playback = null
-                refreshHistory()
+                closePlayback()
             }
             selected != null || selectedPerson != null -> backFromDetails()
             tab == "Search" && searchGenre != null -> exitGenre()
@@ -857,8 +906,7 @@ class MainActivity : ComponentActivity() {
             },
             onClose = {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=PLAYER_BACK_BUTTON")
-                playback = null
-                refreshHistory()
+                closePlayback()
             }
         )
         }
@@ -935,9 +983,9 @@ class MainActivity : ComponentActivity() {
                     matchTvResolution = it; settings.matchTvResolution = it
                 }
                 Text(
-                    "Optional Android TV test: a 1080-class video can request 1080p at its matching frame rate " +
+                    "Enabled by default on Android TV: a 1080-class video can request 1080p at its matching frame rate " +
                         "instead of keeping the TV's 4K output. Frame-rate matching takes priority. " +
-                        "Resolution matching is off by default; use it only if it looks better on your TV. " +
+                        "You can turn resolution matching off if needed for your display. " +
                         "The prior display preference is restored on exit.",
                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall
                 )
@@ -1065,7 +1113,9 @@ class MainActivity : ComponentActivity() {
                 pendingCastFocusId = pendingCastFocus?.takeIf { it.first == "${item.type}:${item.id}" }?.second,
                 onCastFocusRestored = { pendingCastFocus = null },
                 pendingEpisodeFocus = pendingEpisodeFocus,
-                onEpisodeFocusRestored = { pendingEpisodeFocus = null },
+                pendingPlayFocus = pendingPlayFocus,
+                onPlayFocusRestored = { pendingPlayFocus=false;pendingEpisodeFocus=null },
+                onEpisodeFocusRestored = { pendingEpisodeFocus = null;pendingPlayFocus=false },
                 onSetWatched = { s, e, value ->
                     scope.launch {
                         try {
@@ -1076,6 +1126,7 @@ class MainActivity : ComponentActivity() {
                 },
                 isFavorite = history.any { it.mediaId == item.id && it.mediaType == item.type && it.favorite },
                 onPlay = {
+                    playbackReturnToPlay = true
                     if (item.type == "movie") play(item)
                     else nextUnwatchedEpisode(item.id, episodes, watched)?.let { play(item, it.season, it.episode) }
                 },
@@ -1104,7 +1155,7 @@ class MainActivity : ComponentActivity() {
                         } catch (ex: Exception) { error = ex.message }
                     }
                 },
-                onEpisodePlay = { ep -> play(item, ep.season, ep.episode) },
+                onEpisodePlay = { ep -> playbackReturnToPlay=false;play(item, ep.season, ep.episode) },
                 restoreScrollY = titleScrollBookmarks["${item.type}:${item.id}"],
                 onSaveScrollY = { offset -> titleScrollBookmarks["${item.type}:${item.id}"] = offset }
             )
@@ -1242,6 +1293,17 @@ class MainActivity : ComponentActivity() {
                                     items(outsideOther(row.titles), key = { "${it.type}-${it.id}" }) { item ->
                                         PosterTile(marked(item), titleReturnFocus, "$tab:Genres:${row.name}:${item.type}:${item.id}") { open(item) }
                                     }
+                                    if(row.hasMore) item(key="genre-more-${row.genreId}") {
+                                        val type=if(tab=="Movies")"movie" else "tv"
+                                        val loading=genreRowLoading["$type:${row.genreId}"]==true
+                                        TvFocusButton(onClick={loadMoreGenreRow(type,row)},
+                                            modifier=Modifier.width(140.dp).height(190.dp),enabled=!genresLoading) {
+                                            Text(if(loading)"Loading…" else if(genreRowErrors.containsKey("$type:${row.genreId}"))"Retry" else "Load More")
+                                        }
+                                    }
+                                }
+                                genreRowErrors["${if(tab=="Movies")"movie" else "tv"}:${row.genreId}"]?.let {
+                                    Text(it,color=Color(0xFFFFA8A8),style=MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -1652,7 +1714,7 @@ private class PlayerControlSettings(context: Context) {
         get() = isTelevision && prefs.getBoolean("tv_match_frame_rate", true)
         set(value) { prefs.edit().putBoolean("tv_match_frame_rate", value).apply() }
     var matchTvResolution: Boolean
-        get() = isTelevision && prefs.getBoolean("tv_match_resolution", false)
+        get() = isTelevision && prefs.getBoolean("tv_match_resolution", true)
         set(value) { prefs.edit().putBoolean("tv_match_resolution", value).apply() }
     var adBlockerMode: String
         get() = JaGeckoAdBlockers.normalized(prefs.getString("ad_blocker_mode", JaGeckoAdBlockers.UBLOCK) ?: JaGeckoAdBlockers.UBLOCK)
