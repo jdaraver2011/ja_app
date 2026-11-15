@@ -162,6 +162,7 @@ class MainActivity : ComponentActivity() {
     val watched by WatchedStore.watched.collectAsState()
     remember { JaVidSrcCatalog.initialize(appContext); true }
     val vidSrcSnapshot by JaVidSrcCatalog.snapshot.collectAsState()
+    val dailyVidSrcDownloads by JaVidSrcCatalog.dailyDownloads.collectAsState()
     val vidSrcQuality by JaVidSrcCatalog.quality.collectAsState()
     val vidSrcPromotions by JaVidSrcCatalog.promotions.collectAsState()
     val sourceDataVersion = vidSrcSnapshot.generation to vidSrcPromotions
@@ -875,7 +876,7 @@ class MainActivity : ComponentActivity() {
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
         error?.let { Text(it, color = Color(0xFFFFA8A8)) }
         if (selected == null && selectedPerson == null && (tab == "Movies" || (tab == "Search" && searchGenre?.type == "movie"))) {
-            if (vidSrcSnapshot.busy || !vidSrcSnapshot.ready) Text(
+            if (vidSrcSnapshot.busy || (!vidSrcSnapshot.ready && dailyVidSrcDownloads)) Text(
                 if (vidSrcSnapshot.ready) "Updating VidSrc catalogue…" else "Preparing VidSrc catalogue…",
                 color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
             vidSrcSnapshot.error?.let {
@@ -885,6 +886,24 @@ class MainActivity : ComponentActivity() {
         }
         if (tab == "Settings" && selected == null) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+                Text("VidSrc catalogue downloads", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                TvSettingsToggle("Download VidSrc ID lists daily", dailyVidSrcDownloads) {
+                    JaVidSrcCatalog.setDailyDownloads(it)
+                }
+                Text(
+                    "When off, JA keeps using the saved IDs and skips automatic downloads on launch or return. " +
+                        "Movie availability can become outdated. CAM metadata checks remain enabled. " +
+                        "Turning this on checks whether the lists are overdue.",
+                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall
+                )
+                if (!vidSrcSnapshot.ready && !dailyVidSrcDownloads) Text(
+                    "No saved ID lists. Download once below to populate available movie listings.",
+                    color = Color(0xFFFFC48A), style = MaterialTheme.typography.bodySmall
+                )
+                TvFocusButton(onClick = { JaVidSrcCatalog.refreshOverdue(force = true) }, enabled = !vidSrcSnapshot.busy) {
+                    Text("Download ID lists now")
+                }
+                Spacer(Modifier.height(16.dp))
                 Text("Player controls", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text("Choose which controls appear over GeckoView. Android's system Back action still exits playback.", color = Color.LightGray)
                 TvSettingsToggle("Show Back button", showBack) { showBack = it; settings.showBack = it }

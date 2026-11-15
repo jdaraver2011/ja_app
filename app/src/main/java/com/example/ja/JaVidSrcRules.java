@@ -22,6 +22,9 @@ public final class JaVidSrcRules {
         if (retryAfter > now && retryAfter - now <= RETRY_MS) return false;
         return checked <= 0 || now < checked || now - checked >= DAY_MS;
     }
+    public static boolean shouldDownload(boolean enabled, boolean manual, long checked, long retryAfter, long now) {
+        return manual || (enabled && due(checked,retryAfter,now));
+    }
     public static boolean safeCount(long previous, long next) {
         return next > 0 && (previous <= 0 || next * 2 >= previous);
     }

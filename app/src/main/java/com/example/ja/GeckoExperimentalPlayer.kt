@@ -140,6 +140,7 @@ private class JaRemoteBridge {
     private var activePort: WebExtension.Port? = null
     private var hideTitlePending = false
     private var statisticsLogCount = 0
+    private val playbackWindows = mutableMapOf<WebExtension.Port, JaPlaybackWindow>()
 
     fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
         try {
@@ -179,6 +180,14 @@ private class JaRemoteBridge {
                                                 if (seconds > 0.0 && seconds.isFinite()) {
                                                     val width = report.optInt("width", 0)
                                                     val height = report.optInt("height", 0)
+                                                    val window = playbackWindows.getOrPut(port) { JaPlaybackWindow() }
+                                                    window.sample(android.os.SystemClock.elapsedRealtime(), frames,
+                                                        report.optInt("dropped", -1), width, height, seconds)?.let { sample ->
+                                                        Log.i("JA_PERF", "VIDEO_WINDOW host=${Uri.parse(port.sender.url).host} " +
+                                                            "elapsedMs=${sample.elapsedMs} frames=${sample.frames} dropped=${sample.dropped} " +
+                                                            "droppedPercent=${String.format(java.util.Locale.US, "%.2f", sample.droppedPercent())} " +
+                                                            "resolution=${width}x$height")
+                                                    }
                                                     mainHandler.post { onVideoStatistics?.invoke(frames, seconds, width, height) }
                                                 }
                                             }
@@ -196,6 +205,7 @@ private class JaRemoteBridge {
                                     }
                                     override fun onDisconnect(port: WebExtension.Port) {
                                         ports.remove(port)
+                                        playbackWindows.remove(port)
                                         if (activePort === port) activePort = null
                                         Log.i("JA_TV_BRIDGE", "FRAME_DISCONNECTED ports=${ports.size}")
                                     }
@@ -235,7 +245,7 @@ private class JaRemoteBridge {
         }
     }
 
-    fun clear() { ports.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
+    fun clear() { ports.clear(); playbackWindows.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
 }
 
 /**
@@ -384,12 +394,13 @@ private class JaOverlayGuardBridge {
                                             override fun onPortMessage(message: Any, port: WebExtension.Port) {
                                                 val data = message as? JSONObject ?: return
                                                 val event = data.optString("event")
-                                                if (event !in setOf("GUARD_FRAME_READY", "OVERLAY_BLOCKED", "OVERLAY_BACKDROP_BLOCKED", "AD_FRAME_BLOCKED")) return
+                                                if (event !in setOf("GUARD_FRAME_READY", "GUARD_PERF", "OVERLAY_BLOCKED", "OVERLAY_BACKDROP_BLOCKED", "AD_FRAME_BLOCKED")) return
                                                 val host = data.optString("host").take(100)
                                                 handler.post {
                                                     if (!connected) return@post
                                                     Log.i("JA_AD_GUARD", "$event host=$host detail=${data.optString("detail").take(64)}")
-                                                    if (event == "GUARD_FRAME_READY") onFrameReady?.invoke(host)
+                                                    if (event == "GUARD_PERF") Log.i("JA_PERF", "GUARD_STATS $data")
+                                                    else if (event == "GUARD_FRAME_READY") onFrameReady?.invoke(host)
                                                     else onBlocked?.invoke(event, host)
                                                 }
                                             }

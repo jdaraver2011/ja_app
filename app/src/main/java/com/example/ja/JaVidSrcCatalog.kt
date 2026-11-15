@@ -32,6 +32,10 @@ object JaVidSrcCatalog {
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     private val initialized=CompletableDeferred<Unit>()
     private val syncMutex=Mutex()
+    private val feedSwitchLock=Any()
+    private val automaticCalls=mutableSetOf<okhttp3.Call>()
+    private val _dailyDownloads=MutableStateFlow(true)
+    val dailyDownloads=_dailyDownloads.asStateFlow()
     private val qualityLock=Any()
     private val records=ConcurrentHashMap<Int,JaVidSrcDatabase.Quality>()
     private val pending=ConcurrentHashMap.newKeySet<Int>()
@@ -51,6 +55,8 @@ object JaVidSrcCatalog {
     @Synchronized fun initialize(context: Context) {
         if(started)return
         started=true;app=context.applicationContext
+        _dailyDownloads.value=app.getSharedPreferences("ja_vidsrc_sync",Context.MODE_PRIVATE)
+            .getBoolean("daily_downloads",true)
         scope.launch {
             try {
                 db=JaVidSrcDatabase(app)
@@ -95,6 +101,17 @@ object JaVidSrcCatalog {
         if(!pending.add(item.id))return
         if(queue.trySend(item).isFailure)pending.remove(item.id)
     }
+    fun setDailyDownloads(enabled: Boolean) {
+        if(!started)return
+        synchronized(feedSwitchLock) {
+            _dailyDownloads.value=enabled
+            app.getSharedPreferences("ja_vidsrc_sync",Context.MODE_PRIVATE).edit()
+                .putBoolean("daily_downloads",enabled).apply()
+            if(!enabled)automaticCalls.toList().forEach { it.cancel() }
+        }
+        Log.i("JA_CATALOG_SYNC","DAILY_DOWNLOADS_ENABLED enabled=$enabled")
+        if(enabled)refreshOverdue()
+    }
     fun refreshOverdue(force: Boolean=false) {
         if(!started)return
         scope.launch {
@@ -103,7 +120,7 @@ object JaVidSrcCatalog {
                 val now=System.currentTimeMillis()
                 val prefs=app.getSharedPreferences("ja_vidsrc_sync",Context.MODE_PRIVATE)
                 val retry=prefs.getLong("retry_after",0L)
-                if(force || JaVidSrcRules.due(_snapshot.value.syncedAt,retry,now)) {
+                if(JaVidSrcRules.shouldDownload(_dailyDownloads.value,force,_snapshot.value.syncedAt,retry,now)) {
                     val directory=File(app.cacheDir,"vidsrc-${System.nanoTime()}")
                     directory.mkdirs()
                     _snapshot.value=_snapshot.value.copy(busy=true,error=null)
@@ -111,10 +128,11 @@ object JaVidSrcCatalog {
                         val files=coroutineScope {
                             mapOf(1 to "movie_tmdb.txt",2 to "tv_tmdb.txt",3 to "eps_tmdb.txt").map { (kind,name) -> async {
                                 val file=File(directory,name)
-                                downloadFeed(name,file)
+                                downloadFeed(name,file,automatic=!force)
                                 kind to file
                             } }.awaitAll().toMap()
                         }
+                        if(!force && !_dailyDownloads.value)throw CancellationException("Automatic downloads disabled")
                         val fresh=db.install(files,now)
                         _snapshot.value=fresh
                         prefs.edit().remove("retry_after").apply()
@@ -132,9 +150,16 @@ object JaVidSrcCatalog {
             }
         }
     }
-    private fun downloadFeed(name: String, output: File) {
+    private fun downloadFeed(name: String, output: File, automatic: Boolean) {
         val request=Request.Builder().url("https://vidsrc.sh/ids/$name").header("User-Agent",UA).header("Accept","text/plain").build()
-        feedsClient.newCall(request).execute().use { response ->
+        val call=feedsClient.newCall(request)
+        synchronized(feedSwitchLock) {
+            if(automatic) {
+                if(!_dailyDownloads.value)throw CancellationException("Automatic downloads disabled")
+                automaticCalls.add(call)
+            }
+        }
+        try { call.execute().use { response ->
             if(!response.isSuccessful)error("ID feed HTTP ${response.code}")
             val body=response.body ?: error("Empty ID response")
             val contentType=response.header("Content-Type").orEmpty().lowercase()
@@ -148,7 +173,10 @@ object JaVidSrcCatalog {
                     out.write(buffer,0,n)
                 }
             } }
-        }
+        } }catch(error:Exception) {
+            if(automatic && call.isCanceled())throw CancellationException("Automatic download cancelled",error)
+            throw error
+        }finally { synchronized(feedSwitchLock) { automaticCalls.remove(call) } }
     }
     private fun refreshQuality(item: TitleItem) {
         val now=System.currentTimeMillis();val old=records[item.id]
