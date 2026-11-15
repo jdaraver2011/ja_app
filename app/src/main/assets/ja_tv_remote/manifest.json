@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "JA TV Remote v1.1.5ay \u2014 Native Auto Quality",
-  "version": "1.1.6.9",
-  "description": "TV remote, subtitles off at startup, 1-second frame statistics; preserves native Auto video quality.",
+  "name": "JA TV Remote \u2014 Output Quality Match",
+  "version": "2.0.2",
+  "description": "TV remote, subtitle defaults, frame statistics and API-only quality matching to verified TV output.",
   "browser_specific_settings": {
     "gecko": {
       "id": "ja-tv-remote-107@local.invalid"
@@ -20,6 +20,7 @@
         "https://*/*"
       ],
       "js": [
+        "output-quality.js",
         "remote.js"
       ],
       "all_frames": true,

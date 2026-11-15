@@ -1261,8 +1261,28 @@
     hideWhenPlaying();
     updateCenterVisibility();
   }
+  let qualityUserTouched = false;
+  document.addEventListener('pointerdown', event => {
+    if (event.isTrusted && event.target?.closest?.('.jw-menu, .jw-settings-menu, .jw-btn'))
+      qualityUserTouched = true;
+  }, true);
+  const outputQuality = JaOutputQuality.create({
+    video: currentVideo,
+    api: video => {
+      if (!isVerifiedJwContext()) return null;
+      const host = video?.closest('.jwplayer[id]');
+      const page = window.wrappedJSObject;
+      if (!host || !page || typeof page.jwplayer !== 'function') return null;
+      return page.jwplayer(host.id);
+    },
+    report: detail => send(detail),
+    userBusy: () => defaultsUserMenuTouched || qualityUserTouched
+  });
+  window.addEventListener('pagehide', () => outputQuality.cancel());
+
   async function handle(message) {
     const action = message?.action;
+    if (action === 'matchOutputQuality') { outputQuality.request(message.height); return; }
     if (action === 'hideTitleChrome') { hidePlayerTitleChrome(); return; }
     if (action && /^controls(?:Open|Next|Prev|Select|Down|Up|Close)$/.test(action)) {
       defaultsUserMenuTouched = true;
@@ -1723,13 +1743,13 @@
       case 'quality':
         // Never change the video's quality while it is buffering/starting.
         // Selecting a fixed 1080p rendition made VidSrc briefly interrupt
-        // playback in the Nov 9 test. Let the provider's native Auto mode
-        // choose resolution; the viewer can still select quality manually.
+        // playback in the Nov 9 test. Output quality matching runs separately
+        // only after native display confirmation and advancing playback.
         // Retain subtitle-off and audio setup, and NEVER open Settings here.
         qualitySkipped=true;
         qualityTarget='Player default (unchanged)';
         startupLog('DEFAULT_QUALITY_SKIPPED', {
-          reason:'PRESERVE_NATIVE_AUTO', qualityChanges:0
+          reason:'STARTUP_PRESERVES_AUTO_OUTPUT_POLICY_SEPARATE', qualityChanges:0
         });
         advanceStartup('ccOpen');
         return;
