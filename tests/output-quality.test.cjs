@@ -24,7 +24,7 @@ let f=fixture();f.q.request(1080);f.step(8);
 assert.equal(f.calls,1);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_VERIFIED');assert.equal(f.pending,false);
 f.q.request(1080);f.step(3);assert.equal(f.calls,1);
 f=fixture({available:false});f.q.request(1080);f.step(35);assert.equal(f.calls,0);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_UNAVAILABLE');assert.equal(f.pending,false);
-f=fixture({accept:false});f.q.request(1080);f.step(35);assert.equal(f.calls,1);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_UNVERIFIED');
+f=fixture({accept:false});f.q.request(1080);f.step(35);assert.equal(f.calls,2);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_UNVERIFIED');
 f=fixture({busy:true});f.q.request(1080);f.step();assert.equal(f.calls,0);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_USER_CONTROL');
 f=fixture();f.q.request(1080);f.step(3);f.setIndex(2);f.step();assert.equal(f.calls,1);assert.equal(f.events.at(-1).event,'QUALITY_MATCH_USER_OR_PLAYER_OVERRIDE');
 f=fixture();f.q.request(1080);f.step(3);f.replace();f.step();assert.equal(f.events.at(-1).event,'QUALITY_MATCH_VIDEO_CHANGED');
