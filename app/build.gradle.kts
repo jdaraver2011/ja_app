@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.ja"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20001
-        versionName = "2.0.1"
+        versionCode = 20002
+        versionName = "2.0.2"
         buildConfigField("String", "GECKOVIEW_VERSION", "\"160.0.20261104181552\"")
         buildConfigField("String", "TMDB_API_KEY", "\"${prop("TMDB_API_KEY")}\"")
         buildConfigField("String", "AUTHORIZED_EMBED_TEMPLATE", "\"${prop("AUTHORIZED_EMBED_TEMPLATE")}\"")
