@@ -530,6 +530,40 @@
       el.style.removeProperty('outline-offset');
     });
   }
+  function focusQualityRow(item) {
+    try {item.scrollIntoView({block:'nearest'});item.focus({preventScroll:true});} catch (_) {}
+  }
+  function qualityPlaybackSnapshot(origin,stage) {
+    const video=currentVideo();if(!video)return;
+    try{
+      const q=video.getVideoPlaybackQuality?.();
+      let hash=2166136261;
+      for(const c of String(video.currentSrc||''))hash=Math.imul(hash^c.charCodeAt(0),16777619);
+      const buffered=[];
+      for(let i=Math.max(0,video.buffered.length-2);i<video.buffered.length;i++)
+        buffered.push([video.buffered.start(i),video.buffered.end(i)]);
+      send({event:'QUALITY_PLAYBACK_STATE',origin,stage,
+        sourceFingerprint:(hash>>>0).toString(16),position:video.currentTime,
+        width:video.videoWidth,height:video.videoHeight,paused:video.paused,
+        readyState:video.readyState,networkState:video.networkState,
+        total:q?.totalVideoFrames,dropped:q?.droppedVideoFrames,buffered});
+    }catch(_){send({event:'QUALITY_PLAYBACK_STATE_UNAVAILABLE',origin,stage});}
+  }
+  const qualitySampleTimers=new Set();
+  function activateQualityRow(item,origin) {
+    focusQualityRow(item);
+    qualityPlaybackSnapshot(origin,'before');
+    item.click();
+    qualityPlaybackSnapshot(origin,'after-click');
+    const video=currentVideo();
+    for(const ms of [2000,8000]){
+      const timer=setTimeout(()=>{
+        qualitySampleTimers.delete(timer);
+        if(currentVideo()===video)qualityPlaybackSnapshot(origin,'after-'+ms+'ms');
+      },ms);
+      qualitySampleTimers.add(timer);
+    }
+  }
   function selectMenu(delta, first = false) {
     const items = menuItems();
     if (menuKind(openJwMenu()) === 'CC') ccMenuMap('navigate');
@@ -541,7 +575,7 @@
     item.setAttribute(MENU_FOCUS_TAG, 'true');
     item.style.setProperty('outline', '3px solid white');
     item.style.setProperty('outline-offset', '2px');
-    try { item.scrollIntoView({block:'nearest'}); item.focus({preventScroll:true}); } catch (_) {}
+    focusQualityRow(item);
     const menu = openJwMenu();
     send({event:'MENU_SELECTED', kind:menuKind(menu), index:menuSelection,
       total:items.length, label:menuLabel(item), tag:item.tagName.toLowerCase(),
@@ -598,7 +632,7 @@
     }
     manualPreference(kind, label);
     // Click nearest observed clickable row for both CC and Settings.
-    try { item.click(); } catch (e) { send({event:'MENU_ACTIVATION_ERROR', kind, label, error:e?.name || String(e)}); return; }
+    try { if(kind==='SETTINGS' && /^(Auto|\d{3,4}p)$/i.test(label))activateQualityRow(item,'manual');else item.click(); } catch (e) { send({event:'MENU_ACTIVATION_ERROR', kind, label, error:e?.name || String(e)}); return; }
     clearMenuFocus(); menuSelection = -1; ccSelectMode = false;
     send({event:'MENU_ACTIVATED', kind, label});
     if (kind === 'CC') send({event:'CC_TRACK_ACTIVATED', label});
@@ -1283,7 +1317,7 @@
     adapterReports.add(key); send({event, ...detail});
   }
   function preferenceApi(video) {
-    try { return JaJwPreferences.discover(video, window.wrappedJSObject, document, preferenceReport); }
+    try { return JaJwPreferences.discover(video, window.wrappedJSObject, document, preferenceReport, label=>qualityActivation.run(label,video)); }
     catch (error) { preferenceReport('PLAYER_API_UNAVAILABLE',{reason:'DISCOVERY_EXCEPTION'}); return null; }
   }
   function manualPreference(kind, label) {
@@ -1300,6 +1334,31 @@
     const menu=row?.closest('.jw-menu');if(!menu)return;
     manualPreference(menuKind(menu), menuLabel(row));
   },true);
+  let qualityDocumentActive=true;
+  const qualityMaskStyle=document.createElement('style');
+  qualityMaskStyle.textContent='html[data-ja-quality-transaction="true"] .jw-menu { clip-path:inset(100%)!important; pointer-events:none!important; }';
+  (document.head||document.documentElement).appendChild(qualityMaskStyle);
+  const qualityActivation=JaQualityActivation.create({
+    valid:video=>qualityDocumentActive && !qualityUserTouched && currentVideo()===video,
+    mask:value=>{if(value)document.documentElement.setAttribute('data-ja-quality-transaction','true');else document.documentElement.removeAttribute('data-ja-quality-transaction');},
+    open:()=>{
+      if(openJwMenu())return false;
+      const button=Array.from(document.querySelectorAll('button.jw-btn,[role="button"].jw-btn'))
+        .find(el=>/^settings$/i.test((el.getAttribute('aria-label')||el.getAttribute('title')||'').trim()));
+      if(!button)throw new Error('NO_SETTINGS_BUTTON');button.click();return true;
+    },
+    find:label=>menuKind(openJwMenu())==='SETTINGS'?menuItems().find(el=>menuLabel(el)===label):null,
+    focus:focusQualityRow,
+    activate:row=>activateQualityRow(row,'automatic'),
+    close:()=>{
+      // Do not close a menu after the viewer has taken control of it.
+      const menu=openJwMenu();
+      if(!controlMode && menuKind(menu)==='SETTINGS')menu.querySelector('.jw-menu-close,[aria-label="Close"]')?.click();
+      clearMenuFocus();
+      send({event:'QUALITY_MENU_CLEANUP',open:!!openJwMenu(),userControl:controlMode});
+    },
+    report:(event,detail)=>send({event,...detail})
+  });
   const outputQuality = JaOutputQuality.create({
     video: currentVideo, api: preferenceApi,
     report: detail => send(detail), userBusy: () => qualityUserTouched
@@ -1308,7 +1367,7 @@
     video: currentVideo, api: preferenceApi,
     report: detail => send(detail), userBusy: () => captionsUserTouched
   });
-  window.addEventListener('pagehide', () => {outputQuality.cancel();captionDefaults.cancel();});
+  window.addEventListener('pagehide', () => {qualityDocumentActive=false;qualityActivation.cancel();outputQuality.cancel();captionDefaults.cancel();qualitySampleTimers.forEach(clearTimeout);qualitySampleTimers.clear();});
 
   async function handle(message) {
     const action = message?.action;
@@ -1316,6 +1375,7 @@
     if (action === 'matchOutputQuality') { outputQuality.request(message.height); return; }
     if (action === 'hideTitleChrome') { hidePlayerTitleChrome(); return; }
     if (action && /^controls(?:Open|Next|Prev|Select|Down|Up|Close)$/.test(action)) {
+      qualityActivation.cancel();
       defaultsUserMenuTouched = true;
       document.documentElement.removeAttribute(BACKGROUND_STARTUP_ATTR);
     }

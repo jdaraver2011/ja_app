@@ -24,10 +24,11 @@ var JaOutputQuality = (() => {
   function create({video, api, report, userBusy = () => false,
     now = () => Date.now(), schedule = (fn, ms) => setTimeout(fn, ms),
     unschedule = id => clearTimeout(id)}) {
+    let commitPending=false, commitError=null, generation=0;
     let timer = null, target = 0, started = 0, requested = null, done = true;
     let lastPosition = null, advancing = 0, verified = 0, boundVideo = null, mutations = 0, lastMutation = 0;
     const emit = (event, extra = {}) => report({event, outputHeight: target, ...extra});
-    function cancel() { if (timer !== null) unschedule(timer); timer = null; done = true; }
+    function cancel() { generation++; if (timer !== null) unschedule(timer); timer = null; done = true; }
     function finish(event, extra) { cancel(); emit(event, extra); }
     function tick() {
       timer = null;
@@ -38,6 +39,8 @@ var JaOutputQuality = (() => {
           finish(requested ? 'QUALITY_MATCH_UNVERIFIED' : 'QUALITY_MATCH_UNAVAILABLE',
             {reason: requested ? 'SELECTION_NOT_CONFIRMED' : 'API_OR_LEVELS_NOT_READY'}); return;
         }
+        if(commitError)throw commitError;
+        if(commitPending){later();return;}
         const v = video();
         if (boundVideo && v !== boundVideo) { finish('QUALITY_MATCH_VIDEO_CHANGED'); return; }
         if (!v || v.paused || v.ended || v.readyState < 3 || !v.videoWidth) { later(); return; }
@@ -63,7 +66,7 @@ var JaOutputQuality = (() => {
           emit('QUALITY_MATCH_REQUESTED', {quality:choice.label, index:choice.index,
             exact:choice.resolution === target, alreadySelected:selected === choice.index});
           // At most two requests per target; retry only after a bounded settling interval.
-          if (selected !== choice.index || player.forceQualityCommit === true) { player.setCurrentQuality(choice.index); mutations++; lastMutation=now(); }
+          if (selected !== choice.index || player.forceQualityCommit === true) { commit(player,choice.index); mutations++; lastMutation=now(); }
         } else {
           const currentChoice = choices(levels).find(x => x.index === requested.index);
           if (!currentChoice || currentChoice.resolution !== requested.resolution) {
@@ -71,14 +74,14 @@ var JaOutputQuality = (() => {
           }
           if (selected === requested.index) {
             if (++verified >= 2) {
-              finish('QUALITY_MATCH_VERIFIED', {quality:requested.label, index:selected,
+              finish(player.qualityEvidence==='CUSTOM_MENU_SELECTION'?'QUALITY_MENU_SELECTION_CONFIRMED':'QUALITY_MATCH_VERIFIED', {quality:requested.label, index:selected,
                 evidence:player.qualityEvidence || 'JW_API_SELECTION', videoWidth:v.videoWidth, videoHeight:v.videoHeight}); return;
             }
           } else {
             verified = 0;
             if (selected !== requested.previous) { finish('QUALITY_MATCH_USER_OR_PLAYER_OVERRIDE'); return; }
             if (mutations < 2 && now()-lastMutation >= 5000) {
-              player.setCurrentQuality(requested.index);mutations++;lastMutation=now();
+              commit(player,requested.index);mutations++;lastMutation=now();
               emit('QUALITY_MATCH_RETRY',{quality:requested.label,attempt:mutations});
             }
           }
@@ -86,11 +89,18 @@ var JaOutputQuality = (() => {
       } catch (error) { finish('QUALITY_MATCH_API_ERROR', {error:String(error?.name || 'Error').slice(0,40)}); return; }
       later();
     }
+    function commit(player,index) {
+      const result=player.setCurrentQuality(index);
+      if(result && typeof result.then==='function'){
+        commitPending=true;const token=generation;
+        result.then(()=>{if(token===generation)commitPending=false;},error=>{if(token===generation){commitPending=false;commitError=error;}});
+      }
+    }
     function later() { if (!done) timer = schedule(tick, 1000); }
     function request(height) {
       height = Number(height);
       if (!Number.isInteger(height) || height < 360 || height > 4320 || height === target) return;
-      cancel(); target = height; started = now(); requested = null; boundVideo = null;
+      cancel(); commitPending=false;commitError=null; target = height; started = now(); requested = null; boundVideo = null;
       lastPosition = null; advancing = 0; verified = 0; mutations = 0; lastMutation = 0; done = false;
       emit('QUALITY_MATCH_ARMED'); later();
     }

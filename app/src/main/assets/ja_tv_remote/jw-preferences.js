@@ -1,7 +1,7 @@
 /* Shared discovery and bounded subtitle defaults for the confirmed video document. */
 var JaJwPreferences = (() => {
   'use strict';
-  function discover(video, page, doc, report) {
+  function discover(video, page, doc, report, activateQuality) {
     if (!video) return null;
     if (typeof page?.jwplayer === 'function') {
       const ids = [video.closest?.('[id]')?.id,
@@ -41,41 +41,9 @@ var JaJwPreferences = (() => {
       getQualityLevels: () => menuRows('quality').map(x => ({label:x.label})),
       getCurrentQuality: () => menuRows('quality').findIndex(x => selected(x.row)),
       setCurrentQuality: index => {
-        const item=menuRows('quality')[index]; if(!item)return;
-        const menu=item.row.closest('.jw-menu');
-        const alreadyOpen=menu?.classList.contains('is-open');
-        let opened=false;
-        const attr='data-ja-quality-transaction';
-        if(!alreadyOpen){
-          const button=Array.from(doc.querySelectorAll('button.jw-btn, [role="button"].jw-btn'))
-            .find(el=>/^settings$/i.test((el.getAttribute('aria-label')||el.getAttribute('title')||'').trim()));
-          if(!button){report('QUALITY_COMMIT_UNAVAILABLE',{reason:'NO_SETTINGS_BUTTON'});return;}
-          if(!doc.querySelector('style[data-ja-quality-style]')){
-            const style=doc.createElement('style');style.setAttribute('data-ja-quality-style','true');
-            style.textContent='html['+attr+'="true"] .jw-menu { opacity:0!important; pointer-events:none!important; }';
-            (doc.head||doc.documentElement).appendChild(style);
-          }
-          doc.documentElement.setAttribute(attr,'true');
-          button.click();opened=true;
-        }
-        // Re-query after opening: this provider may rebuild the row handlers.
-        const fresh=menuRows('quality').find(x=>x.label===item.label);
-        try{
-          if(!fresh)throw new Error('QUALITY_ROW_REPLACED');
-          fresh.row.click();
-          report('QUALITY_ROW_ACTIVATED',{quality:item.label,openedByJA:opened});
-        }finally{
-          if(opened){
-            setTimeout(()=>{
-              try{
-                const current=menuRows('quality')[0]?.row.closest('.jw-menu');
-                if(current?.classList.contains('is-open'))
-                  current.querySelector('.jw-menu-close, [aria-label="Close"]')?.click();
-                report('QUALITY_MENU_CLEANUP',{open:!!current?.classList.contains('is-open')});
-              }finally{doc.documentElement.removeAttribute(attr);}
-            },250);
-          }
-        }
+        const item=menuRows('quality')[index];
+        if(!item || !activateQuality) throw new Error('QUALITY_ACTIVATION_UNAVAILABLE');
+        return activateQuality(item.label);
       },
       getCaptionsList: () => menuRows('captions').length ? [{id:'off'},{id:'custom'}] : [],
       getCurrentCaptions: () => {const item=menuRows('captions')[0];return item && selected(item.row) ? 0 : -1;},
