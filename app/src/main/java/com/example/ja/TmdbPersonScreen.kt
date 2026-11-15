@@ -40,7 +40,6 @@ private val personMuted = Color(0xFFB5BEC6)
 fun TmdbPersonScreen(
     person: TmdbPersonCredit,
     repository: TmdbPersonRepository,
-    onBack: () -> Unit,
     onOpenTitle: (TitleItem) -> Unit,
     filmographyPage: Int = 0,
     onFilmographyPageChange: (Int) -> Unit = {},
@@ -49,7 +48,7 @@ fun TmdbPersonScreen(
 ) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scrollScope = rememberCoroutineScope()
-    val backFocus = remember(person.id) { FocusRequester() }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val biographyFocus = remember(person.id) { FocusRequester() }
     val contentFocus = remember(person.id) { FocusRequester() }
     // Save on navigation away; restoration waits until TMDB details are loaded.
@@ -84,7 +83,7 @@ fun TmdbPersonScreen(
     val movePastBiography: () -> Unit = {
         val info = personInfo
         if (info != null) scrollScope.launch {
-            val prefix = 3 + (if (error != null) 1 else 0) + (if (info.alsoKnownAs.isNotEmpty()) 1 else 0)
+            val prefix = 2 + (if (error != null) 1 else 0) + (if (info.alsoKnownAs.isNotEmpty()) 1 else 0)
             if (info.knownForTitles.isNotEmpty()) {
                 listState.scrollToItem(prefix)
                 snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == "known-for-row" } }.first { it }
@@ -108,22 +107,6 @@ fun TmdbPersonScreen(
         state = listState,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item(key = "back") {
-            JaCompactBackButton(onClick = onBack, modifier = Modifier.focusRequester(backFocus)
-                .onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && !loading && personInfo != null) {
-                        scrollScope.launch {
-                            val biographyIndex = 2 + (if (error != null) 1 else 0)
-                            listState.scrollToItem(biographyIndex)
-                            snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == "biography" } }.first { it }
-                            withFrameNanos { }
-                            biographyFocus.requestFocus()
-                        }
-                        true
-                    } else false
-                })
-        }
-
         item { BoxWithConstraints(Modifier.fillMaxWidth()) {
             val compact = jaContentBaseWidth(maxWidth) < 620.dp
             Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 24.dp)) {
@@ -159,11 +142,11 @@ fun TmdbPersonScreen(
                     text = personInfo?.biography ?: "No biography is currently available from TMDB.",
                     requester = biographyFocus,
                     onDownToContent = movePastBiography,
-                    onUpToBack = {
+                    onUpToNavigation = {
                         scrollScope.launch {
                             listState.scrollToItem(0)
                             withFrameNanos { }
-                            backFocus.requestFocus()
+                            focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)
                         }
                     }
                 )
@@ -195,7 +178,7 @@ fun TmdbPersonScreen(
                 val start = page * 50
                 val credits = allCredits.drop(start).take(50)
                 // LazyColumn items before the filmography heading (loaded state).
-                val filmographyHeaderIndex = 3 +
+                val filmographyHeaderIndex = 2 +
                     (if (error != null) 1 else 0) +
                     (if (!personInfo?.alsoKnownAs.isNullOrEmpty()) 1 else 0) +
                     (if (!personInfo?.knownForTitles.isNullOrEmpty()) 2 else 0)
@@ -246,7 +229,7 @@ private fun PersonFact(label: String, value: String) {
 
 /** Up/Down navigate past the panel until the viewer explicitly chooses to read. */
 @Composable
-private fun PersonBiography(text: String, requester: FocusRequester, onUpToBack: () -> Unit,
+private fun PersonBiography(text: String, requester: FocusRequester, onUpToNavigation: () -> Unit,
     onDownToContent: () -> Unit) {
     val scroll = rememberScrollState()
     val step = with(LocalDensity.current) { 72.dp.toPx() }
@@ -258,7 +241,7 @@ private fun PersonBiography(text: String, requester: FocusRequester, onUpToBack:
             JaBiographyNavigation.Action.END_READING -> reading = false
             JaBiographyNavigation.Action.SCROLL_UP -> scroll.dispatchRawDelta(-step)
             JaBiographyNavigation.Action.SCROLL_DOWN -> scroll.dispatchRawDelta(step)
-            JaBiographyNavigation.Action.PREVIOUS -> { reading = false; onUpToBack() }
+            JaBiographyNavigation.Action.PREVIOUS -> { reading = false; onUpToNavigation() }
             JaBiographyNavigation.Action.NEXT -> { reading = false; onDownToContent() }
             else -> Unit
         }

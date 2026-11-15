@@ -51,7 +51,6 @@ fun TitleDetailsScreen(
     onToggleFavorite: () -> Unit,
     onOpenRecommendation: (TitleItem) -> Unit,
     onOpenPerson: (TmdbPersonCredit) -> Unit,
-    onBack: () -> Unit,
     seasons: List<Int>,
     season: Int,
     episodes: List<EpisodeItem>,
@@ -136,15 +135,10 @@ fun TitleDetailsScreen(
     val posterUrl = details?.posterUrl ?: item.posterUrl
     val rating = details?.rating ?: item.rating.takeIf { it > 0 }
 
-    // A visible Back button uses the same stack as Android system Back.
-    // It also makes it obvious that the updated details screen is installed.
     Column(
         Modifier.fillMaxSize().background(detailsBg).verticalScroll(detailsScrollState),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            JaCompactBackButton(onClick = onBack)
-        }
         // Compact header for both movies and TV shows. The oversized backdrop
         // has been removed to bring Overview (and TV seasons) into view sooner.
         // Poster is about 25% smaller than the previous details poster.

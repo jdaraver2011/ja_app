@@ -1112,7 +1112,6 @@ class MainActivity : ComponentActivity() {
             TmdbPersonScreen(
                 person = activePerson,
                 repository = peopleRepo,
-                onBack = { backFromDetails() },
                 onOpenTitle = { creditTitle -> open(creditTitle, fromDetails = true) },
                 filmographyPage = personFilmographyPages[activePerson.id] ?: 0,
                 onFilmographyPageChange = { page -> personFilmographyPages[activePerson.id] = page },
@@ -1159,7 +1158,6 @@ class MainActivity : ComponentActivity() {
                 },
                 onOpenRecommendation = { suggested -> open(suggested, fromDetails = true) },
                 onOpenPerson = { person -> openPerson(person) },
-                onBack = { backFromDetails() },
                 seasons = seasons,
                 season = season,
                 episodes = episodes,
