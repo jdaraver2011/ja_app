@@ -94,14 +94,16 @@ fun JaSearchScreen(
         }
         // Search filters remain a compact horizontal strip. Only result cards scroll vertically.
         item(span = { GridItemSpan(maxLineSpan) }, key = "search-filters") {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                rowItems(JaSearchMode.entries) { candidate ->
-                    JaSearchButton(
-                        text = candidate.label,
-                        highlighted = candidate == mode,
-                        onClick = { onModeChange(candidate) },
-                        compact = true
-                    )
+            JaUnscaledTopBar {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowItems(JaSearchMode.entries) { candidate ->
+                        JaSearchButton(
+                            text = candidate.label,
+                            highlighted = candidate == mode,
+                            onClick = { onModeChange(candidate) },
+                            compact = true
+                        )
+                    }
                 }
             }
         }

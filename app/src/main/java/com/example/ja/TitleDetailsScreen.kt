@@ -149,7 +149,7 @@ fun TitleDetailsScreen(
         // has been removed to bring Overview (and TV seasons) into view sooner.
         // Poster is about 25% smaller than the previous details poster.
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val compact = maxWidth < 620.dp
+            val compact = jaContentBaseWidth(maxWidth) < 620.dp
             val posterWidth = if (compact) 84.dp else 144.dp
             val posterHeight = if (compact) 126.dp else 212.dp
             Row(

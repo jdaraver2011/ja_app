@@ -764,6 +764,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     resumePrompt?.let { pending ->
+        JaCompactContent {
         AlertDialog(
             onDismissRequest = { resumePrompt = null },
             title = { Text("Continue watching?") },
@@ -783,6 +784,7 @@ class MainActivity : ComponentActivity() {
                 }
             }) { Text("Start over") } }
         )
+        }
     }
     fun nextPlaybackSource(reason: String, recordFailure: Boolean = true) {
         // No HTTP checks here either. All three sources are known from the
@@ -927,6 +929,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         Spacer(Modifier.height(12.dp))
+        JaCompactContent {
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
         error?.let { Text(it, color = Color(0xFFFFA8A8)) }
         if (selected == null && selectedPerson == null && (tab == "Movies" || (tab == "Search" && searchGenre?.type == "movie"))) {
@@ -1199,13 +1202,15 @@ class MainActivity : ComponentActivity() {
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"
                 val activeView = if (isMovieTab) moviesView else tvView
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres")).forEach { view ->
-                        TvSecondaryButton(
-                            text = view,
-                            selected = activeView == view,
-                            onClick = { if (isMovieTab) moviesView = view else tvView = view }
-                        )
+                JaUnscaledTopBar {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres")).forEach { view ->
+                            TvSecondaryButton(
+                                text = view,
+                                selected = activeView == view,
+                                onClick = { if (isMovieTab) moviesView = view else tvView = view }
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -1303,8 +1308,8 @@ class MainActivity : ComponentActivity() {
                                         val type=if(tab=="Movies")"movie" else "tv"
                                         val loading=genreRowLoading["$type:${row.genreId}"]==true
                                         TvFocusButton(onClick={loadMoreGenreRow(type,row)},
-                                            modifier=Modifier.width(140.dp).height(190.dp),enabled=!genresLoading) {
-                                            Text(if(loading)"Loading…" else if(genreRowErrors.containsKey("$type:${row.genreId}"))"Retry" else "Load More")
+                                            colors=ButtonDefaults.buttonColors(containerColor=accent),enabled=!genresLoading) {
+                                            Text(if(loading)"Loading…" else if(genreRowErrors.containsKey("$type:${row.genreId}"))"Retry" else "Load More",color=Color.Black)
                                         }
                                     }
                                 }
@@ -1319,13 +1324,15 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(favoritesView) {
                     Log.i("JA_FAVORITES", "GRID_V115O_VERTICAL view=$favoritesView")
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Movies", "TV").forEach { view ->
-                        TvSecondaryButton(
-                            text = view,
-                            selected = favoritesView == view,
-                            onClick = { favoritesView = view }
-                        )
+                JaUnscaledTopBar {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Movies", "TV").forEach { view ->
+                            TvSecondaryButton(
+                                text = view,
+                                selected = favoritesView == view,
+                                onClick = { favoritesView = view }
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -1351,9 +1358,9 @@ class MainActivity : ComponentActivity() {
                     // vertical rows even on a wide Android TV display.
                     BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                         val columnCount = when {
-                            maxWidth < 340.dp -> 1
-                            maxWidth < 640.dp -> 2
-                            maxWidth < 960.dp -> 3
+                            jaContentBaseWidth(maxWidth) < 340.dp -> 1
+                            jaContentBaseWidth(maxWidth) < 640.dp -> 2
+                            jaContentBaseWidth(maxWidth) < 960.dp -> 3
                             else -> 4
                         }
                         LazyVerticalGrid(
@@ -1385,6 +1392,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
         }
     }
 }

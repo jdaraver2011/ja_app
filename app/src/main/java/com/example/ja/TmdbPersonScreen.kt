@@ -125,7 +125,7 @@ fun TmdbPersonScreen(
         }
 
         item { BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val compact = maxWidth < 620.dp
+            val compact = jaContentBaseWidth(maxWidth) < 620.dp
             Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 24.dp)) {
                 AsyncImage(
                     model = personInfo?.profileUrl ?: person.profileUrl,
