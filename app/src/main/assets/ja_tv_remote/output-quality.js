@@ -63,7 +63,7 @@ var JaOutputQuality = (() => {
           emit('QUALITY_MATCH_REQUESTED', {quality:choice.label, index:choice.index,
             exact:choice.resolution === target, alreadySelected:selected === choice.index});
           // At most two requests per target; retry only after a bounded settling interval.
-          if (selected !== choice.index) { player.setCurrentQuality(choice.index); mutations++; lastMutation=now(); }
+          if (selected !== choice.index || player.forceQualityCommit === true) { player.setCurrentQuality(choice.index); mutations++; lastMutation=now(); }
         } else {
           const currentChoice = choices(levels).find(x => x.index === requested.index);
           if (!currentChoice || currentChoice.resolution !== requested.resolution) {
@@ -72,7 +72,7 @@ var JaOutputQuality = (() => {
           if (selected === requested.index) {
             if (++verified >= 2) {
               finish('QUALITY_MATCH_VERIFIED', {quality:requested.label, index:selected,
-                evidence:'JW_CURRENT_QUALITY', videoWidth:v.videoWidth, videoHeight:v.videoHeight}); return;
+                evidence:player.qualityEvidence || 'JW_API_SELECTION', videoWidth:v.videoWidth, videoHeight:v.videoHeight}); return;
             }
           } else {
             verified = 0;

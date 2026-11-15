@@ -937,6 +937,7 @@
       opacity:0 !important;visibility:hidden !important;pointer-events:none !important;
     }`;
   (document.head || document.documentElement).appendChild(titleStyle);
+  let titleRuleReported=false;
   function hidePlayerTitleChrome() {
     // Ignore ad/tracker frames: only pages containing a video, JW shell, or
     // embedded player iframe can have the JA player's title banner.
@@ -950,15 +951,12 @@
     const candidates=document.querySelectorAll(
       '.jw-title,.jw-title-primary,.jw-title-secondary,.vjs-title,'+
       '.player-title,.video-title,.movie-title,[data-testid="player-title"],'+
-      'h1,h2,h3,[class*="title" i],[id*="title" i]');
+      'h1,h2,h3,[class*="title" i],[id*="title" i],div,span');
     let checked=0;
     for (const el of candidates) {
-      if (++checked > 350) break;
+      if (++checked > 600) break;
       if (!el.isConnected || el.closest('.jw-menu,.jw-controlbar,.jw-bottom,.jw-seek,.jw-toolbar')) continue;
       if (el.querySelector('video,iframe,button,input,[role="button"]')) continue;
-      const rect=el.getBoundingClientRect();
-      if (rect.width < 15 || rect.height < 5 || rect.height > 100 ||
-          rect.top > vh*.35 || rect.bottom < 0) continue;
       const value=(el.innerText||el.textContent||'').trim().replace(/\s+/g,' ');
       if (value.length < 3 || value.length > 100) continue;
       const cls=String(el.className?.baseVal||el.className||'');
@@ -966,15 +964,28 @@
       const explicitlyNamed=/title/i.test(cls+' '+id+' '+(el.getAttribute('data-testid')||''));
       const titleWithYear=/^(?!.*(?:install|vpn|virus|advert))(?:.{3,85})\s(?:19|20)\d{2}$/i.test(value);
       if (!explicitlyNamed && !titleWithYear) continue;
+      const rect=el.getBoundingClientRect();
+      if (rect.width < 15 || rect.height < 5 || rect.height > 100 ||
+          rect.top > vh*.35 || rect.bottom < 0) continue;
+
       if (el.getAttribute(TITLE_NODE_ATTR)==='true') continue;
       el.setAttribute(TITLE_NODE_ATTR,'true');
       hiddenCount++;
       if (labels.length<2) labels.push(value.slice(0,48));
     }
     if (hiddenCount) send({event:'TITLE_CHROME_HIDDEN',count:hiddenCount,labels});
-    else if (currentVideo() || /(^|\.)vidsrc\.mov$/.test(location.hostname))
+    else if (!titleRuleReported && (currentVideo() || /(^|\.)vidsrc\.mov$/.test(location.hostname))) {
+      titleRuleReported=true;
       send({event:'TITLE_CHROME_RULE_ARMED',frame:location.hostname,checked});
+    }
   }
+  let titleRefreshTimer=null;
+  const titleObserver=new MutationObserver(()=>{
+    if(document.documentElement.getAttribute(TITLE_HIDE_ATTR)!=='true' || titleRefreshTimer)return;
+    titleRefreshTimer=setTimeout(()=>{titleRefreshTimer=null;hidePlayerTitleChrome();},1200);
+  });
+  if(document.body)titleObserver.observe(document.body,{childList:true,subtree:true,characterData:true});
+  window.addEventListener('pagehide',()=>{titleObserver.disconnect();clearTimeout(titleRefreshTimer);});
   // In control mode, explicitly reveal JW Player's real toolbar. This is
   // temporary and does not change autoplay, volume, quality, or subtitles.
   const toolbarForced = new Map();
@@ -1157,6 +1168,7 @@
       }
       // The dedicated center-icon rule remains independent of JW's toolbar;
       // it is temporarily relaxed while the user is interacting by touch.
+      if (!touchPlaybackMode) hidePlayerTitleChrome();
       const centerCount = hideCentralPlaybackIcons();
       send({event:'CONTROLS_HIDDEN', count:hidden.length,
         centerCandidates:centerCount, touchMode:touchPlaybackMode});
