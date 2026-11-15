@@ -9,6 +9,12 @@ public final class JaVidSrcRulesTest {
  }
  public static void main(String[] args)throws Exception{
   long now=1_800_000_000_000L;
+  check(!JaVidSrcRules.shouldDownload(false,false,0,0,now));
+  check(!JaVidSrcRules.shouldDownload(false,false,now-JaVidSrcRules.DAY_MS,0,now));
+  check(JaVidSrcRules.shouldDownload(false,true,now,now+JaVidSrcRules.RETRY_MS,now));
+  check(JaVidSrcRules.shouldDownload(true,false,now-JaVidSrcRules.DAY_MS,0,now));
+  check(!JaVidSrcRules.shouldDownload(true,false,now,0,now));
+  check(!JaVidSrcRules.shouldDownload(true,false,0,now+JaVidSrcRules.RETRY_MS,now));
   check(JaVidSrcRules.due(0,0,now));
   check(!JaVidSrcRules.due(now-1000,0,now));
   check(JaVidSrcRules.due(now-JaVidSrcRules.DAY_MS,0,now));
