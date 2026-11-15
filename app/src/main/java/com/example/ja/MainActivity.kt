@@ -529,20 +529,26 @@ class MainActivity : ComponentActivity() {
     }
     fun loadMorePopularTV() {
         if (tvPopularLoading || tvPopularPage >= tvPopularTotalPages || tvPopularPage >= 500) return
-        val nextPage = tvPopularPage + 1
         tvPopularLoading = true
         tvPopularError = null
+        var fetchPage = tvPopularPage + 1
         scope.launch {
             try {
-                val found = searchRepo.popularShowsPage(nextPage)
-                tvPopularTitles = (tvPopularTitles + found.titles).distinctBy { it.type to it.id }
-                tvPopularPage = found.page
-                tvPopularTotalPages = if (found.titles.isEmpty()) found.page else found.totalPages
-                Log.i("JA_TV", "POPULAR_PAGE page=${found.page} total=${tvPopularTitles.size}")
+                val batch = JaCatalogBatch(tvPopularPage,tvPopularTotalPages,5)
+                while (batch.hasNext()) {
+                    fetchPage = batch.nextPage
+                    val found = searchRepo.popularShowsPage(fetchPage)
+                    val totalPages = if (found.titles.isEmpty()) found.page else found.totalPages
+                    batch.accept(found.page,totalPages)
+                    tvPopularTitles = (tvPopularTitles + found.titles).distinctBy { it.type to it.id }
+                    tvPopularPage = batch.lastPage
+                    tvPopularTotalPages = batch.totalPages
+                    Log.i("JA_TV", "POPULAR_PAGE page=${found.page} total=${tvPopularTitles.size} batchPages=5")
+                }
             } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
             catch (ex: Exception) {
                 tvPopularError = "Couldn't load popular TV shows: ${ex.message}"
-                Log.w("JA_TV", "POPULAR_LOAD_FAILED page=$nextPage", ex)
+                Log.w("JA_TV", "POPULAR_LOAD_FAILED page=$fetchPage", ex)
             } finally { tvPopularLoading = false }
         }
     }
