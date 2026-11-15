@@ -1,6 +1,0 @@
-# Copy to local.properties and set your own SDK path and TMDB API key
-# sdk.dir=/path/to/Android/Sdk
-TMDB_API_KEY=YOUR_TMDB_V3_API_KEY
-# Optional: ONLY a licensed embed endpoint. Supported placeholders: {id}, {season}, {episode}, {type}
-AUTHORIZED_EMBED_TEMPLATE=
-AUTHORIZED_EMBED_HOST=
