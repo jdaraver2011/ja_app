@@ -3,16 +3,37 @@ const {discover,captions}=require('../app/src/main/assets/ja_tv_remote/jw-prefer
 const quality=require('../app/src/main/assets/ja_tv_remote/output-quality.js');
 // Match the custom row structure reported in the device log, without a .jwplayer ancestor.
 function row(label){let active=false;return {label,textContent:label,classList:{contains:()=>active},getAttribute:()=>null,click(){active=true;},set active(v){active=v;},closest(){return this;}};}
+let open=false, commits=0, cleaned=0, scheduled=null;
+const attrs=new Map();
 const qrows=['Auto','360p','720p','1080p'].map(row);qrows[0].active=true;
-for(const r of qrows)r.click=()=>{qrows.forEach(x=>x.active=false);r.active=true;};
-const off=row('Off');const menus=[{textContent:'Settings×QualityAuto360p720p1080pSpeed0.5×0.75×Normal',querySelectorAll:selector=>selector==='.jw-sec'?[{textContent:'Quality'},{textContent:'Speed'}]:qrows},{textContent:'Subtitles Options Off',querySelector:()=>({}),querySelectorAll:()=>[off]}];
-assert.equal(/\bQuality\b/i.test(menus[0].textContent),false,'Regression fixture must reproduce concatenated provider text');
+const off=row('Off');
+const qmenu={textContent:'Settings×QualityAuto360p720p1080pSpeed0.5×0.75×Normal',
+ classList:{contains:()=>open},querySelectorAll:selector=>selector==='.jw-sec'?[{textContent:'Quality'},{textContent:'Speed'}]:qrows,
+ querySelector:()=>({click:()=>{open=false;cleaned++;}})};
+const menus=[qmenu,{textContent:'Subtitles Options Off',querySelector:()=>({}),querySelectorAll:()=>[off]}];
+for(const r of qrows){r.closest=selector=>selector==='.jw-menu'?qmenu:r;r.click=()=>{assert.equal(open,true,'Commit requires open provider menu');commits++;qrows.forEach(x=>x.active=false);r.active=true;};}
+assert.equal(/\bQuality\b/i.test(qmenu.textContent),false);
 const video={closest:()=>null};
-const doc={querySelectorAll:s=>s==='video'?[video]:s==='.jw-menu'?menus:[],querySelector:()=>({})};
+const doc={querySelectorAll:s=>s==='video'?[video]:s==='.jw-menu'?menus:s.includes('button.jw-btn')?[{getAttribute:()=> 'Settings',click:()=>open=true}]:[],
+ querySelector:s=>s==='.jw-btn, .jw-seek'?{}:null,createElement:()=>({setAttribute(){}}),head:{appendChild(){}},
+ documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)}};
 let adapter=discover(video,{},doc,()=>{});
+const oldTimeout=global.setTimeout;global.setTimeout=fn=>{scheduled=fn;return 1;};
 assert.equal(adapter.getCurrentQuality(),0);adapter.setCurrentQuality(3);assert.equal(adapter.getCurrentQuality(),3);
+assert.equal(commits,1);assert.equal(attrs.get('data-ja-quality-transaction'),'true');scheduled();assert.equal(open,false);assert.equal(cleaned,1);assert.equal(attrs.size,0);
+open=true;scheduled=null;adapter.setCurrentQuality(2);assert.equal(open,true);assert.equal(scheduled,null,'Do not close a user-owned menu');
+open=false;global.setTimeout=oldTimeout;
 assert.equal(adapter.getCurrentCaptions(),-1);adapter.setCurrentCaptions(0);assert.equal(adapter.getCurrentCaptions(),0);
 assert.equal(quality.select(adapter.getQualityLevels(),1080).index,3);
+// A pre-existing checkmark must still commit through the custom player's open-menu path.
+qrows.forEach(x=>x.active=false);qrows[3].active=true;open=false;
+video.paused=false;video.ended=false;video.readyState=4;video.videoWidth=1920;video.videoHeight=1080;video.currentTime=1;
+let qualityTick=null,clock=0;const previousCommits=commits;
+global.setTimeout=fn=>{scheduled=fn;return 1;};
+const controller=quality.create({video:()=>video,api:()=>adapter,report:()=>{},now:()=>clock,schedule:fn=>{qualityTick=fn;return 1;},unschedule:()=>qualityTick=null});
+controller.request(1080);
+for(let i=0;i<3;i++){clock+=1000;video.currentTime++;const fn=qualityTick;qualityTick=null;fn?.();}
+assert.equal(commits,previousCommits+1,'Checked custom row must be reactivated once');scheduled();controller.cancel();global.setTimeout=oldTimeout;
 assert.equal(discover(video,{}, {...doc,querySelectorAll:s=>s==='video'?[{},{}]:[]},()=>{}),null);
 const jw={getContainer:()=>({contains:v=>v===video})};assert.equal(discover(video,{jwplayer:()=>jw},doc,()=>{}),jw);
 function fixture(){let time=0,fn=null,index=1,calls=0,ready=false,busy=false;const events=[];
