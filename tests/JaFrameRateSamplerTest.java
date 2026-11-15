@@ -30,6 +30,13 @@ public final class JaFrameRateSamplerTest {
         absent(s.observe(264,Double.NaN));absent(s.observe(288,Double.POSITIVE_INFINITY));
         // A stalled timestamp cannot produce a refresh request.
         s.reset();absent(s.observe(120,5));absent(s.observe(120,5));absent(s.observe(120,5));
+        // Jittered adjacent intervals used to reset confidence indefinitely.
+        s.reset();absent(s.observe(100,1));absent(s.observe(123,2));near(s.observe(148,3),24);
+        s.reset();absent(s.observe(100,1));absent(s.observe(124,2));absent(s.observe(149,3));
+        // A familiar mean is insufficient when intermediate frames are a large burst.
+        s.reset();absent(s.observe(100,1));absent(s.observe(121,2));absent(s.observe(148,3));
+        // Early samples are usable; the matcher no longer waits for media time four.
+        s.reset();absent(s.observe(12,.5));absent(s.observe(36,1.5));near(s.observe(60,2.5),24);
         System.out.println("PASS: real one-second trace, five-second cadence, seeks, resets, duplicates, stalls and cadence changes");
     }
 }
