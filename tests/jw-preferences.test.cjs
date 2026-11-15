@@ -5,7 +5,8 @@ const quality=require('../app/src/main/assets/ja_tv_remote/output-quality.js');
 function row(label){let active=false;return {label,textContent:label,classList:{contains:()=>active},getAttribute:()=>null,click(){active=true;},set active(v){active=v;},closest(){return this;}};}
 const qrows=['Auto','360p','720p','1080p'].map(row);qrows[0].active=true;
 for(const r of qrows)r.click=()=>{qrows.forEach(x=>x.active=false);r.active=true;};
-const off=row('Off');const menus=[{textContent:'Settings Quality Auto360p720p1080p',querySelectorAll:()=>qrows},{textContent:'Subtitles Options Off',querySelector:()=>({}),querySelectorAll:()=>[off]}];
+const off=row('Off');const menus=[{textContent:'Settings×QualityAuto360p720p1080pSpeed0.5×0.75×Normal',querySelectorAll:selector=>selector==='.jw-sec'?[{textContent:'Quality'},{textContent:'Speed'}]:qrows},{textContent:'Subtitles Options Off',querySelector:()=>({}),querySelectorAll:()=>[off]}];
+assert.equal(/\bQuality\b/i.test(menus[0].textContent),false,'Regression fixture must reproduce concatenated provider text');
 const video={closest:()=>null};
 const doc={querySelectorAll:s=>s==='video'?[video]:s==='.jw-menu'?menus:[],querySelector:()=>({})};
 let adapter=discover(video,{},doc,()=>{});
