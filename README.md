@@ -12,6 +12,8 @@ Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.2-debu
 
 ## Current behavior and test status
 
+- v2.1.2 adds ScottsMedia as the third source and moves CineJoy to fourth: VidSrc, VidFast, ScottsMedia, CineJoy. Movie URL: `https://player.scottsmedia.online/embed/movie/{tmdbId}?autoplay=1`. TV URL: `https://player.scottsmedia.online/embed/tv/{tmdbId}/{season}/{episode}?autoplay=1`, following the user's instruction to assume the VidSrc endpoint shape. Provider compatibility and the assumed TV URL require device testing. TV season preferences can learn ScottsMedia after confirmed playback.
+
 - v2.1.2 remembers the enabled source that starts a TV episode and tries it first for later episodes in the same series/season. Preferences persist on the device; each season (including Specials) is independent. Movies retain the default order. Explicit source failure forgets a matching season preference; unavailable/disabled choices are never injected into playback. Remaining sources retain their existing fallback order. No network preflight was added.
 - Settings > Preferred playback sources > Reset preferred sources clears season preferences and legacy post-reset choices together; watch progress is preserved. A later successful episode teaches that season again. Legacy playback-history rankings remain ignored.
 - v2.1.2 includes a pure Java regression suite in the workflow for season isolation, source promotion and fallback/reset ordering. Compilation, lint and device verification are pending the new GitHub run.

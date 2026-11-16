@@ -92,10 +92,10 @@ private fun prewarmPlayerAdBlocker(context: Context, mode: String) {
 
 
 /**
- * Only the three entries in PlaybackRegistry may be considered for playback.
+ * Only the enabled entries in PlaybackRegistry may be considered for playback.
  * This guard also blocks stale domain-ledger aliases and old preference IDs.
  */
-private val jaActiveSourceIds = listOf("vidsrc", "vidfast-vc", "cinejoy")
+private val jaActiveSourceIds = listOf("vidsrc", "vidfast-vc", "scottsmedia", "cinejoy")
 
 private fun isJaPlaybackSourceEnabled(id: String): Boolean = id in jaActiveSourceIds
 
@@ -786,7 +786,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     fun nextPlaybackSource(reason: String, recordFailure: Boolean = true) {
-        // No HTTP checks here either. All three sources are known from the
+        // No HTTP checks here either. All enabled sources are known from the
         // registry; actual GeckoView failures decide when to try the next one.
         val failed = playbackChoices.getOrNull(playbackChoiceIndex) ?: return
         if (recordFailure) request?.let { current ->
@@ -1062,7 +1062,7 @@ class MainActivity : ComponentActivity() {
                 Text(
                     "Default source order: " +
                         "1. VidSrc (vidsrc.sh), 2. VidFast (vidfast.vc), " +
-                        "3. CineJoy (cinejoy.pk). No other providers are enabled. " +
+                        "3. ScottsMedia, 4. CineJoy (cinejoy.pk). " +
                         "TV episodes first try the last working source for that same series and season. " +
                         "Movies retain the default order. Each TV season learns independently. " +
                         "Reset clears saved season preferences. Watch progress stays intact.",
@@ -1084,7 +1084,7 @@ class MainActivity : ComponentActivity() {
                         title = { Text("Reset preferred sources?") },
                         text = { Text(
                             "All titles will start with VidSrc (vidsrc.sh), followed by " +
-                                "VidFast (vidfast.vc), then CineJoy (cinejoy.pk). " +
+                                "VidFast (vidfast.vc), ScottsMedia, then CineJoy (cinejoy.pk). " +
                                  "Saved TV-season preferences and other learned choices will be cleared. " +
                                 "Each season learns again when an episode starts playing. " +
                                 "Watch progress is preserved."
@@ -1094,7 +1094,7 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     val saved = preferredSourceReset.resetAll()
                                     preferredSourceResetStatus = if (saved)
-                                        "Season preferences cleared. Default order: VidSrc, VidFast, CineJoy."
+                                        "Season preferences cleared. Default order: VidSrc, VidFast, ScottsMedia, CineJoy."
                                     else "Reset could not be saved. Please retry."
                                     confirmPreferredSourceReset = false
                                 },

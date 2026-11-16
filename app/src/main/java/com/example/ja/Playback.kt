@@ -12,7 +12,7 @@ data class PlaybackRequest(
     val season: Int = 0,
     val episode: Int = 0,
     // Retained for compatibility with callers that still pass IMDb metadata.
-    // All three registered sources use the numeric TMDB ID instead.
+    // Registered sources use the numeric TMDB ID instead.
     val imdbId: String? = null
 )
 
@@ -63,7 +63,27 @@ class VidFastEmbedProvider : PlaybackProvider {
     }
 }
 
-/** Preferred source 3. CineJoy takes a numeric TMDB movie or television ID. */
+/** Preferred source 3. TMDB embeds with URL autoplay. */
+class ScottsMediaEmbedProvider : PlaybackProvider {
+    override val id = "scottsmedia"
+    override val label = "ScottsMedia"
+    override fun resolve(request: PlaybackRequest): PlaybackSource? {
+        if (!request.valid()) return null
+        // TV format follows the VidSrc shape at the user's instruction.
+        val path = if (request.media.type == "movie") {
+            "/embed/movie/${request.media.id}"
+        } else {
+            "/embed/tv/${request.media.id}/${request.season}/${request.episode}"
+        }
+        val url = Uri.Builder().scheme("https").authority("player.scottsmedia.online")
+            .encodedPath(path)
+            .appendQueryParameter("autoplay", "1")
+            .build().toString()
+        return checkedSource(url, "player.scottsmedia.online")
+    }
+}
+
+/** Preferred source 4. CineJoy takes a numeric TMDB movie or television ID. */
 class CineJoyEmbedProvider : PlaybackProvider {
     override val id = "cinejoy"
     override val label = "CineJoy"
@@ -93,13 +113,14 @@ private fun checkedSource(url: String, host: String): PlaybackSource? {
 }
 
 /**
- * JA v1.1.5at: exactly three registered providers in default preference order.
- * No other VidSrc/VidFast variants or unrelated sources are registered.
+ * Four registered providers in default preference order. TV seasons may
+ * promote their locally learned working provider after this list is built.
  */
 class PlaybackRegistry(
     private val providers: List<PlaybackProvider> = listOf(
         AuthorizedEmbedProvider(),
         VidFastEmbedProvider(),
+        ScottsMediaEmbedProvider(),
         CineJoyEmbedProvider()
     )
 ) {

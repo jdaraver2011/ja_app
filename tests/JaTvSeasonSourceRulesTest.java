@@ -10,7 +10,7 @@ public final class JaTvSeasonSourceRulesTest {
         if (!value) throw new AssertionError(message);
     }
     public static void main(String[] args) {
-        List<String> defaults = Arrays.asList("vidsrc", "vidfast-vc", "cinejoy");
+        List<String> defaults = Arrays.asList("vidsrc", "vidfast-vc", "scottsmedia", "cinejoy");
         String episode1 = JaTvSeasonSourceRules.key("tv", 1399, 1, 1);
         String episode8 = JaTvSeasonSourceRules.key("tv", 1399, 1, 8);
         check(episode1.equals(episode8), "Episodes in the same season must share the preference");
@@ -22,13 +22,15 @@ public final class JaTvSeasonSourceRulesTest {
         check(JaTvSeasonSourceRules.key("tv", 1399, -1, 1) == null, "Reject invalid season");
         check(JaTvSeasonSourceRules.key("tv", 1399, 1, 0) == null, "Require a real episode");
         check(JaTvSeasonSourceRules.order(defaults, "vidfast-vc").equals(
-            Arrays.asList("vidfast-vc", "vidsrc", "cinejoy")), "Promote VidFast, preserve fallback");
+            Arrays.asList("vidfast-vc", "vidsrc", "scottsmedia", "cinejoy")), "Promote VidFast, preserve fallback");
         check(JaTvSeasonSourceRules.order(defaults, "cinejoy").equals(
-            Arrays.asList("cinejoy", "vidsrc", "vidfast-vc")), "Promote CineJoy, preserve fallback");
+            Arrays.asList("cinejoy", "vidsrc", "vidfast-vc", "scottsmedia")), "Promote CineJoy, preserve fallback");
+        check(JaTvSeasonSourceRules.order(defaults, "scottsmedia").equals(
+            Arrays.asList("scottsmedia", "vidsrc", "vidfast-vc", "cinejoy")), "Promote ScottsMedia for the season");
         check(JaTvSeasonSourceRules.order(defaults, "vidsrc").equals(defaults), "Already preferred");
         check(JaTvSeasonSourceRules.order(defaults, "disabled-server").equals(defaults), "No disabled provider injection");
         check(JaTvSeasonSourceRules.order(defaults, null).equals(defaults), "Unlearned/reset season uses default order");
-        check(defaults.equals(Arrays.asList("vidsrc", "vidfast-vc", "cinejoy")), "Do not mutate allowlist");
+        check(defaults.equals(Arrays.asList("vidsrc", "vidfast-vc", "scottsmedia", "cinejoy")), "Do not mutate allowlist");
         check(JaTvSeasonSourceRules.order(Arrays.asList(), "vidfast-vc").isEmpty(), "Handle no sources");
         Map<String, String> learned = new HashMap<>();
         learned.put(episode1, "vidfast-vc");
