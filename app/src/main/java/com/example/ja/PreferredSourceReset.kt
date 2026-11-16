@@ -4,12 +4,9 @@ import android.content.Context
 import android.util.Log
 
 /**
- * A conservative reset layer over JA's existing per-title server history.
- *
- * The older ServerPlaybackHistory storage is deliberately not modified: its
- * private key schema is not part of this one-file playback baseline. Once the
- * user resets, pre-reset rankings are ignored for every title, and only
- * playback successes recorded AFTER the reset are preferred per title/episode.
+ * Resettable source choices plus TV-season preferences learned from confirmed
+ * foreground playback. Season keys are independent of the legacy episode
+ * override and share its global reset, without touching watch progress.
  */
 internal class PreferredSourceReset(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(
@@ -19,7 +16,7 @@ internal class PreferredSourceReset(context: Context) {
     val enabled: Boolean
         get() = prefs.getBoolean("override_old_history", false)
 
-    /** A persistent, global reset; clears only this class's post-reset choices. */
+    /** Clear post-reset episode choices and all newly learned TV-season choices together. */
     fun resetAll(): Boolean {
         val ok = prefs.edit().clear().putBoolean("override_old_history", true).commit()
         Log.i("JA_SERVERS", "PREFERRED_SOURCES_RESET saved=$ok first=vidsrc second=vidfast-vc")
@@ -55,4 +52,37 @@ internal class PreferredSourceReset(context: Context) {
         // the preference. HTTP availability checks are never enough.
         prefs.edit().putString(titleKey(request), sourceId).apply()
     }
+    /** TV seasons learn independently of the older per-episode reset override. */
+    private fun tvSeasonKey(request: PlaybackRequest): String? =
+        JaTvSeasonSourceRules.key(request.media.type, request.media.id, request.season, request.episode)
+
+    fun rankTvSeason(request: PlaybackRequest, choices: List<PlaybackChoice>): List<PlaybackChoice> {
+        val key = tvSeasonKey(request) ?: return choices
+        val learned = prefs.getString(key, null)
+        val ordered = JaTvSeasonSourceRules.order(choices.map { it.id }, learned)
+        val byId = choices.associateBy { it.id }
+        val result = ordered.mapNotNull { byId[it] }
+        Log.i("JA_SERVERS", "TV_SEASON_SOURCE_ORDER tmdb=${request.media.id} " +
+            "season=${request.season} episode=${request.episode} preferred=${learned ?: "none"} " +
+            "order=${result.joinToString(",") { it.id }}")
+        return result
+    }
+
+    fun recordTvSeasonStarted(request: PlaybackRequest, sourceId: String) {
+        val key = tvSeasonKey(request) ?: return
+        if (sourceId.isBlank()) return
+        prefs.edit().putString(key, sourceId).apply()
+        Log.i("JA_SERVERS", "TV_SEASON_SOURCE_LEARNED tmdb=${request.media.id} " +
+            "season=${request.season} episode=${request.episode} provider=$sourceId")
+    }
+
+    fun recordTvSeasonFailure(request: PlaybackRequest, sourceId: String) {
+        val key = tvSeasonKey(request) ?: return
+        // A failure from another provider must not erase the working choice.
+        if (prefs.getString(key, null) != sourceId) return
+        prefs.edit().remove(key).apply()
+        Log.i("JA_SERVERS", "TV_SEASON_SOURCE_CLEARED tmdb=${request.media.id} " +
+            "season=${request.season} episode=${request.episode} provider=$sourceId")
+    }
+
 }

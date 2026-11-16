@@ -63,6 +63,10 @@ jobs:
           DIRECT_MEDIA_TEMPLATE: ${{ secrets.DIRECT_MEDIA_TEMPLATE }}
           DIRECT_MEDIA_HOST: ${{ secrets.DIRECT_MEDIA_HOST }}
         run: python3 scripts/configure_build.py
+      - name: Test TV season source preferences
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-season-source-tests" app/src/main/java/com/example/ja/JaTvSeasonSourceRules.java tests/JaTvSeasonSourceRulesTest.java
+          java -cp "$RUNNER_TEMP/ja-season-source-tests" com.example.ja.JaTvSeasonSourceRulesTest
       - name: Test startup ordering
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-startup-tests" app/src/main/java/com/example/ja/JaStartupBarrier.java tests/JaStartupBarrierTest.java
@@ -151,7 +155,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.1.1-debug
+          name: JA-2.1.2-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

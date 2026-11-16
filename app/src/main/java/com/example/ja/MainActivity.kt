@@ -695,7 +695,7 @@ class MainActivity : ComponentActivity() {
     var resumeLookupBusy by remember { mutableStateOf(false) }
     fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L, restart: Boolean = false) {
         // Direct playback: no HTTP preflight, no detached verification, and no
-        // preference/HTTP ranking. Each failed player falls back locally.
+        // HTTP ranking. TV seasons can reuse a locally learned working source.
         playbackEpisodeTarget = if(item.type=="tv")s to e else null
         pendingEpisodeFocus = null
         pendingPlayFocus = false
@@ -718,16 +718,14 @@ class MainActivity : ComponentActivity() {
                 Log.i("JA_SERVERS", "SOURCE_ALLOWLIST type=${r.media.type} tmdb=${r.media.id} " +
                     "registered=${registered.size} enabled=${candidates.size} " +
                     "order=${candidates.joinToString(",") { it.id }}")
-                // Use the reset-style start order on EVERY new title. The
-                // registry/allowlist already sorts VidSrc -> VidFast -> CineJoy.
-                // Keep playback history for diagnostics, but do not let learned
-                // successes or HTTP responses unexpectedly select a different
-                // startup source. The reset button still clears saved history.
-                val choices = candidates
-                Log.i("JA_SERVERS", "SOURCE_DEFAULT_RESET_ORDER " +
-                    "type=${r.media.type} tmdb=${r.media.id} " +
+                // Movies keep the default allowlist order. A TV episode may
+                // promote only the working provider learned for its own season.
+                // This is a local preference lookup, never an HTTP preflight.
+                val choices = preferredSourceReset.rankTvSeason(r, candidates)
+                Log.i("JA_SERVERS", "SOURCE_START_ORDER " +
+                    "type=${r.media.type} tmdb=${r.media.id} season=${r.season} " +
                     "order=${choices.joinToString(",") { it.id }} " +
-                    "historyRank=ignored")
+                    "preference=tv-season-only")
                 if (choices.isEmpty()) {
                     error = "No configured playback source for this TMDB title."
                     return@launch
@@ -793,6 +791,7 @@ class MainActivity : ComponentActivity() {
         val failed = playbackChoices.getOrNull(playbackChoiceIndex) ?: return
         if (recordFailure) request?.let { current ->
             serverPlaybackHistory.recordExplicitFailure(current, failed.id, reason)
+            preferredSourceReset.recordTvSeasonFailure(current, failed.id)
         }
         val next = playbackChoiceIndex + 1
         if (next >= playbackChoices.size) {
@@ -893,6 +892,8 @@ class MainActivity : ComponentActivity() {
                     serverPlaybackHistory.recordVideoStarted(activeRequest, canonicalId)
                     // Relearn only successes observed AFTER the global reset.
                     preferredSourceReset.recordVideoStarted(activeRequest, canonicalId)
+                    // Learn the enabled provider actually used, not an alias host.
+                    preferredSourceReset.recordTvSeasonStarted(activeRequest, current.id)
                     Log.i("JA_SERVERS", "VIDEO_STARTED_RECORDED provider=$canonicalId " +
                         "series=${activeRequest.media.type == "tv"} tmdb=${activeRequest.media.id} " +
                         "season=${activeRequest.season} episode=${activeRequest.episode}")
@@ -912,6 +913,7 @@ class MainActivity : ComponentActivity() {
                 // Ignore delayed reports emitted after a different player opened.
                 if (playback == failedSource) request?.let {
                     serverPlaybackHistory.recordExplicitFailure(it, playingSourceId, reason)
+                    preferredSourceReset.recordTvSeasonFailure(it, playingSourceId)
                 }
             },
             onClose = {
@@ -1058,11 +1060,12 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.height(16.dp))
                 Text("Preferred playback sources", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text(
-                    "Reset source choices for every movie and episode. Default order: " +
+                    "Default source order: " +
                         "1. VidSrc (vidsrc.sh), 2. VidFast (vidfast.vc), " +
                         "3. CineJoy (cinejoy.pk). No other providers are enabled. " +
-                        "JA always starts new titles in this order; previous successes cannot reorder it. " +
-                        "The Reset button also clears saved source preferences. Watch progress stays intact.",
+                        "TV episodes first try the last working source for that same series and season. " +
+                        "Movies retain the default order. Each TV season learns independently. " +
+                        "Reset clears saved season preferences. Watch progress stays intact.",
                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(Modifier.height(8.dp))
@@ -1082,8 +1085,8 @@ class MainActivity : ComponentActivity() {
                         text = { Text(
                             "All titles will start with VidSrc (vidsrc.sh), followed by " +
                                 "VidFast (vidfast.vc), then CineJoy (cinejoy.pk). " +
-                                 "Previously learned source choices are not used for the " +
-                                "startup order and saved preferences will be cleared. " +
+                                 "Saved TV-season preferences and other learned choices will be cleared. " +
+                                "Each season learns again when an episode starts playing. " +
                                 "Watch progress is preserved."
                         ) },
                         confirmButton = {
@@ -1091,7 +1094,7 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     val saved = preferredSourceReset.resetAll()
                                     preferredSourceResetStatus = if (saved)
-                                        "Preferred sources reset: VidSrc, VidFast, CineJoy."
+                                        "Season preferences cleared. Default order: VidSrc, VidFast, CineJoy."
                                     else "Reset could not be saved. Please retry."
                                     confirmPreferredSourceReset = false
                                 },
