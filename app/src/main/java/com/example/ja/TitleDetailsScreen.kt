@@ -12,10 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -133,100 +135,109 @@ fun TitleDetailsScreen(
     val title = details?.title ?: item.title
     val overview = details?.overview?.takeIf { it.isNotBlank() } ?: item.overview
     val posterUrl = details?.posterUrl ?: item.posterUrl
+    val backdropUrl = details?.backdropUrl ?: item.backdrop
+        ?.takeIf { it.startsWith("/") }
+        ?.let { "https://image.tmdb.org/t/p/w1280$it" }
     val rating = details?.rating ?: item.rating.takeIf { it > 0 }
 
     Column(
         Modifier.fillMaxSize().background(detailsBg).verticalScroll(detailsScrollState),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Compact header for both movies and TV shows. The oversized backdrop
-        // has been removed to bring Overview (and TV seasons) into view sooner.
-        // Poster is about 25% smaller than the previous details poster.
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val compact = jaContentBaseWidth(maxWidth) < 620.dp
-            val posterWidth = if (compact) 84.dp else 144.dp
-            val posterHeight = if (compact) 126.dp else 212.dp
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 22.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                AsyncImage(
-                    model = posterUrl,
-                    contentDescription = "$title poster",
-                    modifier = Modifier.width(posterWidth).height(posterHeight)
-                        .clip(RoundedCornerShape(9.dp))
-                        .border(1.dp, detailsSurface, RoundedCornerShape(9.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
-                ) {
-                    Text(
-                        title,
-                        fontSize = if (compact) 22.sp else 31.sp,
-                        lineHeight = if (compact) 26.sp else 35.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = if (compact) 3 else 4,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (!details?.creatorNames.isNullOrBlank()) {
-                        Text(
-                            "${details?.creatorLabel}: ${details?.creatorNames}",
-                            fontSize = 13.sp,
-                            color = detailsMuted,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (!details?.tagline.isNullOrBlank()) {
-                        Text(
-                            details!!.tagline.orEmpty(),
-                            color = detailsMuted,
-                            fontSize = 13.sp,
-                            maxLines = if (compact) 2 else 3,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    DetailsMetaLine(details)
-                    DetailsScore(rating, details?.voteCount ?: 0)
-                    // Keep both actions directly below the TMDB score, beside
-                    // the poster instead of below the entire details header.
+        // This background belongs to the scrolling upper section only.
+        // matchParentSize lets content determine height without a banner spacer.
+        Box(Modifier.fillMaxWidth().clipToBounds()) {
+            DetailsBackdrop(backdropUrl)
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Keep the compact poster/title/actions and overview layout intact.
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val compact = jaContentBaseWidth(maxWidth) < 620.dp
+                    val posterWidth = if (compact) 84.dp else 144.dp
+                    val posterHeight = if (compact) 126.dp else 212.dp
                     Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 22.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        DetailsActionButton(
-                            if (item.type == "movie") "▶  Play" else nextEpisode?.let { "▶ S${it.season} E${it.episode}" }
-                                ?: if (episodes.isEmpty()) "Loading episodes…" else "✓ Season watched",
-                            primary = true, compact = compact,
-                            modifier = Modifier.focusRequester(playFocus),
-                            enabled = playEnabled, onClick = onPlay)
-                        if (item.type == "movie") DetailsActionButton(
-                            if (watchedMovie) "✓ Watched · Mark unwatched" else "Mark watched",
-                            compact = compact, onClick = { onSetWatched(0, 0, !watchedMovie) })
-                        DetailsActionButton(
-                            if (isFavorite) "★  Favorited" else "☆  Favorite",
-                            compact = compact,
-                            onClick = onToggleFavorite
+                        AsyncImage(
+                            model = posterUrl,
+                            contentDescription = "$title poster",
+                            modifier = Modifier.width(posterWidth).height(posterHeight)
+                                .clip(RoundedCornerShape(9.dp))
+                                .border(1.dp, detailsSurface, RoundedCornerShape(9.dp)),
+                            contentScale = ContentScale.Crop
                         )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
+                        ) {
+                            Text(
+                                title,
+                                fontSize = if (compact) 22.sp else 31.sp,
+                                lineHeight = if (compact) 26.sp else 35.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = if (compact) 3 else 4,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (!details?.creatorNames.isNullOrBlank()) {
+                                Text(
+                                    "${details?.creatorLabel}: ${details?.creatorNames}",
+                                    fontSize = 13.sp,
+                                    color = detailsMuted,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (!details?.tagline.isNullOrBlank()) {
+                                Text(
+                                    details!!.tagline.orEmpty(),
+                                    color = detailsMuted,
+                                    fontSize = 13.sp,
+                                    maxLines = if (compact) 2 else 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            DetailsMetaLine(details)
+                            DetailsScore(rating, details?.voteCount ?: 0)
+                            // Keep both actions directly below the TMDB score, beside
+                            // the poster instead of below the entire details header.
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                DetailsActionButton(
+                                    if (item.type == "movie") "▶  Play" else nextEpisode?.let { "▶ S${it.season} E${it.episode}" }
+                                        ?: if (episodes.isEmpty()) "Loading episodes…" else "✓ Season watched",
+                                    primary = true, compact = compact,
+                                    modifier = Modifier.focusRequester(playFocus),
+                                    enabled = playEnabled, onClick = onPlay)
+                                if (item.type == "movie") DetailsActionButton(
+                                    if (watchedMovie) "✓ Watched · Mark unwatched" else "Mark watched",
+                                    compact = compact, onClick = { onSetWatched(0, 0, !watchedMovie) })
+                                DetailsActionButton(
+                                    if (isFavorite) "★  Favorited" else "☆  Favorite",
+                                    compact = compact,
+                                    onClick = onToggleFavorite
+                                )
+                            }
+                        }
                     }
                 }
+
+                if (detailsLoading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = detailsAccent)
+                } else if (detailsError != null) {
+                    Text("Extended TMDB details unavailable: $detailsError", color = detailsMuted, fontSize = 12.sp)
+                }
+
+                if (overview.isNotBlank()) {
+                    DetailsHeading("Overview")
+                    Text(overview, color = Color.White, fontSize = 15.sp, lineHeight = 23.sp)
+                }
+
             }
-        }
-
-        if (detailsLoading) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = detailsAccent)
-        } else if (detailsError != null) {
-            Text("Extended TMDB details unavailable: $detailsError", color = detailsMuted, fontSize = 12.sp)
-        }
-
-        if (overview.isNotBlank()) {
-            DetailsHeading("Overview")
-            Text(overview, color = Color.White, fontSize = 15.sp, lineHeight = 23.sp)
         }
 
         if (item.type == "tv") {
@@ -339,6 +350,30 @@ fun TitleDetailsScreen(
             color = detailsMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp, bottom = 18.dp)
         )
     }
+}
+
+/** Decorative TMDB artwork: right-aligned crop, dark left and lower-edge fade. */
+@Composable
+private fun BoxScope.DetailsBackdrop(url: String?) {
+    if (url.isNullOrBlank()) return
+    AsyncImage(
+        model = url,
+        contentDescription = null,
+        modifier = Modifier.matchParentSize(),
+        alignment = Alignment.CenterEnd,
+        contentScale = ContentScale.Crop
+    )
+    Box(Modifier.matchParentSize().background(Brush.horizontalGradient(
+        0f to detailsBg.copy(alpha = 0.98f),
+        0.35f to detailsBg.copy(alpha = 0.93f),
+        0.70f to detailsBg.copy(alpha = 0.78f),
+        1f to detailsBg.copy(alpha = 0.68f)
+    )))
+    Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+        0f to Color.Transparent,
+        0.70f to Color.Transparent,
+        1f to detailsBg
+    )))
 }
 
 @Composable

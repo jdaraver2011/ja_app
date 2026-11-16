@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.1.0 (20100)**, based on v2.0.10.
+Current testing version: **2.1.1 (20101)**, based on v2.1.0.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,12 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.0-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. The workflow reports lint separately with continue-on-error; a green workflow alone does not establish zero lint errors. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.1-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. The workflow reports lint separately with continue-on-error; a green workflow alone does not establish zero lint errors. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.1.1 restores the TMDB backdrop behind only the upper Movie/TV poster/title/overview section. It crops from the right, applies a heavy dark gradient and fades into the page at the bottom. This section scrolls with the existing content; cast, seasons and episodes keep the plain background. Existing element sizing, layout order and navigation bars are retained. Titles without artwork retain the normal background.
+- v2.1.1 source was reviewed; APK compilation, lint and visual device testing are pending the GitHub workflow run.
 
 - v2.1.0 reduces menu/details content a further 5% from the previously verified 80% size (76% of the original size). Text, posters, spacing and focus bounds scale together.
 - The two main navigation bars keep their original sizing.
