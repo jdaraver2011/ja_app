@@ -1,6 +1,11 @@
 name: Build JA APK
 on:
   workflow_dispatch:
+    inputs:
+      publish_update:
+        description: Publish this version as a public device update
+        type: boolean
+        default: false
   push:
     branches: [main, master]
 permissions:
@@ -11,8 +16,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -38,8 +47,14 @@ jobs:
           node tests/vidfast-api.test.cjs
           node tests/overlay-guard.test.cjs
           node tests/overlay-workload.bench.cjs
+      - name: Test update acceptance and release metadata
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-update-tests" app/src/main/java/com/example/ja/JaUpdateRules.java tests/JaUpdateRulesTest.java
+          java -cp "$RUNNER_TEMP/ja-update-tests" com.example.ja.JaUpdateRulesTest
+          python3 tests/update-release.test.py
       - name: Configure build
         env:
+          JA_UPDATE_REPOSITORY: ${{ vars.JA_UPDATE_REPOSITORY || github.repository }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           AUTHORIZED_EMBED_TEMPLATE: ${{ secrets.AUTHORIZED_EMBED_TEMPLATE }}
           AUTHORIZED_EMBED_HOST: ${{ secrets.AUTHORIZED_EMBED_HOST }}
@@ -110,7 +125,19 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-pagination-tests" app/src/main/java/com/example/ja/JaCatalogBatch.java app/src/main/java/com/example/ja/JaGenreCatalog.java tests/JaCatalogBatchTest.java
           java -cp "$RUNNER_TEMP/ja-pagination-tests" com.example.ja.JaCatalogBatchTest
+      - name: Restore persistent signing key
+        env:
+          JA_KEYSTORE_BASE64: ${{ secrets.JA_KEYSTORE_BASE64 }}
+          JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
+          JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
+          JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
+          PUBLISH_UPDATE: ${{ inputs.publish_update || false }}
+        run: python3 scripts/restore_update_signing.py
       - name: Build debug APK
+        env:
+          JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
+          JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
+          JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
         continue-on-error: true
@@ -118,7 +145,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-2.0.7-debug
+          name: JA-2.0.8-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -129,3 +156,22 @@ jobs:
           name: JA-lint-report
           path: app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
+      - name: Prepare public update assets
+        if: ${{ inputs.publish_update }}
+        env:
+          UPDATE_REPO: ${{ vars.JA_UPDATE_REPOSITORY || github.repository }}
+        run: |
+          python3 scripts/prepare_update_release.py --apk app/build/outputs/apk/debug/app-debug.apk --repo "$UPDATE_REPO" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+      - name: Publish device update
+        if: ${{ inputs.publish_update }}
+        env:
+          GH_TOKEN: ${{ secrets.JA_UPDATE_PUBLISH_TOKEN || github.token }}
+          UPDATE_REPO: ${{ vars.JA_UPDATE_REPOSITORY || github.repository }}
+        run: |
+          test "$(gh api "repos/$UPDATE_REPO" --jq '.private')" = "false" || { echo 'Updates require a public release repository.'; exit 1; }
+          version=$(python3 -c 'import json; print(json.load(open("dist/ja-update.json"))["versionName"])')
+          gh release create "v$version" dist/JA-update.apk dist/ja-update.json --repo "$UPDATE_REPO" --title "JA $version" --notes 'JA device update. Install through Settings > Update Now.' --draft
+          gh release edit "v$version" --repo "$UPDATE_REPO" --draft=false --latest
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ja-update.keystore"
