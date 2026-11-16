@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict');
+const {create}=require('../app/src/main/assets/ja_tv_remote/jw-api.js');
+const video={id:'inner',parentElement:{id:'real-host'}};
+const doc={querySelectorAll:()=>[]};
+let state={mode:'auto',reason:'auto',level:{index:1,width:1920,height:800,bitrate:3000000,label:'secret-url-token'}};
+const callbacks={},removed=[];let selected=0;
+const player={getContainer:()=>({contains:v=>v===video}),getQualityLevels:()=>[{label:'Auto'},{label:'1080p',width:1920,height:800}],getCurrentQuality:()=>selected,
+ setCurrentQuality:i=>selected=i,getVisualQuality:()=>state,on:(n,f)=>callbacks[n]=f,off:(n,f)=>removed.push(n)};
+const factory=id=>{if(id!=='real-host')throw Error('wrong host');return player;};factory.version='8.0-test';
+const events=[];const scope={jwplayer:factory};
+const api=create({page:()=>scope,doc,report:(event,detail)=>events.push({event,...detail}),exportCallback:f=>f});
+const p=api.discover(video);assert.ok(p.requiresVisualQuality);p.setCurrentQuality(1);assert.equal(p.getCurrentQuality(),1);
+assert.equal(p.getVisualQuality().mode,'auto');assert.equal(p.getVisualQuality().level.label,'other');
+assert.equal(api.discover(video),p);assert.equal(Object.keys(callbacks).length,3);
+state={mode:'manual',reason:'api',level:{index:1,width:1920,height:800,bitrate:3000000,label:'1080p'}};
+callbacks.visualQuality({untrusted:'ignored'});assert.ok(events.some(e=>e.event==='JW_QUALITY_EVENT'&&e.visual.mode==='manual'));
+api.dispose();assert.equal(removed.length,3);assert.equal(api.discover(video),null);
+let logs=[];const missing=create({page:()=>({Hls:function(){}}),doc,report:(event,d)=>logs.push({event,...d})});
+assert.equal(missing.discover(video),null);assert.ok(logs.some(e=>e.reason==='NO_JW_GLOBAL'));assert.equal(missing.inspect(video).libraries.Hls,'function');
+logs=[];const wrong=create({page:()=>({jwplayer:()=>({getContainer:()=>({contains:()=>false})})}),doc,report:(event,d)=>logs.push({event,...d})});
+assert.equal(wrong.discover(video),null);assert.ok(logs.some(e=>e.reason==='NO_MATCHING_CONTAINER'));
+console.log('PASS: ancestor-instance matching, capabilities, API calls, visual modes, event registration/removal, sanitized metadata and explicit discovery failures');

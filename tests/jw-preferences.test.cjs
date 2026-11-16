@@ -26,7 +26,7 @@ assert.equal(adapter.getCurrentCaptions(),-1);adapter.setCurrentCaptions(0);asse
 assert.equal(quality.select(adapter.getQualityLevels(),1080).index,3);
 adapter.setCurrentQuality(3);assert.equal(commits,2,'Checked row still delegates activation');
 assert.equal(discover(video,{}, {...doc,querySelectorAll:s=>s==='video'?[{},{}]:[]},()=>{}),null);
-const jw={getContainer:()=>({contains:v=>v===video})};assert.equal(discover(video,{jwplayer:()=>jw},doc,()=>{}),jw);
+const jw={getContainer:()=>({contains:v=>v===video})};assert.equal(discover(video,{jwplayer:()=>jw},doc,()=>{},undefined,{discover:()=>jw}),jw);
 function fixture(){let time=0,fn=null,index=1,calls=0,ready=false,busy=false;const events=[];
  const v={readyState:4,textTracks:[{kind:'subtitles',mode:'showing'}]};
  const api={getCaptionsList:()=>ready?[{},{}]:[{}],getCurrentCaptions:()=>index,setCurrentCaptions:i=>{calls++;index=i;}};
