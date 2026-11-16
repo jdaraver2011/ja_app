@@ -17,14 +17,27 @@ android {
         applicationId = "com.example.ja"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20007
-        versionName = "2.0.7"
+        versionCode = 20008
+        versionName = "2.0.8"
+        val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
+        require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
+        buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")
         buildConfigField("String", "GECKOVIEW_VERSION", "\"160.0.20261104181552\"")
         buildConfigField("String", "TMDB_API_KEY", "\"${prop("TMDB_API_KEY")}\"")
         buildConfigField("String", "AUTHORIZED_EMBED_TEMPLATE", "\"${prop("AUTHORIZED_EMBED_TEMPLATE")}\"")
         buildConfigField("String", "AUTHORIZED_EMBED_HOST", "\"${prop("AUTHORIZED_EMBED_HOST")}\"")
         buildConfigField("String", "DIRECT_MEDIA_TEMPLATE", "\"${prop("DIRECT_MEDIA_TEMPLATE")}\"")
         buildConfigField("String", "DIRECT_MEDIA_HOST", "\"${prop("DIRECT_MEDIA_HOST")}\"")
+    }
+    val updateStore = System.getenv("JA_SIGNING_STORE")
+    if (!updateStore.isNullOrBlank()) {
+        signingConfigs.create("updates") {
+            storeFile = file(updateStore)
+            storePassword = System.getenv("JA_KEYSTORE_PASSWORD") ?: error("Missing JA_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("JA_KEY_ALIAS") ?: error("Missing JA_KEY_ALIAS")
+            keyPassword = System.getenv("JA_KEY_PASSWORD") ?: error("Missing JA_KEY_PASSWORD")
+        }
+        buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("updates")
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

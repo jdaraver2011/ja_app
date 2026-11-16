@@ -9,7 +9,8 @@ if not key:
     raise SystemExit('Add TMDB_API_KEY under GitHub Settings > Secrets and variables > Actions.')
 values = {name: os.environ.get(name, '') for name in (
     'TMDB_API_KEY', 'AUTHORIZED_EMBED_TEMPLATE', 'AUTHORIZED_EMBED_HOST',
-    'DIRECT_MEDIA_TEMPLATE', 'DIRECT_MEDIA_HOST')}
+    'DIRECT_MEDIA_TEMPLATE', 'DIRECT_MEDIA_HOST', 'JA_UPDATE_REPOSITORY')}
+values['JA_UPDATE_REPOSITORY'] = os.environ.get('JA_UPDATE_REPOSITORY') or 'jdaraver2011/ja_app'
 sdk = os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT')
 if sdk:
     values['sdk.dir'] = sdk

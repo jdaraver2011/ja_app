@@ -945,6 +945,7 @@ class MainActivity : ComponentActivity() {
         }
         if (tab == "Settings" && selected == null) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+                JaUpdateSettings()
                 Text("VidSrc catalogue downloads", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 TvSettingsToggle("Download VidSrc ID lists daily", dailyVidSrcDownloads) {
                     JaVidSrcCatalog.setDailyDownloads(it)
