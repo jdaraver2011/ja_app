@@ -1364,14 +1364,13 @@
     manualPreference(menuKind(menu), menuLabel(row));
   },true);
   let qualityDocumentActive=true;
-  const qualityMaskStyle=document.createElement('style');
-  qualityMaskStyle.textContent='html[data-ja-quality-transaction="true"] .jw-menu { clip-path:inset(100%)!important; pointer-events:none!important; }';
-  (document.head||document.documentElement).appendChild(qualityMaskStyle);
+  const qualityMenuMask=JaQualityMenuMask.create({doc:document,
+    report:(event,detail)=>send({event,...detail})});
   const qualityActivation=JaQualityActivation.create({
-    valid:video=>qualityDocumentActive && !qualityUserTouched && qualityVideo()===video,
-    mask:value=>{if(value)document.documentElement.setAttribute('data-ja-quality-transaction','true');else document.documentElement.removeAttribute('data-ja-quality-transaction');},
+    valid:video=>qualityDocumentActive && !qualityUserTouched && !defaultsUserMenuTouched && !controlMode && qualityVideo()===video,
+    mask:value=>qualityMenuMask.set(value),
     open:()=>{
-      if(openJwMenu())return false;
+      if(openJwMenu())throw new Error('QUALITY_USER_MENU_OPEN');
       const button=Array.from(document.querySelectorAll('button.jw-btn,[role="button"].jw-btn'))
         .find(el=>/^settings$/i.test((el.getAttribute('aria-label')||el.getAttribute('title')||'').trim()));
       if(!button)throw new Error('NO_SETTINGS_BUTTON');button.click();return true;
@@ -1388,6 +1387,10 @@
     },
     report:(event,detail)=>send({event,...detail})
   });
+  // Real touch/mouse/key input immediately restores the visible menu and
+  // cancels delayed selection/cleanup. Synthetic automation is unaffected.
+  for(const event of ['pointerdown','touchstart','keydown'])
+    document.addEventListener(event,e=>{if(e.isTrusted)qualityActivation.cancel();},{capture:true,passive:true});
   const outputQuality = JaOutputQuality.create({
     video: currentVideo, api: preferenceApi,
     report: detail => send(detail), userBusy: () => qualityUserTouched

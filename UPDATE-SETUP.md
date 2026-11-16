@@ -1,6 +1,6 @@
-# JA v2.0.8 (20008) — internet updates from Settings
+# JA v2.1.0 (20100) — internet updates from Settings
 
-Apply these changed files over v2.0.7 at the project root, preserving paths. Build/install the first updater-enabled APK normally. The APK artifact is JA-2.0.8-debug. All player scripts, subtitle defaults and JW testing code are retained.
+This version builds on v2.0.10. The APK artifact is JA-2.1.0-debug. Keep the same repository signing secrets that successfully updated v2.0.9 to v2.0.10. Publish v2.1.0 through Build JA APK to test installation from v2.0.10. No manual reinstall is needed for devices already using that permanent key.
 
 ## How remote updates work
 
@@ -77,9 +77,9 @@ The updater does not report installation success just because the installer open
 
 ## Validation
 
-assembleDebug and lintDebug passed. Java acceptance tests cover wrong package, version/downgrade, signer mismatch and checksum/size rejection. Four Python tests cover release metadata, repository validation, wrong package and required publishing key. Release assets were generated locally from a real built APK to verify package/version/size/checksum metadata; nothing was published. Workflow YAML, opt-in publication, draft-first upload and narrow FileProvider configuration were checked. Existing player scripts and playback/detail files match v2.0.7. End-to-end network/install tests still require devices and a configured published update.
+v2.1.0: assembleDebug and lintDebug passed. All asset JavaScript syntax checks, 11 focused/regression suites and four update-release metadata tests passed. Coverage includes automatic quality timing, menu replacement/cloning, style restoration and manual takeover. Lint retains existing warnings. The menu mask and additional 5% sizing require device testing; a headless rendering check could not run in this environment, so live rendering has not been verified.
 
-No device installation or live release publication was performed. Permission/installer UX, network download and in-place data preservation still need the device test above.
+The user confirmed successful in-app installation from v2.0.9 to v2.0.10. No v2.1.0 device installation or release publication has been performed during preparation of this version.
 
 ## Official references
 

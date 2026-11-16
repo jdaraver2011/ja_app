@@ -11,8 +11,9 @@ function fixture(owned=true){const events=[],waits=[],resolvers=[];let row={},va
  f.replace();await f.next();assert.equal(f.events.at(-1),'focus');f.replace();await f.next();assert.equal(f.events.at(-1),'click');
  assert.ok(!f.events.includes('close'));await f.next();await p;
  assert.deepEqual(f.waits,[800,300,1800]);assert.deepEqual(f.events,['mask:true','open','focus','click','close','mask:false']);
- f=fixture();p=f.q.run('1080p');f.q.cancel();await f.next();await assert.rejects(p,/CANCELLED/);assert.ok(!f.events.includes('click'));assert.equal(f.events.at(-1),'mask:false');
+ f=fixture();p=f.q.run('1080p');f.q.cancel();await f.next();await assert.rejects(p,/CANCELLED/);assert.ok(!f.events.includes('click'));assert.ok(!f.events.includes('close'));assert.equal(f.events.at(-1),'mask:false');
  f=fixture();p=f.q.run('1080p');await f.next();f.invalidate();await f.next();await assert.rejects(p,/CANCELLED/);assert.ok(!f.events.includes('click'));
+ f=fixture();p=f.q.run('1080p');await f.next();await f.next();f.q.cancel();await f.next();await assert.rejects(p,/CANCELLED/);assert.equal(f.events.filter(e=>e==='click').length,1);assert.ok(!f.events.includes('close'));
  f=fixture(false);p=f.q.run('1080p');await f.next();await f.next();await f.next();await p;assert.ok(!f.events.includes('close'));
  console.log('PASS: delayed open/focus/activation/settling, fresh-row queries, transaction deduplication, cancellation and user-menu ownership');
 })().catch(e=>{console.error(e);process.exitCode=1;});

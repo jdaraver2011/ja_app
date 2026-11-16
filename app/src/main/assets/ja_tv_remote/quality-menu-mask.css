@@ -1,0 +1,6 @@
+/* Extension-owned CSS is independent of the embedded page's inline-style CSP.
+   Clip only during JA's automatic quality transaction. Keep layout, opacity,
+   visibility and focus intact so the existing row discovery/activation works. */
+html[data-ja-quality-transaction="true"] .jw-menu {
+  clip-path: inset(100%) !important;
+}

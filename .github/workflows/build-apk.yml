@@ -47,6 +47,8 @@ jobs:
           node tests/vidfast-api.test.cjs
           node tests/overlay-guard.test.cjs
           node tests/overlay-workload.bench.cjs
+          node tests/quality-activation.test.cjs
+          node tests/quality-menu-mask.test.cjs
       - name: Test update acceptance and release metadata
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-update-tests" app/src/main/java/com/example/ja/JaUpdateRules.java tests/JaUpdateRulesTest.java
@@ -145,7 +147,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: JA-2.0.8-debug
+          name: JA-2.1.0-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

@@ -8,7 +8,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 
 /** Layout-aware sizing: dp, sp, padding and focus bounds shrink together. No drawing-only scale. */
-private const val CONTENT_SCALE = 0.8f
+// A further 5% reduction from the established 80% content size.
+private const val CONTENT_SCALE = 0.8f * 0.95f
 private val LocalJaBaseDensity = staticCompositionLocalOf<Density?> { null }
 
 @Composable

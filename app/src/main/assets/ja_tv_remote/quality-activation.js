@@ -21,7 +21,8 @@ var JaQualityActivation = (() => {
           report('QUALITY_ROW_ACTIVATED',{quality:label,openedByJA:owned});
           await wait(1800);check();
         }finally{
-          try{if(owned)close();}finally{mask(false);}
+          // A cancelled transaction hands the open menu to the viewer.
+          try{if(owned && token===generation)close();}finally{mask(false);}
         }
       })().finally(()=>{pending=null;});
       return pending;
