@@ -266,6 +266,8 @@ class MainActivity : ComponentActivity() {
     // TV has its own Popular/Genres toggle, paged results and scroll state.
     // Keep the original TV genre rows and all Movies/Search state intact.
     var tvView by remember { mutableStateOf("Popular") }
+    val networksRepo = remember(catalogueDate, catalogueGeneration) { TmdbNetworksRepository(appContext) }
+    val networksState = remember(networksRepo) { JaNetworksBrowseState() }
     val tvPopularGridState = rememberLazyGridState()
     var tvPopularTitles by remember { mutableStateOf(emptyList<TitleItem>()) }
     var tvPopularPage by remember { mutableIntStateOf(0) }
@@ -1216,7 +1218,7 @@ class MainActivity : ComponentActivity() {
                 val activeView = if (isMovieTab) moviesView else tvView
                 JaUnscaledTopBar {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres")).forEach { view ->
+                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks")).forEach { view ->
                             TvSecondaryButton(
                                 text = view,
                                 selected = activeView == view,
@@ -1226,7 +1228,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                if (activeView == "Popular" || activeView == "Other") {
+                if (!isMovieTab && activeView == "Networks") {
+                    JaNetworksScreen(
+                        repo = networksRepo, state = networksState, returnFocus = titleReturnFocus,
+                        marked = { marked(it) }, onOpen = { open(it) },
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    )
+                } else if (activeView == "Popular" || activeView == "Other") {
                     val isOther = isMovieTab && activeView == "Other"
                     // The TV and Movies Popular lists share layout only, not data or scroll state.
                     val titles = if (isOther) otherDisplayTitles else if (isMovieTab) outsideOther(popularTitles) else tvPopularTitles
@@ -1437,7 +1445,7 @@ private fun TvSecondaryButton(
 
 // The remote focus ring is intentionally white and only visible while focused.
 @Composable
-private fun TvFocusButton(
+internal fun TvFocusButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
@@ -1467,7 +1475,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     )
 }
 
-@Composable private fun PosterTile(item: TitleItem, returnFocus: JaTitleReturnFocus,
+@Composable internal fun PosterTile(item: TitleItem, returnFocus: JaTitleReturnFocus,
     returnKey: String, onClick: () -> Unit) {
     val requester = rememberTitleReturnRequester(returnFocus, returnKey)
     LaunchedEffect(item.id,item.type) { JaVidSrcCatalog.observe(item) }

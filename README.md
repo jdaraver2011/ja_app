@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.1.2 (20102)**, based on v2.1.1.
+Current testing version: **2.1.3 (20103)**, based on v2.1.2.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.2-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. The workflow reports lint separately with continue-on-error; a green workflow alone does not establish zero lint errors. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.3-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. The workflow reports lint separately with continue-on-error; a green workflow alone does not establish zero lint errors. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.1.3 adds TV > Networks next to Genres. All named network IDs from TMDB's official TV network export are sorted alphabetically, retaining distinct IDs even when names match. Network membership uses TMDB's `discover/tv?with_networks=ID`, independently for each row; a series can appear in multiple matching networks and is deduplicated only within one row. This is the TV network association, not a production-studio or current streaming-availability filter.
+- The Networks page reuses genre poster sizing/focus styling and centered Load More buttons. It initially loads toward 50 shows per visible row (up to three pages), then one page per Load More. Details/playback return preserves retained network/list scroll positions and title focus. Requests are cancellable and limited to three concurrent row loads, with a bounded 96-row memory cache.
+- The network directory downloads only when Networks is opened, is cached on-device, and refreshes against TMDB's daily published export. A previous-day file and saved directory provide fallback. This is separate from the VidSrc daily-ID download setting. Hidden rows do not fetch their show lists. No catalogue scan runs while the Networks screen is disposed for playback.
+- v2.1.3 has been reviewed at source level. APK compilation, lint, live TMDB export decoding/API responses, phone and TV rendering/navigation tests are pending the GitHub build/device test.
 
 - v2.1.2 adds ScottsMedia as the third source and moves CineJoy to fourth: VidSrc, VidFast, ScottsMedia, CineJoy. Movie URL: `https://player.scottsmedia.online/embed/movie/{tmdbId}?autoplay=1`. TV URL: `https://player.scottsmedia.online/embed/tv/{tmdbId}/{season}/{episode}?autoplay=1`, following the user's instruction to assume the VidSrc endpoint shape. Provider compatibility and the assumed TV URL require device testing. TV season preferences can learn ScottsMedia after confirmed playback.
 
