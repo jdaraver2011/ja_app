@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "JA TV Remote \u2014 Output Quality Match",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "TV remote with verified quality and caption defaults, JW API discovery and custom row adapter.",
   "browser_specific_settings": {
     "gecko": {
@@ -20,6 +20,7 @@
         "https://*/*"
       ],
       "js": [
+        "jw-api.js",
         "output-quality.js",
         "jw-preferences.js",
         "quality-activation.js",

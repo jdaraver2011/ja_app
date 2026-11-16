@@ -542,7 +542,7 @@
   }
   function qualityPlaybackSnapshot(origin,stage,previous) {
     const video=qualityVideo();
-    if(!video){send({event:'QUALITY_PLAYBACK_STATE_UNAVAILABLE',origin,stage,reason:'NO_VIDEO'});return;}
+    if(!video){const sample={event:'QUALITY_PLAYBACK_STATE_UNAVAILABLE',origin,stage,reason:'NO_VIDEO'};send(sample);return sample;}
     try{
       const q=video.getVideoPlaybackQuality?.();
       let hash=2166136261;
@@ -550,26 +550,32 @@
       const buffered=[];
       for(let i=Math.max(0,video.buffered.length-2);i<video.buffered.length;i++)
         buffered.push([video.buffered.start(i),video.buffered.end(i)]);
-      send({event:'QUALITY_PLAYBACK_STATE',origin,stage,
+      const sample={event:'QUALITY_PLAYBACK_STATE',origin,stage,engine:jwApi.inspect(video),
         sourceFingerprint:(hash>>>0).toString(16),position:video.currentTime,
         videoChanged:!!previous && video!==previous, connected:video.isConnected,
         width:video.videoWidth,height:video.videoHeight,paused:video.paused,
         readyState:video.readyState,networkState:video.networkState,
-        total:q?.totalVideoFrames,dropped:q?.droppedVideoFrames,buffered});
-    }catch(_){send({event:'QUALITY_PLAYBACK_STATE_UNAVAILABLE',origin,stage});}
+        total:q?.totalVideoFrames,dropped:q?.droppedVideoFrames,buffered};
+      send(sample);return sample;
+    }catch(_){const sample={event:'QUALITY_PLAYBACK_STATE_UNAVAILABLE',origin,stage,reason:'SNAPSHOT_ERROR'};send(sample);return sample;}
   }
   const qualitySampleTimers=new Set();
   function activateQualityRow(item,origin) {
     const before=qualityVideo();
     const guard=origin==='automatic'?JaQualityResume.arm(before,qualityIntentVersion):null;
+    const series=[];
     focusQualityRow(item);
-    qualityPlaybackSnapshot(origin,'before',before);
+    series.push(qualityPlaybackSnapshot(origin,'before',before));
     item.click();
-    qualityPlaybackSnapshot(origin,'after-click',before);
+    series.push(qualityPlaybackSnapshot(origin,'after-click',before));
     for(const ms of [500,1500,3000,8000]){
       const timer=setTimeout(()=>{
         qualitySampleTimers.delete(timer);
-        qualityPlaybackSnapshot(origin,'after-'+ms+'ms',before);
+        series.push(qualityPlaybackSnapshot(origin,'after-'+ms+'ms',before));
+        if(ms===8000)send({event:'QUALITY_COMPARISON_SERIES',origin,samples:series.map(s=>({
+          stage:s.stage,position:s.position,paused:s.paused,readyState:s.readyState,
+          width:s.width,height:s.height,videoChanged:s.videoChanged,source:s.sourceFingerprint,
+          reason:s.reason,visual:s.engine?.visual}))});
         const active=qualityVideo();
         if(qualityDocumentActive && JaQualityResume.sample(guard,active,qualityIntentVersion,!document.hidden)){
           send({event:'QUALITY_RESUME_REQUESTED',stage:'after-'+ms+'ms',videoChanged:active!==before});
@@ -1330,12 +1336,17 @@
   let qualityUserTouched = false, captionsUserTouched = false;
   const adapterReports = new Set();
   function preferenceReport(event, detail) {
-    const key = event + ':' + (detail.adapter || detail.reason || '');
-    if (adapterReports.has(key)) return;
+    const key = event + ':' + JSON.stringify(detail);
+    if(event==='JW_QUALITY_EVENT'){send({event,...detail});return;}
+    if (adapterReports.has(key) || adapterReports.size>=80) return;
     adapterReports.add(key); send({event, ...detail});
   }
+  const jwApi=JaJwApi.create({
+    page:()=>window.wrappedJSObject,doc:document,report:preferenceReport,current:qualityVideo,
+    exportCallback:typeof exportFunction==='function'?(callback,scope)=>exportFunction(callback,scope):null
+  });
   function preferenceApi(video) {
-    try { return JaJwPreferences.discover(video, window.wrappedJSObject, document, preferenceReport, label=>qualityActivation.run(label,video)); }
+    try { return JaJwPreferences.discover(video, window.wrappedJSObject, document, preferenceReport, label=>qualityActivation.run(label,video),jwApi); }
     catch (error) { preferenceReport('PLAYER_API_UNAVAILABLE',{reason:'DISCOVERY_EXCEPTION'}); return null; }
   }
   function manualPreference(kind, label) {
@@ -1385,7 +1396,7 @@
     video: currentVideo, api: preferenceApi,
     report: detail => send(detail), userBusy: () => captionsUserTouched
   });
-  window.addEventListener('pagehide', () => {qualityDocumentActive=false;qualityActivation.cancel();outputQuality.cancel();captionDefaults.cancel();qualitySampleTimers.forEach(clearTimeout);qualitySampleTimers.clear();});
+  window.addEventListener('pagehide', () => {qualityDocumentActive=false;jwApi.dispose();qualityActivation.cancel();outputQuality.cancel();captionDefaults.cancel();qualitySampleTimers.forEach(clearTimeout);qualitySampleTimers.clear();});
 
   async function handle(message) {
     const action = message?.action;

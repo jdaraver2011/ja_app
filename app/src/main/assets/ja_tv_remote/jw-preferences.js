@@ -1,20 +1,11 @@
 /* Shared discovery and bounded subtitle defaults for the confirmed video document. */
 var JaJwPreferences = (() => {
   'use strict';
-  function discover(video, page, doc, report, activateQuality) {
+  function discover(video, page, doc, report, activateQuality, jwApi) {
     if (!video) return null;
-    if (typeof page?.jwplayer === 'function') {
-      const ids = [video.closest?.('[id]')?.id,
-        ...Array.from(doc.querySelectorAll('.jwplayer[id]')).map(x => x.id)];
-      for (const id of [...new Set(ids.filter(Boolean)), 0, 1, 2, 3]) {
-        try {
-          const player = page.jwplayer(id);
-          const container = player?.getContainer?.();
-          if (container?.contains(video)) {
-            report('PLAYER_ADAPTER', {adapter:'JW_API'}); return player;
-          }
-        } catch (_) {}
-      }
+    if (jwApi) {
+      const player=jwApi.discover(video);
+      if(player){report('PLAYER_ADAPTER',{adapter:'JW_API'});return player;}
     }
     // Provider-specific JW-style controls are not necessarily the JW library.
     // Accept only one video in this confirmed document; never open either menu.

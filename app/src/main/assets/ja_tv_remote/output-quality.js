@@ -37,7 +37,7 @@ var JaOutputQuality = (() => {
         if (userBusy()) { finish('QUALITY_MATCH_USER_CONTROL'); return; }
         if (now() - started >= 30000) {
           finish(requested ? 'QUALITY_MATCH_UNVERIFIED' : 'QUALITY_MATCH_UNAVAILABLE',
-            {reason: requested ? 'SELECTION_NOT_CONFIRMED' : 'API_OR_LEVELS_NOT_READY'}); return;
+            {reason: requested ? 'SELECTION_OR_VISUAL_MODE_NOT_CONFIRMED' : 'API_OR_LEVELS_NOT_READY'}); return;
         }
         if(commitError)throw commitError;
         if(commitPending){later();return;}
@@ -66,16 +66,26 @@ var JaOutputQuality = (() => {
           emit('QUALITY_MATCH_REQUESTED', {quality:choice.label, index:choice.index,
             exact:choice.resolution === target, alreadySelected:selected === choice.index});
           // At most two requests per target; retry only after a bounded settling interval.
-          if (selected !== choice.index || player.forceQualityCommit === true) { commit(player,choice.index); mutations++; lastMutation=now(); }
+          if (selected !== choice.index || player.forceQualityCommit === true || player.requiresVisualQuality === true) { commit(player,choice.index); mutations++; lastMutation=now(); }
         } else {
           const currentChoice = choices(levels).find(x => x.index === requested.index);
           if (!currentChoice || currentChoice.resolution !== requested.resolution) {
             finish('QUALITY_MATCH_LEVELS_CHANGED'); return;
           }
           if (selected === requested.index) {
+            let visual=null;
+            if(player.requiresVisualQuality){
+              visual=player.getVisualQuality();
+              emit('JW_VISUAL_QUALITY_CHECK',{selected,visual});
+              const rendition=visual?.level?select([{...visual.level,label:''}],target):null;
+              if(!visual || visual.mode!=='manual' ||
+                 !((Number(visual.level?.width)>0 || Number(visual.level?.height)>0)?rendition?.resolution===requested.resolution:visual.level?.index===requested.index)){
+                verified=0;later();return;
+              }
+            }
             if (++verified >= 2) {
-              finish(player.qualityEvidence==='CUSTOM_MENU_SELECTION'?'QUALITY_MENU_SELECTION_CONFIRMED':'QUALITY_MATCH_VERIFIED', {quality:requested.label, index:selected,
-                evidence:player.qualityEvidence || 'JW_API_SELECTION', videoWidth:v.videoWidth, videoHeight:v.videoHeight}); return;
+              finish(player.requiresVisualQuality?'JW_STREAM_QUALITY_CONFIRMED':player.qualityEvidence==='CUSTOM_MENU_SELECTION'?'QUALITY_MENU_SELECTION_CONFIRMED':'QUALITY_MATCH_VERIFIED', {quality:requested.label, index:selected,
+                evidence:player.requiresVisualQuality?'JW_VISUAL_MANUAL_MODE':player.qualityEvidence || 'JW_API_SELECTION', visual, videoWidth:v.videoWidth, videoHeight:v.videoHeight}); return;
             }
           } else {
             verified = 0;
