@@ -1488,7 +1488,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             .padding(3.dp)
     ) {
         AsyncImage(item.posterUrl, item.title, Modifier.fillMaxWidth().height(190.dp), contentScale = ContentScale.Crop)
-        Text((if (item.watched) "✓ " else "") + item.title, modifier = Modifier.fillMaxWidth(), maxLines = 2,
+        Text((if (item.watched) "✓ " else "") + item.title, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 3,
             overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, color = Color.White)
     }
 }

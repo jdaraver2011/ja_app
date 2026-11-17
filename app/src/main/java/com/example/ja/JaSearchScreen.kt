@@ -349,7 +349,7 @@ internal fun JaSearchTitleCard(
             )
             Text(
                 (if (title.watched) "✓ " else "") + title.title, color = Color.White, fontSize = 13.sp,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                minLines = 3, maxLines = 3, overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
             )
         }
