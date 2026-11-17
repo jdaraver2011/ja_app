@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.1.5 (20105)**, based on v2.1.4.
+Current testing version: **2.1.6 (20106)**, based on v2.1.5.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,13 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.5-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. Publishing runs require Android lint to pass; ordinary testing builds report lint separately with continue-on-error. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.6-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. Publishing runs require Android lint to pass; ordinary testing builds report lint separately with continue-on-error. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.1.6 splits Continue into Movies/TV using the existing unscaled sub-buttons and separate vertical grids/scroll states. Cards derive from current saved history, selecting the latest resumable entry per title, with compact time or S##E## (time) labels above the poster. Times use total minutes and seconds.
+- TV details scroll the season strip to the selected season and show episode resume points on each episode card. Opening a title focuses Play once it is ready; a fully watched season's Play button allows replay of its first episode. Returning from playback or cast retains the existing targeted focus restoration.
+- Compilation, automated checks, lint and device validation are pending the v2.1.6 workflow.
 
 - v2.1.5 reserves exactly two lines for every movie/TV card title in genre/network rows and title grids. Single-line names retain the same title area as two-line names; longer names use ellipsis. Poster sizes and navigation bars are unchanged. Device verification of stable row positioning remains pending.
 - v2.1.5 compilation, automated regression checks and Android lint passed in [GitHub Actions run 43997624022](https://github.com/jdaraver2011/ja_app/actions/runs/43997624022). The signed device update is published; the temporary branch publication trigger has been removed.

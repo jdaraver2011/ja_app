@@ -1,0 +1,12 @@
+name: Publish JA v2.1.6
+on:
+  push:
+    branches: [v2.1.6]
+permissions:
+  contents: write
+jobs:
+  release:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: true
+    secrets: inherit

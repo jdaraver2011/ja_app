@@ -236,7 +236,9 @@ class MainActivity : ComponentActivity() {
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
-    val continueScrollState = rememberScrollState()
+    var continueView by remember { mutableStateOf("Movies") }
+    val continueMovieGridState = rememberLazyGridState()
+    val continueTvGridState = rememberLazyGridState()
     var genreRows by remember { mutableStateOf(emptyList<GenreRow>()) }
     var genresLoading by remember { mutableStateOf(false) }
     val genreRowLoading = remember { mutableStateMapOf<String,Boolean>() }
@@ -607,9 +609,7 @@ class MainActivity : ComponentActivity() {
             // Favorite posters derive directly from the current history state;
             // a freshly added/removed favorite should never show stale results.
             "Favorites" -> Unit
-            "Continue" -> {
-                results = history.filter { it.positionMs > 0 }.distinctBy { it.mediaId to it.mediaType }.map { TitleItem(it.mediaId, it.title, "", it.poster, null, it.mediaType) }
-            }
+            "Continue" -> Unit // Derive cards directly from current history below.
         }
     }
     // DETAILS_NAV v1.1.4b: retain every title/person route so Back returns to its caller.
@@ -617,7 +617,8 @@ class MainActivity : ComponentActivity() {
     fun showTitle(item: TitleItem) {
         pendingCastFocus = null
         pendingEpisodeFocus = null
-        pendingPlayFocus = false
+        pendingPlayFocus = true
+        titleScrollBookmarks.remove("${item.type}:${item.id}")
         selected = item; episodes = emptyList(); seasons = emptyList()
         JaVidSrcCatalog.observe(item)
         // Details load TMDB metadata only; no provider HTTP or hidden-video tests.
@@ -678,6 +679,7 @@ class MainActivity : ComponentActivity() {
                 showTitle(previous.title)
             }
             if (previous.person == null && previous.title != null && previous.castId != null) {
+                pendingPlayFocus = false
                 pendingCastFocus = "${previous.title.type}:${previous.title.id}" to previous.castId
             }
             Log.i("JA_DETAILS_NAV", "BACK_TO_${if (previous.person == null) "TITLE" else "PERSON"} id=${previous.title?.id ?: 0} depth=${detailsBackStack.size}")
@@ -1134,6 +1136,10 @@ class MainActivity : ComponentActivity() {
                 item = item,
                 repo = detailsRepo,
                 watchedKeys = watched,
+                episodeResumePositions = remember(history, item.id, item.type) {
+                    history.filter { it.mediaId == item.id && it.mediaType == "tv" && it.episode > 0 }
+                        .associate { (it.season to it.episode) to it.positionMs }
+                },
                 pendingCastFocusId = pendingCastFocus?.takeIf { it.first == "${item.type}:${item.id}" }?.second,
                 onCastFocusRestored = { pendingCastFocus = null },
                 pendingEpisodeFocus = pendingEpisodeFocus,
@@ -1152,7 +1158,8 @@ class MainActivity : ComponentActivity() {
                 onPlay = {
                     playbackReturnToPlay = true
                     if (item.type == "movie") play(item)
-                    else nextUnwatchedEpisode(item.id, episodes, watched)?.let { play(item, it.season, it.episode) }
+                    else (nextUnwatchedEpisode(item.id, episodes, watched) ?: episodes.firstOrNull())
+                        ?.let { play(item, it.season, it.episode) }
                 },
                 onToggleFavorite = {
                     scope.launch {
@@ -1179,7 +1186,7 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 onEpisodePlay = { ep -> playbackReturnToPlay=false;play(item, ep.season, ep.episode) },
-                restoreScrollY = titleScrollBookmarks["${item.type}:${item.id}"],
+                restoreScrollY = if (pendingPlayFocus) null else titleScrollBookmarks["${item.type}:${item.id}"],
                 onSaveScrollY = { offset -> titleScrollBookmarks["${item.type}:${item.id}"] = offset }
             )
             }
@@ -1399,15 +1406,54 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            } else {
-                Text(tab, style = MaterialTheme.typography.titleLarge, color = Color.White)
+            } else if (tab == "Continue") {
+                JaUnscaledTopBar {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Movies", "TV").forEach { view ->
+                            TvSecondaryButton(text = view, selected = continueView == view,
+                                onClick = { continueView = view })
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                val continueType = if (continueView == "Movies") "movie" else "tv"
+                // Most recent resumable episode per series; derive from live history,
+                // so returning from playback refreshes both order and labels.
+                val continueItems = remember(history, continueType) {
+                    history.filter { it.mediaType == continueType && it.positionMs > 0 &&
+                        (continueType == "movie" || it.episode > 0) }
+                        .sortedByDescending { it.updatedAt }
+                        .distinctBy { it.mediaId }
+                }
+                Text("Continue $continueView", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Spacer(Modifier.height(8.dp))
-                Column(Modifier.verticalScroll(continueScrollState)) {
-                    results.chunked(50).forEachIndexed { rowIndex, group ->
-                        val rowState = genreScrollStates.getOrPut("Continue:$rowIndex") { LazyListState() }
-                        LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 14.dp)) {
-                            items(group, key = { "${it.type}-${it.id}" }) { item ->
-                                PosterTile(marked(item), titleReturnFocus, "Continue:$rowIndex:${item.type}:${item.id}") { open(item) }
+                if (continueItems.isEmpty()) {
+                    Text("No ${if (continueType == "movie") "movies" else "TV shows"} to continue yet.",
+                        color = Color.LightGray)
+                } else {
+                    val gridState = if (continueType == "movie") continueMovieGridState else continueTvGridState
+                    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                        val columnCount = when {
+                            jaContentBaseWidth(maxWidth) < 340.dp -> 1
+                            jaContentBaseWidth(maxWidth) < 640.dp -> 2
+                            jaContentBaseWidth(maxWidth) < 960.dp -> 3
+                            else -> 4
+                        }
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(columnCount), state = gridState,
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            contentPadding = PaddingValues(bottom = 24.dp)
+                        ) {
+                            gridItems(continueItems, key = { "continue-${it.mediaType}-${it.mediaId}" }) { saved ->
+                                val title = TitleItem(saved.mediaId, saved.title, "", saved.poster, null, saved.mediaType)
+                                JaSearchTitleCard(marked(title),
+                                    badge = JaResumeLabels.continueLabel(saved.mediaType, saved.season,
+                                        saved.episode, saved.positionMs),
+                                    returnFocus = titleReturnFocus,
+                                    returnKey = "Continue:$continueView:${title.type}:${title.id}"
+                                ) { open(title) }
                             }
                         }
                     }

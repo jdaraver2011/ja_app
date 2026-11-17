@@ -42,6 +42,7 @@ fun TitleDetailsScreen(
     repo: TmdbDetailsRepository,
     isFavorite: Boolean,
     watchedKeys: Set<String> = emptySet(),
+    episodeResumePositions: Map<Pair<Int, Int>, Long> = emptyMap(),
     pendingCastFocusId: Int? = null,
     onCastFocusRestored: () -> Unit = {},
     pendingEpisodeFocus: Pair<Int, Int>? = null,
@@ -62,13 +63,14 @@ fun TitleDetailsScreen(
     onSaveScrollY: (Int) -> Unit = {}
 ) {
     val detailsScrollState = rememberScrollState()
+    val seasonRow = rememberLazyListState()
     val episodeRow = rememberLazyListState()
     val episodeFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val castRow = rememberLazyListState()
     val castFocus = remember { FocusRequester() }
     val watchedMovie = WatchedStore.key(item.id, item.type) in watchedKeys
-    val nextEpisode = nextUnwatchedEpisode(item.id, episodes, watchedKeys)
+    val nextEpisode = nextUnwatchedEpisode(item.id, episodes, watchedKeys) ?: episodes.firstOrNull()
     val playEnabled = item.type == "movie" || nextEpisode != null
     DisposableEffect(item.type, item.id) {
         onDispose { onSaveScrollY(detailsScrollState.value) }
@@ -90,6 +92,15 @@ fun TitleDetailsScreen(
         if (!detailsLoading && restoreScrollY != null) {
             withFrameNanos { }
             detailsScrollState.scrollTo(restoreScrollY)
+        }
+    }
+
+    // Bring the active season into view without stealing focus from Play.
+    LaunchedEffect(item.id, item.type, season, seasons) {
+        val index = seasons.indexOf(season)
+        if (index >= 0) {
+            withFrameNanos { }
+            seasonRow.scrollToItem(index)
         }
     }
 
@@ -246,8 +257,8 @@ fun TitleDetailsScreen(
                 if (seasons.isEmpty()) {
                     Text("Loading seasons…", color = detailsMuted, fontSize = 13.sp)
                 } else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(seasons) { candidate ->
+                    LazyRow(state = seasonRow, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(seasons, key = { it }) { candidate ->
                             DetailsActionButton(
                                 "Season $candidate", primary = candidate == season,
                                 onClick = { onSeasonSelected(candidate) }
@@ -260,6 +271,7 @@ fun TitleDetailsScreen(
                         items(episodes, key = { "${it.season}:${it.episode}" }) { ep ->
                             val watched = WatchedStore.key(item.id, "tv", ep.season, ep.episode) in watchedKeys
                             DetailsEpisodeCard(ep, watched,
+                                resumePositionMs = episodeResumePositions[ep.season to ep.episode] ?: 0L,
                                 modifier = if (pendingEpisodeFocus == (ep.season to ep.episode)) Modifier.focusRequester(episodeFocus) else Modifier,
                                 onSetWatched = { onSetWatched(ep.season, ep.episode, !watched) },
                                 onClick = { onEpisodePlay(ep) })
@@ -441,7 +453,7 @@ private fun DetailsActionButton(
 }
 
 @Composable
-private fun DetailsEpisodeCard(ep: EpisodeItem, watched: Boolean, modifier: Modifier,
+private fun DetailsEpisodeCard(ep: EpisodeItem, watched: Boolean, resumePositionMs: Long, modifier: Modifier,
     onSetWatched: () -> Unit, onClick: () -> Unit) {
     var playFocused by remember { mutableStateOf(false) }
     var watchedFocused by remember { mutableStateOf(false) }
@@ -455,8 +467,9 @@ private fun DetailsEpisodeCard(ep: EpisodeItem, watched: Boolean, modifier: Modi
                 .clickable(role = Role.Button, onClick = onClick).padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Text("${if (watched) "✓ " else ""}S${ep.season} E${ep.episode}", color = detailsAccent,
-                fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text((if (watched) "✓ " else "") + JaResumeLabels.episodeLabel(ep.season, ep.episode, resumePositionMs),
+                color = detailsAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(ep.name, color = Color.White, fontSize = 13.sp, minLines = 2, maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
         }

@@ -338,7 +338,8 @@ internal fun JaSearchTitleCard(
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             if (badge != null) Text(badge, color = searchAmber, fontSize = 12.sp,
-                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
             AsyncImage(
                 model = title.posterUrl,
                 contentDescription = title.title,
