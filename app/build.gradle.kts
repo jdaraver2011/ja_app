@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.ja"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20108
-        versionName = "2.1.8-music-test1"
+        versionCode = 20109
+        versionName = "2.1.9"
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
         require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
         buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")

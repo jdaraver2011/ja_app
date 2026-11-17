@@ -149,8 +149,11 @@ class JaMusicService : Service() {
         page.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
                 if (JaMusicRules.allowed(request.uri)) return null
-                mutable.value = mutable.value.copy(message = "This link cannot open inside Music.")
-                Log.i("JA_MUSIC", "NAVIGATION_BLOCKED") // Never log URLs/tokens/passwords.
+                mutable.value = mutable.value.copy(message = "Music only opens secure HTTPS web links.")
+                val target = android.net.Uri.parse(request.uri)
+                Log.i("JA_MUSIC", "NAVIGATION_BLOCKED scheme=${target.scheme.orEmpty()} " +
+                    "host=${target.host.orEmpty()} redirect=${request.isRedirect}")
+                // Never log the path, query, fragment, tokens or passwords.
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
             override fun onLocationChange(session: GeckoSession, url: String?, perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) {

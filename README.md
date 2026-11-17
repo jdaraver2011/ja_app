@@ -1,6 +1,6 @@
 # JA — current project
 
-Current experimental version: **2.1.8-music-test1 (20108)**, based on stable v2.1.6.
+Current testing version: **2.1.9 (20109)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,13 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.8-music-test1-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.9-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.1.9 changes only Music navigation: HTTPS links and redirects may cross hosts instead of being restricted to Deezer/sign-in-provider domains. User-info URLs, nonstandard ports, missing hosts and non-HTTPS schemes remain rejected. Gecko certificate verification is unchanged.
+- The Music header continues to show the current hostname. Rejected navigations log only scheme/hostname and the redirect flag, excluding paths, queries and fragments. Movie/TV provider navigation rules, music playback lifecycle, blockers, login storage and Home destination are unchanged.
+- Cross-host redirect and unsafe-scheme tests are updated. Compilation, strict lint and device verification of the reported Deezer redirect remain pending.
 
 - Music test 1 adds Music after TV, embedding Deezer's official mobile web screen in its own persistent Gecko session context. Sign-in is hosted by Deezer; no JA password form, token extraction, private Deezer endpoint or entitlement override is used. Free-account full-track availability, DRM, social-login compatibility and phone background behavior require device verification.
 - JaMusicService owns the browser independently of Compose/Activity, exposes platform media controls in a foreground notification and lock screen, handles audio-focus loss/headphone disconnection, and pauses music before video playback. Browsing and task exit retain the session; Stop Music ends the service. Android force-stop, process death and provider playback restrictions can stop it. Playback does not automatically resume after video.
