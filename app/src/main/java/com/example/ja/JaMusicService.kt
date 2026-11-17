@@ -211,6 +211,12 @@ class JaMusicService : Service() {
                         GeckoResult.fromValue(if (videoActive)
                             GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY
                             else GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                    GeckoSession.PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS -> {
+                        val host = android.net.Uri.parse(perm.uri).host.orEmpty()
+                        GeckoResult.fromValue(if (host == "deezer.com" || host.endsWith(".deezer.com"))
+                            GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW
+                            else GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+                    }
                     else -> null
                 }
             }
@@ -223,6 +229,7 @@ class JaMusicService : Service() {
                 if (media === mediaSession) { media = null; mutable.value = mutable.value.copy(playing = false); updateNotification() }
             }
             override fun onPlay(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) {
+                if (destroying) return
                 media = mediaSession
                 val granted = !videoActive && audio.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
                 if (!JaMusicRules.mayPlay(videoActive, granted)) { pause(); return }

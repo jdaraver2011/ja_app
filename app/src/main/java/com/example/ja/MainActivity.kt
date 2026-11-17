@@ -241,7 +241,6 @@ class MainActivity : ComponentActivity() {
     var confirmPreferredSourceReset by remember { mutableStateOf(false) }
     var preferredSourceResetStatus by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf("Movies") }
-    LaunchedEffect(openMusicRequest) { if (openMusicRequest > 0) tab = "Music" }
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
@@ -303,6 +302,12 @@ class MainActivity : ComponentActivity() {
     var playbackChoiceIndex by remember { mutableIntStateOf(0) }
     // A session generation ensures fallback gets fresh GeckoView and display matching.
     var playbackSessionId by remember { mutableIntStateOf(0) }
+    LaunchedEffect(openMusicRequest) {
+        if (openMusicRequest > 0) {
+            selected = null; selectedPerson = null; playback = null
+            detailsBackStack.clear(); tab = "Music"
+        }
+    }
     var history by remember { mutableStateOf(emptyList<WatchItem>()) }
     // Search state lives above the details routes so Back restores the query and results.
     var search by remember { mutableStateOf("") }
