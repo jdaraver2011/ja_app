@@ -12,7 +12,7 @@ Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.5-debu
 
 ## Current behavior and test status
 
-- v2.1.5 reserves exactly three lines for every movie/TV card title in genre/network rows and title grids. Single-line names retain the same title area as two/three-line names; longer names use ellipsis. Poster sizes and navigation bars are unchanged. Device verification of stable row positioning remains pending.
+- v2.1.5 reserves exactly two lines for every movie/TV card title in genre/network rows and title grids. Single-line names retain the same title area as two-line names; longer names use ellipsis. Poster sizes and navigation bars are unchanged. Device verification of stable row positioning remains pending.
 - User verified the v2.1.3 to v2.1.4 in-app update and curated Networks layout.
 
 - v2.1.4 restricts TV Networks to a curated U.S. commercial broadcast, major cable and streaming-platform selection. Both newly fetched directories and v2.1.3 saved directories are filtered, so an update does not require clearing app data. Names are matched against TMDB; ambiguous U.S. broadcasters/cable networks are pinned by ID, and unavailable/ambiguous unpinned platforms are omitted rather than matched to an unrelated network. Rows remain alphabetical, independently populated and paginated.

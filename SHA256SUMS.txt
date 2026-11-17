@@ -1,5 +1,5 @@
 11cd9f4875ec88113c1745b04c9454bbb77d3b5aaf876d79c7e98c1f918991b7  .github/workflows/build-apk.yml
-c81957cab47c0d462f788758af6ac9ca339591d6e2cb5ced80a217243110d25c  README.md
+f26c87794f53df376439ca0c1e9c0202873639c606a465725caf6e0fb01f98d3  README.md
 f9662b2810af35c765e4ab1de5fcd640487ea8a9f15fef3460053d449c8141cd  UPDATE-SETUP.md
 13180f3bc0bbf20fc9a284ff5c4f035daa434469b96393b5d0ac9703f671019c  app/build.gradle.kts
 c3b5fd9b0d86d1f8e614a63ff7873eb6d67d7d6bfdba9ed1329c07d8481a1321  app/src/main/AndroidManifest.xml
@@ -12,7 +12,7 @@ fd61a586a1bc61f992c7fcd8f8709b2663360c3253cce5c84c9e4a0b087ff803  app/src/main/a
 0f01267bb10dbde2f50c6d7a5a4aa373ca42662427b5a35e11081d4c8158227c  app/src/main/java/com/example/ja/JaContentSizing.kt
 13438b96888b7301825b5498eccfd3c4fc0c23721374141ac70439670f195c83  app/src/main/java/com/example/ja/JaUpdateRules.java
 b26319ca55606349a8838fbf6cef4766468ce1e7486840ed99c24075bcaf8712  app/src/main/java/com/example/ja/JaUpdateSettings.kt
-9b3b649ebddc20ff9388e775798ab1e758daf70351d51411c901c5e275894de4  app/src/main/java/com/example/ja/MainActivity.kt
+6054e1cf2d152d509d5a10d5335b374df60e7285586f486ef1cdd3bacb2df540  app/src/main/java/com/example/ja/MainActivity.kt
 1419af4392a415cca645607566619dfffcebc6dda70a5f1b4a1e32ba82d9bd18  app/src/main/res/xml/update_paths.xml
 c7b0450603d3be5d0a5d29b275335574eb23effae6834476d0290c9fbd0a3ada  scripts/configure_build.py
 709c978177a7e93321199b16c3ee959c992c7dda51005a6e73261872e147497b  scripts/prepare_update_release.py
@@ -29,5 +29,5 @@ b0c5334caae0378f2304a347cc49e43a1ebc21a8664ba4b56f0aa10fe2b3d5ab  tests/JaTvSeas
 c587f99dbf8325059ec4f348e9d6fc26394e7ccf631aea4ad15d2e9269897535  app/src/main/java/com/example/ja/TmdbNetworksRepository.kt
 39464645a229dd0e5bad12f4ce477a464a3ecc0dd0be6da63f4e86f1926756a2  app/src/main/java/com/example/ja/JaNetworksScreen.kt
 80e1d8158cf94a9da9d921ddfc7bfd1ca599927261a57c0658f8fe8e9b09a9a2  app/src/main/java/com/example/ja/JaCuratedTvNetworks.kt
-0cd874056daf2a8d3a8f323c368bcde4725f8a8942e1fac7ee012e07d2487977  app/src/main/java/com/example/ja/JaSearchScreen.kt
+5c5a0507e6a2f17b3cdae7a11924fea884d6409ecf5203aaccdca1ba4002766c  app/src/main/java/com/example/ja/JaSearchScreen.kt
 2d04d62d707997710f17295573ed22db1e1eac769e40125de74295114d8450bd  .github/workflows/release-v2.1.5.yml
