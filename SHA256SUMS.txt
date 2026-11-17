@@ -1,5 +1,5 @@
 11cd9f4875ec88113c1745b04c9454bbb77d3b5aaf876d79c7e98c1f918991b7  .github/workflows/build-apk.yml
-f26c87794f53df376439ca0c1e9c0202873639c606a465725caf6e0fb01f98d3  README.md
+05e1e3683d0208921e6e2806ddb6fed6d6fca05a5cf48efb06d6d1a3aeac0dd7  README.md
 f9662b2810af35c765e4ab1de5fcd640487ea8a9f15fef3460053d449c8141cd  UPDATE-SETUP.md
 13180f3bc0bbf20fc9a284ff5c4f035daa434469b96393b5d0ac9703f671019c  app/build.gradle.kts
 c3b5fd9b0d86d1f8e614a63ff7873eb6d67d7d6bfdba9ed1329c07d8481a1321  app/src/main/AndroidManifest.xml
@@ -30,4 +30,3 @@ c587f99dbf8325059ec4f348e9d6fc26394e7ccf631aea4ad15d2e9269897535  app/src/main/j
 39464645a229dd0e5bad12f4ce477a464a3ecc0dd0be6da63f4e86f1926756a2  app/src/main/java/com/example/ja/JaNetworksScreen.kt
 80e1d8158cf94a9da9d921ddfc7bfd1ca599927261a57c0658f8fe8e9b09a9a2  app/src/main/java/com/example/ja/JaCuratedTvNetworks.kt
 5c5a0507e6a2f17b3cdae7a11924fea884d6409ecf5203aaccdca1ba4002766c  app/src/main/java/com/example/ja/JaSearchScreen.kt
-2d04d62d707997710f17295573ed22db1e1eac769e40125de74295114d8450bd  .github/workflows/release-v2.1.5.yml
