@@ -223,9 +223,10 @@ class JaMusicService : Service() {
         }
         page.setMediaSessionDelegate(object : org.mozilla.geckoview.MediaSession.Delegate {
             override fun onActivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) {
-                media = mediaSession
+                if (!destroying) media = mediaSession
             }
             override fun onDeactivated(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) {
+                if (destroying) return
                 if (media === mediaSession) { media = null; mutable.value = mutable.value.copy(playing = false); updateNotification() }
             }
             override fun onPlay(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) {
@@ -238,12 +239,14 @@ class JaMusicService : Service() {
                 Log.i("JA_MUSIC", "PLAYING")
             }
             override fun onPause(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession) {
+                if (destroying) return
                 mutable.value = mutable.value.copy(playing = false)
                 audio.abandonAudioFocusRequest(focus)
                 updateNotification()
             }
             override fun onMetadata(session: GeckoSession, mediaSession: org.mozilla.geckoview.MediaSession,
                 meta: org.mozilla.geckoview.MediaSession.Metadata) {
+                if (destroying) return
                 mutable.value = mutable.value.copy(title = meta.title?.takeIf { it.isNotBlank() } ?: "Deezer")
                 controls.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, mutable.value.title)
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, meta.artist.orEmpty()).build())
