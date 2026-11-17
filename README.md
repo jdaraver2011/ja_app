@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.1.6 (20106)**, based on v2.1.5.
+Current experimental version: **2.1.8-music-test1 (20108)**, based on stable v2.1.6.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,15 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.6-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. Publishing runs require Android lint to pass; ordinary testing builds report lint separately with continue-on-error. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.8-music-test1-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. Publishing runs require Android lint to pass; ordinary testing builds report lint separately with continue-on-error. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- Music test 1 adds Music after TV, embedding Deezer's official mobile web screen in its own persistent Gecko session context. Sign-in is hosted by Deezer; no JA password form, token extraction, private Deezer endpoint or entitlement override is used. Free-account full-track availability, DRM, social-login compatibility and phone background behavior require device verification.
+- JaMusicService owns the browser independently of Compose/Activity, exposes platform media controls in a foreground notification and lock screen, handles audio-focus loss/headphone disconnection, and pauses music before video playback. Browsing and task exit retain the session; Stop Music ends the service. Android force-stop, process death and provider playback restrictions can stop it. Playback does not automatically resume after video.
+- Back/Home/Sign in/Reload/Play-Pause/Stop Music and isolated Reset login controls are included. Sign-in cookies stay in Gecko's Music context; Reset login clears only that context. Explicit sign-in-provider child windows are retained. Other top-level navigation is denied; subresource loading is unchanged.
+- Existing shared uBlock/AdGuard configuration applies to the Deezer session. Music does not toggle the global blocker. JA's video content scripts exclude Deezer and supported sign-in-provider pages to avoid autoplay, quality and caption automation there.
+- Branch music-embedded-test runs the build and strict lint with publication disabled. This is an APK artifact test, not a public device update. Stable v2.1.6 and withdrawn v2.1.7 remain unchanged. Current compilation, regression/lint checks and phone tests are pending.
 
 - v2.1.6 splits Continue into Movies/TV using the existing unscaled sub-buttons and separate vertical grids/scroll states. Cards derive from current saved history, selecting the latest resumable entry per title, with compact time or S##E## (time) labels above the poster. Times use total minutes and seconds.
 - TV details scroll the season strip to the selected season and show episode resume points on each episode card. Opening a title focuses Play once it is ready; a fully watched season's Play button allows replay of its first episode. Returning from playback or cast retains the existing targeted focus restoration.

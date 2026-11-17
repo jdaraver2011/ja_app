@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "JA Source Availability Monitor",
-  "version": "1.1.6.10",
+  "version": "1.1.6.11",
   "description": "Validated player activity, duration-aware progress, resume and stall reporting.",
   "browser_specific_settings": {
     "gecko": {
@@ -24,7 +24,16 @@
       ],
       "all_frames": true,
       "match_about_blank": false,
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "exclude_matches": [
+        "*://deezer.com/*",
+        "*://*.deezer.com/*",
+        "*://*.dzcdn.net/*",
+        "*://accounts.google.com/*",
+        "*://appleid.apple.com/*",
+        "*://facebook.com/*",
+        "*://*.facebook.com/*"
+      ]
     }
   ]
 }

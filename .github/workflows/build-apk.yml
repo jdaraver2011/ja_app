@@ -76,6 +76,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-resume-label-tests" app/src/main/java/com/example/ja/JaResumeLabels.java tests/JaResumeLabelsTest.java
           java -cp "$RUNNER_TEMP/ja-resume-label-tests" com.example.ja.JaResumeLabelsTest
+      - name: Test music navigation and audio ownership
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-music-tests" app/src/main/java/com/example/ja/JaMusicRules.java tests/JaMusicRulesTest.java
+          java -cp "$RUNNER_TEMP/ja-music-tests" com.example.ja.JaMusicRulesTest
       - name: Test startup ordering
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-startup-tests" app/src/main/java/com/example/ja/JaStartupBarrier.java tests/JaStartupBarrierTest.java
@@ -155,7 +159,7 @@ jobs:
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
-        continue-on-error: ${{ !inputs.publish_update }}
+        continue-on-error: false
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
@@ -164,7 +168,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.1.6-debug
+          name: JA-2.1.8-music-test1-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

@@ -106,6 +106,13 @@ private fun jaAllowedSourceChoices(registered: List<PlaybackChoice>): List<Playb
 
 class MainActivity : ComponentActivity() {
     private var explicitExit = false
+    private var musicOpenRequest by mutableIntStateOf(0)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(JaMusicService.OPEN_MUSIC, false)) musicOpenRequest++
+    }
 
     fun closeFromDoubleBack() {
         if (explicitExit) return
@@ -116,7 +123,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         // Home, app switching and configuration changes never take this path.
-        if (explicitExit) {
+        if (explicitExit && !JaMusicService.keepsProcessAlive()) {
             val main = android.os.Handler(android.os.Looper.getMainLooper())
             val terminate = Runnable { android.os.Process.killProcess(android.os.Process.myPid()) }
             main.postDelayed(terminate, 5000L)
@@ -128,7 +135,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Log.i("JA_STARTUP", "APP_BUILD versionName=${BuildConfig.VERSION_NAME} versionCode=${BuildConfig.VERSION_CODE}")
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()
-        setContent { MaterialTheme(colorScheme = darkColorScheme(primary = accent, background = bg, surface = Color(0xFF202832), onBackground = Color.White, onSurface = Color.White, onSurfaceVariant = Color.LightGray)) { StreamingApp(db.dao()) } }
+        if (intent.getBooleanExtra(JaMusicService.OPEN_MUSIC, false)) musicOpenRequest++
+        setContent { MaterialTheme(colorScheme = darkColorScheme(primary = accent, background = bg, surface = Color(0xFF202832), onBackground = Color.White, onSurface = Color.White, onSurfaceVariant = Color.LightGray)) { StreamingApp(db.dao(), musicOpenRequest) } }
         // Start extension setup as soon as JA opens, rather than waiting for the
         // first Play press. Posting lets Compose draw the initial screen first.
         window.decorView.post {
@@ -144,7 +152,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable fun StreamingApp(dao: WatchDao) {
+@Composable fun StreamingApp(dao: WatchDao, openMusicRequest: Int = 0) {
     val activity = LocalContext.current as? MainActivity
     val appContext = LocalContext.current.applicationContext
     val titleReturnFocus = remember { JaTitleReturnFocus() }
@@ -233,6 +241,7 @@ class MainActivity : ComponentActivity() {
     var confirmPreferredSourceReset by remember { mutableStateOf(false) }
     var preferredSourceResetStatus by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf("Movies") }
+    LaunchedEffect(openMusicRequest) { if (openMusicRequest > 0) tab = "Music" }
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
@@ -557,7 +566,10 @@ class MainActivity : ComponentActivity() {
             } finally { tvPopularLoading = false }
         }
     }
-    LaunchedEffect(playback,playbackLoading) { JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading) }
+    LaunchedEffect(playback,playbackLoading) {
+        JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading)
+        JaMusicService.setVideoActive(playback != null || playbackLoading)
+    }
     val catalogueVisible = selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.
     LaunchedEffect(catalogueGeneration, catalogueDate, catalogueVisible, tab, searchGenre, sourceDataVersion) {
@@ -698,6 +710,7 @@ class MainActivity : ComponentActivity() {
     var restartFromBeginning by remember { mutableStateOf(false) }
     var resumeLookupBusy by remember { mutableStateOf(false) }
     fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L, restart: Boolean = false) {
+        JaMusicService.setVideoActive(true)
         // Direct playback: no HTTP preflight, no detached verification, and no
         // HTTP ranking. TV seasons can reuse a locally learned working source.
         playbackEpisodeTarget = if(item.type=="tv")s to e else null
@@ -825,6 +838,7 @@ class MainActivity : ComponentActivity() {
                 closePlayback()
             }
             selected != null || selectedPerson != null -> backFromDetails()
+            tab == "Music" && JaMusicService.back() -> exitGate.reset()
             tab == "Search" && searchGenre != null -> exitGenre()
             else -> {
                 if (exitGate.press(android.os.SystemClock.elapsedRealtime())) {
@@ -932,12 +946,14 @@ class MainActivity : ComponentActivity() {
         Text("JA", style = MaterialTheme.typography.headlineMedium, color = accent)
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(listOf("Movies", "TV", "Search", "Favorites", "Continue", "Settings")) { t ->
+            items(listOf("Movies", "TV", "Music", "Search", "Favorites", "Continue", "Settings")) { t ->
                 TvFocusButton(onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null }, colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)) { Text(t, color = Color.Black) }
             }
         }
         Spacer(Modifier.height(12.dp))
-        JaCompactContent {
+        if (tab == "Music" && selected == null && selectedPerson == null) {
+            JaMusicScreen(Modifier.fillMaxWidth().weight(1f))
+        } else JaCompactContent {
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
         error?.let { Text(it, color = Color(0xFFFFA8A8)) }
         if (selected == null && selectedPerson == null && (tab == "Movies" || (tab == "Search" && searchGenre?.type == "movie"))) {
