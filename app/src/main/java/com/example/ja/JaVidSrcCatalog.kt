@@ -92,7 +92,7 @@ object JaVidSrcCatalog {
     fun playbackBusy(value: Boolean) { playing=value }
     fun includeMovie(id: Int): Boolean {
         val s=_snapshot.value;val q=_quality.value
-        return s.ready && id in s.movies && id !in q.cams && id !in q.missing
+        return s.ready && JaNowPlayingCatalog.includeOutside("movie", id) && id in s.movies && id !in q.cams && id !in q.missing
     }
     fun observe(item: TitleItem) {
         if(!started || item.type!="movie" || item.id<=0)return

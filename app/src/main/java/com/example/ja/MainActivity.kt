@@ -165,9 +165,12 @@ class MainActivity : ComponentActivity() {
     val dailyVidSrcDownloads by JaVidSrcCatalog.dailyDownloads.collectAsState()
     val vidSrcQuality by JaVidSrcCatalog.quality.collectAsState()
     val vidSrcPromotions by JaVidSrcCatalog.promotions.collectAsState()
-    val sourceDataVersion = vidSrcSnapshot.generation to vidSrcPromotions
+    remember { JaNowPlayingCatalog.initialize(appContext); true }
+    val nowPlaying by JaNowPlayingCatalog.snapshot.collectAsState()
+    val movieCatalogueReady = vidSrcSnapshot.ready && nowPlaying.ready
+    val sourceDataVersion = vidSrcSnapshot.generation to (vidSrcPromotions + nowPlaying.generation)
     fun sourcesCurrent(version: Pair<Long,Long>) =
-        JaVidSrcCatalog.snapshot.value.generation == version.first && JaVidSrcCatalog.promotions.value == version.second
+        JaVidSrcCatalog.snapshot.value.generation == version.first && (JaVidSrcCatalog.promotions.value + JaNowPlayingCatalog.snapshot.value.generation) == version.second
     fun marked(item: TitleItem) = item.copy(watched = WatchedStore.key(item.id, item.type) in watched)
     var pendingEpisodeFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var pendingPlayFocus by remember { mutableStateOf(false) }
@@ -257,8 +260,8 @@ class MainActivity : ComponentActivity() {
     var otherTotalPages by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableIntStateOf(1) }
     var otherLoading by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf(false) }
     var otherError by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf<String?>(null) }
-    val otherDisplayTitles = remember(otherTitles,vidSrcQuality.cams) {
-        (vidSrcQuality.cams.values.sortedBy { it.title } + otherTitles).distinctBy { it.id }
+    val otherDisplayTitles = remember(otherTitles, vidSrcQuality.cams, nowPlaying.titles) {
+        (nowPlaying.titles + vidSrcQuality.cams.values.sortedBy { it.title } + otherTitles).distinctBy { it.id }
     }
     val otherMovieIds = remember(otherDisplayTitles) { otherDisplayTitles.map { it.id }.toSet() }
     fun outsideOther(titles: List<TitleItem>): List<TitleItem> = titles.filter {
@@ -402,7 +405,7 @@ class MainActivity : ComponentActivity() {
         searchGenrePageError = null
         searchError = null
         searchGenreLoading = true
-        if (genre.type == "movie" && !vidSrcSnapshot.ready) { searchGenreLoading = false; return }
+        if (genre.type == "movie" && !movieCatalogueReady) { searchGenreLoading = false; return }
         scope.launch {
             try {
                 val found = searchRepo.genreTitlesPage(genre, 1)
@@ -419,7 +422,7 @@ class MainActivity : ComponentActivity() {
     }
     fun loadMoreGenre() {
         val genre = searchGenre ?: return
-        if (genre.type == "movie" && !vidSrcSnapshot.ready) return
+        if (genre.type == "movie" && !movieCatalogueReady) return
         if (searchGenreLoading || searchGenreLoadingMore || searchGenrePage == 0 ||
             searchGenrePage >= searchGenreTotalPages || searchGenrePage >= 500) return
         val revision = genreSearchRevision
@@ -483,7 +486,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     fun loadMorePopular() {
-        if (!vidSrcSnapshot.ready) return
+        if (!movieCatalogueReady) return
         if (popularLoading || popularPage >= popularTotalPages || popularPage >= 500) return
         val requestSources = sourceDataVersion
         val requestDate = catalogueDate
@@ -559,12 +562,19 @@ class MainActivity : ComponentActivity() {
     }
     LaunchedEffect(playback,playbackLoading) { JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading) }
     val catalogueVisible = selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
+    LaunchedEffect(catalogueVisible, catalogueDate, catalogueGeneration) {
+        if (!catalogueVisible) return@LaunchedEffect
+        while (true) {
+            JaNowPlayingCatalog.refreshOverdue()
+            delay(60_000L)
+        }
+    }
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.
     LaunchedEffect(catalogueGeneration, catalogueDate, catalogueVisible, tab, searchGenre, sourceDataVersion) {
         val genre = searchGenre
         if (catalogueVisible && tab == "Search" && genre != null &&
             (searchGenreDataGeneration != catalogueGeneration || (genre.type == "movie" && searchGenreSources != sourceDataVersion)) &&
-            (genre.type != "movie" || vidSrcSnapshot.ready)) browseGenre(genre, refreshing = true)
+            (genre.type != "movie" || movieCatalogueReady)) browseGenre(genre, refreshing = true)
     }
     LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate, catalogueGeneration, catalogueVisible, sourceDataVersion) {
         if (!catalogueVisible) return@LaunchedEffect
@@ -590,7 +600,7 @@ class MainActivity : ComponentActivity() {
                 if (activeView == "Genres") {
                     results = emptyList()
                     val genreType = if (tab == "Movies") "movie" else "tv"
-                    if (genreType == "movie" && !vidSrcSnapshot.ready) {
+                    if (genreType == "movie" && !movieCatalogueReady) {
                         genreRows = emptyList(); genresLoading = true; return@LaunchedEffect
                     }
                     val genreRepo = if (genreType == "movie") movieCatalogueRepo else repo
@@ -941,6 +951,15 @@ class MainActivity : ComponentActivity() {
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
         error?.let { Text(it, color = Color(0xFFFFA8A8)) }
         if (selected == null && selectedPerson == null && (tab == "Movies" || (tab == "Search" && searchGenre?.type == "movie"))) {
+            if (nowPlaying.busy || !nowPlaying.ready) Text(
+                if (nowPlaying.ready) "Updating Now Playing…" else "Preparing Now Playing…",
+                color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            nowPlaying.error?.let {
+                Text(it, color = Color(0xFFFFA8A8), style = MaterialTheme.typography.bodySmall)
+                if (!nowPlaying.busy) TvSecondaryButton("Retry Now Playing", false) {
+                    JaNowPlayingCatalog.refreshOverdue(force = true)
+                }
+            }
             if (vidSrcSnapshot.busy || (!vidSrcSnapshot.ready && dailyVidSrcDownloads)) Text(
                 if (vidSrcSnapshot.ready) "Updating VidSrc catalogue…" else "Preparing VidSrc catalogue…",
                 color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
@@ -1208,7 +1227,7 @@ class MainActivity : ComponentActivity() {
                     results = searchResponse.copy(titles = searchResponse.titles.map { marked(it) }),
                     selectedGenre = searchGenre,
                     genreTitles = outsideOther(searchGenreTitles).map { marked(it) },
-                    genreLoading = searchGenreLoading || (searchGenre?.type == "movie" && !vidSrcSnapshot.ready),
+                    genreLoading = searchGenreLoading || (searchGenre?.type == "movie" && !movieCatalogueReady),
                     genreLoadingMore = searchGenreLoadingMore,
                     genreHasMore = searchGenrePage in 1 until searchGenreTotalPages,
                     genrePageError = searchGenrePageError,
@@ -1246,7 +1265,7 @@ class MainActivity : ComponentActivity() {
                     // The TV and Movies Popular lists share layout only, not data or scroll state.
                     val titles = if (isOther) otherDisplayTitles else if (isMovieTab) outsideOther(popularTitles) else tvPopularTitles
                     val gridState = if (isOther) otherGridState else if (isMovieTab) popularGridState else tvPopularGridState
-                    val loading = if (isOther) otherLoading else if (isMovieTab) popularLoading || !vidSrcSnapshot.ready else tvPopularLoading
+                    val loading = if (isOther) otherLoading else if (isMovieTab) popularLoading || !movieCatalogueReady else tvPopularLoading
                     val loadedPage = if (isOther) otherPage else if (isMovieTab) popularPage else tvPopularPage
                     val totalPages = if (isOther) otherTotalPages else if (isMovieTab) popularTotalPages else tvPopularTotalPages
                     val pageError = if (isOther) otherError else if (isMovieTab) popularError else tvPopularError
@@ -1270,19 +1289,19 @@ class MainActivity : ComponentActivity() {
                                     style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 Text("${titles.size} titles loaded", color = Color.LightGray)
                                 if (isMovieTab) Text(
-                                    if (isOther) "Upcoming releases and movies labelled CAM by VidSrc."
-                                    else "Released by yesterday, listed on VidSrc, with confirmed CAM titles excluded.",
+                                    if (isOther) "U.S. Now Playing titles are labelled CAM by rule; upcoming releases and source-confirmed CAM titles also appear here."
+                                    else "Released by yesterday and listed on VidSrc, excluding U.S. Now Playing and confirmed CAM titles.",
                                     color = Color.LightGray
                                 )
                                 if (isOther && titles.isEmpty() && !loading && loadedPage > 0 && pageError == null) {
                                     Text(if (loadedPage < totalPages) "No upcoming matches on this page. Load More to keep browsing."
-                                        else "No upcoming or confirmed CAM movies found.", color = Color.LightGray)
+                                        else "No upcoming, U.S. Now Playing or confirmed CAM movies found.", color = Color.LightGray)
                                 }
                             }
                         }
                         gridItems(titles, key = { "popular-${it.type}-${it.id}" }) { item ->
                             JaSearchTitleCard(marked(item),
-                                badge = if (isOther) { if (item.id in vidSrcQuality.cams) "CAM" else "Upcoming" } else null,
+                                badge = if (isOther) { if (item.id in nowPlaying.ids || item.id in vidSrcQuality.cams) "CAM" else "Upcoming" } else null,
                                 returnFocus = titleReturnFocus, returnKey = "$tab:$activeView:${item.type}:${item.id}",
                                 restoreFocus = pageFocusId == item.id,
                                 onFocusRestored = { pageFocusId = null }

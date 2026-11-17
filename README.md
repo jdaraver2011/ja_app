@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.1.6 (20106)**, based on v2.1.5.
+Current testing version: **2.1.7 (20107)**, based on v2.1.6.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.6-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. Publishing runs require Android lint to pass; ordinary testing builds report lint separately with continue-on-error. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.7-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. Publishing runs require Android lint to pass; ordinary testing builds report lint separately with continue-on-error. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.1.7 downloads every page of TMDB U.S. Now Playing into one durable daily snapshot. Listed movies appear in Other with CAM labels, independently of the VidSrc daily TXT toggle. This theater-based CAM label is a requested routing rule, not verified recording quality. Existing upcoming/source-confirmed CAM behavior remains.
+- Popular, Movie Genres and Search Movie Genres exclude the complete Now Playing ID set even before Other is opened. A successful daily refresh removes departed IDs from that exclusion and rebuilds movie lists; these titles return through normal popularity/genre discovery, subject to existing release, VidSrc availability and independently confirmed CAM rules.
+- A partial/inconsistent download or request failure retains the previous complete snapshot and retries after 15 minutes while browsing. With no saved snapshot, movie lists wait for the first successful refresh. TV is unaffected. Playback does not wait for theatrical metadata.
+- User verified v2.1.6 layout and remote focus on the updated device. v2.1.7 compilation, tests, lint and device verification are pending.
 
 - v2.1.6 splits Continue into Movies/TV using the existing unscaled sub-buttons and separate vertical grids/scroll states. Cards derive from current saved history, selecting the latest resumable entry per title, with compact time or S##E## (time) labels above the poster. Times use total minutes and seconds.
 - TV details scroll the season strip to the selected season and show episode resume points on each episode card. Opening a title focuses Play once it is ready; a fully watched season's Play button allows replay of its first episode. Returning from playback or cast retains the existing targeted focus restoration.
