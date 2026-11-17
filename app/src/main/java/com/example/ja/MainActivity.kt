@@ -1800,7 +1800,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
 
 
 /** Persist player overlay preferences between JA launches. */
-private class PlayerControlSettings(context: Context) {
+internal class PlayerControlSettings(context: Context) {
     private val prefs = context.getSharedPreferences("ja_player_controls", Context.MODE_PRIVATE)
     private val isTelevision =
         (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
