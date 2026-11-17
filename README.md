@@ -14,7 +14,7 @@ Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.6-debu
 
 - v2.1.6 splits Continue into Movies/TV using the existing unscaled sub-buttons and separate vertical grids/scroll states. Cards derive from current saved history, selecting the latest resumable entry per title, with compact time or S##E## (time) labels above the poster. Times use total minutes and seconds.
 - TV details scroll the season strip to the selected season and show episode resume points on each episode card. Opening a title focuses Play once it is ready; a fully watched season's Play button allows replay of its first episode. Returning from playback or cast retains the existing targeted focus restoration.
-- Compilation, automated checks, lint and device validation are pending the v2.1.6 workflow.
+- v2.1.6 compilation, resume-label tests, existing regression checks and Android lint passed in [GitHub Actions run 44004160083](https://github.com/jdaraver2011/ja_app/actions/runs/44004160083). The signed device update is published. Device validation of Continue, season visibility and focus remains pending. The temporary branch publication trigger has been removed.
 
 - v2.1.5 reserves exactly two lines for every movie/TV card title in genre/network rows and title grids. Single-line names retain the same title area as two-line names; longer names use ellipsis. Poster sizes and navigation bars are unchanged. Device verification of stable row positioning remains pending.
 - v2.1.5 compilation, automated regression checks and Android lint passed in [GitHub Actions run 43997624022](https://github.com/jdaraver2011/ja_app/actions/runs/43997624022). The signed device update is published; the temporary branch publication trigger has been removed.

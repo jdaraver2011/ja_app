@@ -1,5 +1,5 @@
 70a2b33a6846bc4fdcc7fb2c0b93765ebf63d2707538cb1fa64e6f276ff29e21  .github/workflows/build-apk.yml
-eb6bfd0ed59c898ce2b5567ff54a0cd32e4c7039f6ee9d3ce82c7fc03ed7c59f  README.md
+7861ad3fb5060f205cb2d23032f487c2af8e8647426a4c7bf58902954a5e74d5  README.md
 f9662b2810af35c765e4ab1de5fcd640487ea8a9f15fef3460053d449c8141cd  UPDATE-SETUP.md
 c64f44b8f5976ba28e8896c0b536c92ba2765c082ac1ba64471452d18c510001  app/build.gradle.kts
 c3b5fd9b0d86d1f8e614a63ff7873eb6d67d7d6bfdba9ed1329c07d8481a1321  app/src/main/AndroidManifest.xml
@@ -32,4 +32,3 @@ c587f99dbf8325059ec4f348e9d6fc26394e7ccf631aea4ad15d2e9269897535  app/src/main/j
 d50336b6d98e4b0392fa7ba1d819e033d8e2b035afd521b5017b268e74855acf  app/src/main/java/com/example/ja/JaSearchScreen.kt
 47787b1eeb06120aae32a19ddc6f146d1bbe9c0d8976446c27159481584af483  app/src/main/java/com/example/ja/JaResumeLabels.java
 f54e7c97031807a77a96f59ff7664563fad0c8be58614aef66e3df139fee2ebe  tests/JaResumeLabelsTest.java
-e79c35f7336b5a4dfd7d9f60e8a43339335996c5187e01a940fd1f7aaa5cb2fd  .github/workflows/release-v2.1.6.yml
