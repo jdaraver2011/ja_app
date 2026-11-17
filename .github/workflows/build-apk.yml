@@ -1,5 +1,10 @@
 name: Build JA APK
 on:
+  workflow_call:
+    inputs:
+      publish_update:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       publish_update:
@@ -146,7 +151,7 @@ jobs:
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Report Android lint findings
-        continue-on-error: true
+        continue-on-error: ${{ !inputs.publish_update }}
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
@@ -155,7 +160,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.1.3-debug
+          name: JA-2.1.4-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -180,7 +185,9 @@ jobs:
         run: |
           test "$(gh api "repos/$UPDATE_REPO" --jq '.private')" = "false" || { echo 'Updates require a public release repository.'; exit 1; }
           version=$(python3 -c 'import json; print(json.load(open("dist/ja-update.json"))["versionName"])')
-          gh release create "v$version" dist/JA-update.apk dist/ja-update.json --repo "$UPDATE_REPO" --title "JA $version" --notes 'JA device update. Install through Settings > Update Now.' --draft
+          target_args=()
+          if [ "$UPDATE_REPO" = "$GITHUB_REPOSITORY" ]; then target_args=(--target "$GITHUB_SHA"); fi
+          gh release create "v$version" dist/JA-update.apk dist/ja-update.json --repo "$UPDATE_REPO" "${target_args[@]}" --title "JA $version" --notes 'JA device update. Install through Settings > Update Now.' --draft
           gh release edit "v$version" --repo "$UPDATE_REPO" --draft=false --latest
       - name: Remove temporary signing key
         if: always()

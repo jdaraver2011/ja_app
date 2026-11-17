@@ -72,7 +72,7 @@ internal class TmdbNetworksRepository(context: Context) {
 
     private fun sorted(values: List<TmdbNetwork>): List<TmdbNetwork> {
         val collator = Collator.getInstance(Locale.ENGLISH).apply { strength = Collator.PRIMARY }
-        return values.distinctBy { it.id }.sortedWith(Comparator { a, b ->
+        return JaCuratedTvNetworks.select(values).sortedWith(Comparator { a, b ->
             val order = collator.compare(a.name, b.name)
             if (order != 0) order else a.id.compareTo(b.id)
         })
@@ -87,7 +87,7 @@ internal class TmdbNetworksRepository(context: Context) {
             val name = item.optString("name").trim()
             if (id > 0 && name.isNotBlank() && name != "null") TmdbNetwork(id, name) else null
         }
-        values.takeIf { it.isNotEmpty() }?.let { SavedDirectory(LocalDate.parse(obj.getString("date")), sorted(it)) }
+        sorted(values).takeIf { it.isNotEmpty() }?.let { SavedDirectory(LocalDate.parse(obj.getString("date")), it) }
     } catch (_: Exception) { null }
 
     private fun saveDirectory(value: SavedDirectory) {
@@ -132,7 +132,7 @@ internal class TmdbNetworksRepository(context: Context) {
                                 }
                             }
                             check(values.isNotEmpty()) { "TMDB returned no named TV networks." }
-                            sorted(values)
+                            sorted(values).also { check(it.isNotEmpty()) { "No selected U.S. networks found. Please retry." } }
                         }
                     }
                     if (networks != null) { fresh = SavedDirectory(candidate, networks); break }
