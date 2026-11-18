@@ -34,9 +34,9 @@ internal class PreferredSourceReset(context: Context) {
             id == "vidsrc" -> 1      // vidsrc.sh
             id == "vidfast-vc" -> 2   // vidfast.vc
             id == "scottsmedia" -> 3  // player.scottsmedia.online
-            id == "cinejoy" -> 4
-            id == "movy" -> 5
-            id == "7movies" -> 6
+            id == "cinejoy" -> 6
+            id == "movy" -> 4
+            id == "7movies" -> 5
             else -> 7
         }
         // Preserve existing provider order among other servers.

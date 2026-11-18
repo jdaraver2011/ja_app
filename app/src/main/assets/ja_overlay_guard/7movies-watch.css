@@ -1,0 +1,31 @@
+/* JA: isolate the selected TV episode's existing watch player.
+ * Host/path scoping is supplied by the extension manifest; never extract the
+ * iframe URL or replace the provider's token/session/server initialization.
+ */
+main.unified-watch-mode > .wp-head,
+main.unified-watch-mode > .wp-body,
+main.unified-watch-mode .unified-watch-episodes-panel {
+  display: none !important;
+}
+main.unified-watch-mode {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+main.unified-watch-mode > .wp-stage {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #000 !important;
+  z-index: 1 !important;
+}
+main.unified-watch-mode .wp-stage .unified-watch-player,
+main.unified-watch-mode .wp-stage .unified-player-frame {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+}

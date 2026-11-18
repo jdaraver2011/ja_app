@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "JA Playback Overlay Guard",
-  "version": "1.1.6.20",
+  "version": "1.1.6.21",
   "description": "Hide visibly deceptive in-page popup layers without replacing the embedded video player or changing remote controls.",
   "browser_specific_settings": {
     "gecko": {
@@ -34,6 +34,17 @@
         "*://facebook.com/*",
         "*://*.facebook.com/*"
       ]
+    },
+    {
+      "matches": [
+        "https://7movies.ac/tv/*/watch*",
+        "https://www.7movies.ac/tv/*/watch*"
+      ],
+      "css": [
+        "7movies-watch.css"
+      ],
+      "all_frames": false,
+      "run_at": "document_start"
     }
   ]
 }

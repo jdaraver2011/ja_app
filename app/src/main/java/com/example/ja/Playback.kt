@@ -83,7 +83,7 @@ class ScottsMediaEmbedProvider : PlaybackProvider {
     }
 }
 
-/** Preferred source 4. CineJoy takes a numeric TMDB movie or television ID. */
+/** Preferred source 6. CineJoy takes a numeric TMDB movie or television ID. */
 class CineJoyEmbedProvider : PlaybackProvider {
     override val id = "cinejoy"
     override val label = "CineJoy"
@@ -102,7 +102,7 @@ class CineJoyEmbedProvider : PlaybackProvider {
     }
 }
 
-/** Additional source 5. Full Movy title/episode page; not a documented embed API. */
+/** Additional source 4. Full Movy title/episode page; not a documented embed API. */
 class MovyProvider : PlaybackProvider {
     override val id = "movy"
     override val label = "Movy"
@@ -114,7 +114,7 @@ class MovyProvider : PlaybackProvider {
     }
 }
 
-/** Additional source 6. Full 7Movies watch page using numeric TMDB IDs. */
+/** Additional source 5. Full 7Movies watch page using numeric TMDB IDs. */
 class SevenMoviesProvider : PlaybackProvider {
     override val id = "7movies"
     override val label = "7Movies"
@@ -145,9 +145,9 @@ class PlaybackRegistry(
         AuthorizedEmbedProvider(),
         VidFastEmbedProvider(),
         ScottsMediaEmbedProvider(),
-        CineJoyEmbedProvider(),
         MovyProvider(),
-        SevenMoviesProvider()
+        SevenMoviesProvider(),
+        CineJoyEmbedProvider()
     )
 ) {
     fun choices(request: PlaybackRequest): List<PlaybackChoice> =

@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.6 (20206)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.7 (20207)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,11 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.6-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.7-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
 
-- Movy landing fix (not published): the auto-start extension activates only the main HomeBanner Play button on numeric movie/episode pages. It does not treat a playing hero preview as a reason to skip this step. Activation stops when Play disappears, on trusted user input or page changes, and has at most three attempts within 20 seconds. The inline player keeps the requested movie/season/episode URL. URL/button matching was checked against both supplied movie pages and a TV episode page. Regression checks, signed APK compilation and strict Android lint passed in [run 44400944950](https://github.com/jdaraver2011/ja_app/actions/runs/44400944950). The test artifact retains version 2.2.6; this fix is not a public update. Real stream playback still needs device verification. The temporary branch build trigger has been removed.
+- v2.2.7: default order is VidSrc, VidFast, ScottsMedia, Movy, 7Movies, CineJoy. Registry, allowlist, reset text and legacy reset ranking agree; learned TV-season preferences may still promote a working source.
+- A 7Movies TV-watch-only stylesheet hides the identified episode sidebar and lower page body, expanding the existing watch-player stage to the viewport. It preserves the selected episode query, player iframe, session/token initialization, server controls and player menus. It does not extract a raw embed URL. CSS selectors were checked against the live HTML and stylesheet; device rendering/playback remains pending. APK validation and publication will run in the v2.2.7 workflow.
+
+- Movy landing fix (included in v2.2.7): the auto-start extension activates only the main HomeBanner Play button on numeric movie/episode pages. It does not treat a playing hero preview as a reason to skip this step. Activation stops when Play disappears, on trusted user input or page changes, and has at most three attempts within 20 seconds. The inline player keeps the requested movie/season/episode URL. URL/button matching was checked against both supplied movie pages and a TV episode page. Regression checks, signed APK compilation and strict Android lint passed in [run 44400944950](https://github.com/jdaraver2011/ja_app/actions/runs/44400944950). The earlier test artifact retained version 2.2.6; the fix is included in v2.2.7. Real stream playback still needs device verification. The temporary branch build trigger has been removed.
 
 - v2.2.6: Movy and 7Movies are appended to the playback registry and enabled-source allowlist. Default order is VidSrc, VidFast, ScottsMedia, CineJoy, Movy, 7Movies. TV season source promotion and Reset preferred sources include all six.
 - Movy uses https://www.movy.sx/movie/{tmdbId} and /tv/{tmdbId}/{season}/{episode}. The user confirmed the supplied /1/2 example is season 1 episode 2. 7Movies uses https://7movies.ac/movie/{tmdbId}/watch and /tv/{tmdbId}/watch?season={season}&episode={episode}. No undocumented autoplay parameter was added.
