@@ -1826,10 +1826,10 @@ internal class PlayerControlSettings(context: Context) {
         (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
             android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
     var musicDesktopMode: Boolean
-        get() = prefs.getBoolean("music_desktop_site", true)
+        get() = prefs.getBoolean("music_desktop_site", false)
         set(value) { prefs.edit().putBoolean("music_desktop_site", value).apply() }
     var showMusicTab: Boolean
-        get() = prefs.getBoolean("show_music_tab", true)
+        get() = prefs.getBoolean("show_music_tab", false)
         set(value) { prefs.edit().putBoolean("show_music_tab", value).apply() }
     var showBack: Boolean
         get() = prefs.getBoolean("back", false)
@@ -1847,7 +1847,7 @@ internal class PlayerControlSettings(context: Context) {
         get() = isTelevision && prefs.getBoolean("tv_match_resolution", true)
         set(value) { prefs.edit().putBoolean("tv_match_resolution", value).apply() }
     var matchStreamQuality: Boolean
-        get() = isTelevision && prefs.getBoolean("tv_match_stream_quality", true)
+        get() = isTelevision && prefs.getBoolean("tv_match_stream_quality", false)
         set(value) { prefs.edit().putBoolean("tv_match_stream_quality", value).apply() }
     var adBlockerMode: String
         get() = JaGeckoAdBlockers.normalized(prefs.getString("ad_blocker_mode", JaGeckoAdBlockers.UBLOCK) ?: JaGeckoAdBlockers.UBLOCK)

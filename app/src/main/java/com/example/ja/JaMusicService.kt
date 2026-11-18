@@ -39,7 +39,7 @@ class JaMusicService : Service() {
             val playing: Boolean = false, val loading: Boolean = false,
             val canGoBack: Boolean = false, val host: String = "",
             val title: String = "Deezer", val message: String? = null,
-            val desktopSite: Boolean = true
+            val desktopSite: Boolean = false
         )
         private val mutable = MutableStateFlow(State())
         val state = mutable.asStateFlow()
@@ -80,7 +80,7 @@ class JaMusicService : Service() {
     private var receiverRegistered = false
     private var desiredUrl = HOME
     private var prepared = false
-    private var desktopMode = true
+    private var desktopMode = false
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { pause() }
     }

@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.3 (20203)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.4 (20204)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,12 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.3-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.4-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.2.4 changes unset preferences: Match stream quality to TV output defaults off on Android TV (already off on phones); Show Music tab defaults off on all devices; Use desktop site for Music defaults off on all devices. Existing explicitly saved choices remain in effect. TV frame-rate matching and output-resolution matching retain their current defaults and saved settings.
+- Music's initial service state also defaults to mobile mode. No further Deezer integration work is included. Controls remain available in Settings to opt in. Build, regression checks, strict lint and publication are pending the v2.2.4 workflow.
 
 - v2.2.3 changes Music's Home destination from the marketing homepage to Deezer's catalogue at https://www.deezer.com/en/channels/explore/.
 - Settings > Music > Use desktop site for Music defaults on and persists on the device. New Music sessions request Gecko's desktop user agent and desktop viewport. Child/sign-in windows use the same mode. Stop Music and reopen after changing the setting; stored login data is retained. The running Music header and JA_MUSIC logs identify the requested mode. Movie/TV sessions are unchanged.
