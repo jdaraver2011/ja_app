@@ -1,6 +1,6 @@
 # Native music investigation — isolated experiment
 
-This directory is outside Android's source sets. Nothing here is wired into JA's Music tab or public updater. The v2.2.1 app is unchanged. No native Deezer playback has been demonstrated in JA.
+This directory contains research notes. In v2.2.2 the independently written coordinator and simulated check runner are packaged under `app/src/main/java/com/example/ja/experiments/music/`. Settings can invoke the checks on-device and report JA_MUSIC_NATIVE logs. They use a fake player and do not replace the embedded web player. No native Deezer playback has been demonstrated in JA. The public v2.2.1 release is unchanged.
 
 ## Input and scope
 
@@ -26,7 +26,7 @@ This is static analysis, plus review of user-supplied device diagnostics. There 
 
 ## Original prototype
 
-`JaMusicSourceCoordinator.java` is independently written Java for source handoff, not a port of Deezer's client. A resolver would supply an authorized HTTPS media source to this coordinator; no such Deezer resolver is implemented here. The player interface is a test boundary, not a Media3 adapter. No Android background service, authentication, next-track prefetch, DRM or audio decoder is implemented by this prototype.
+`app/src/main/java/com/example/ja/experiments/music/JaMusicSourceCoordinator.java` is independently written Java for source handoff, not a port of Deezer's client. A resolver would supply an authorized HTTPS media source to this coordinator; no such Deezer resolver is implemented here. The player interface is a test boundary, not a Media3 adapter. No Android background service, authentication, next-track prefetch, DRM or audio decoder is implemented by this prototype.
 
 It models selected-track resolution, deduplicated result delivery, resume-position handoff, pause during resolution and cancellation. It additionally uses request generations to reject stale results even when the same track is selected twice. Generation tokens are a JA design improvement; they were not established as Deezer's implementation. Video playback blocks music until the user explicitly resumes it.
 
@@ -37,8 +37,8 @@ All methods must run on one owner thread. READY means the source was handed to t
 Run with JDK 17 from the repository root:
 
 ```sh
-javac -d /tmp/ja-music-prototype experiments/music/JaMusicSourceCoordinator.java experiments/music/JaMusicSourceCoordinatorTest.java
-java -cp /tmp/ja-music-prototype com.example.ja.experiments.music.JaMusicSourceCoordinatorTest
+javac -d /tmp/ja-music-prototype app/src/main/java/com/example/ja/experiments/music/JaMusicSourceCoordinator.java app/src/main/java/com/example/ja/experiments/music/JaMusicExperimentChecks.java
+java -cp /tmp/ja-music-prototype com.example.ja.experiments.music.JaMusicExperimentChecks
 ```
 
 Passed locally: previous-track result/error rejection, duplicate callback rejection, same-track generation isolation, resume position delivered before playback, pause during loading, video-gated playback/no automatic resume, cancellation after Stop, invalid-source rejection and synchronous adapter failure. Tests use a fake player and a reserved example domain. They do not contact Deezer and are not evidence of working native streaming.
@@ -46,3 +46,7 @@ Passed locally: previous-track result/error rejection, duplicate callback reject
 ## Remaining integration boundary
 
 The unresolved prerequisite is a source provider that can obtain an account-authorized playable source and any required playback configuration without the installed Deezer application. The static analysis has not demonstrated that capability. A future Android prototype needs that provider, a real Media3 adapter, audio focus/notification lifecycle, error reporting and device testing before production integration. Ordinary ADB logcat captures cannot supply a complete implementation of the private protocol.
+
+## v2.2.2 device test
+
+Install the signed testing APK, then toggle Settings > Music > Show Music tab off/on. Restart JA to verify persistence. If music is already running, hiding the tab should leave playback alone; Stop Music remains in Settings. Run simulated Music checks and capture `adb logcat -v threadtime JA_MUSIC_NATIVE:I JA_MUSIC:I "*:S"`. Successful output ends with `RUN_COMPLETE mode=SIMULATED result=PASS nativeDeezerPlayback=false`. These are coordinator tests, not a test of a native Deezer source provider.

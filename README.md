@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.1 (20201)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.2 (20202)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,13 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.1-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.2-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.2.2 adds Settings > Music > Show Music tab, on by default and saved on the device. Hiding the tab does not stop active music; Settings includes Stop Music while its service runs. Tapping a music notification while the tab is hidden opens Settings.
+- Settings > Music > Run simulated Music checks exercises the packaged experimental source coordinator with a fake player. Logs use JA_MUSIC_NATIVE and explicitly say SIMULATED / nativeDeezerPlayback=false. No login, network requests, audio decoding or native Deezer streaming occurs during those checks. Normal Music still uses the embedded Deezer web player.
+- Source coordinator checks passed locally. APK compilation, full regressions and Android lint are pending the v2.2.2 testing workflow. This version is an artifact-only test build; v2.2.1 remains the public device update. See [native Music investigation](experiments/music/README.md).
 
 - v2.2.1 fixes the Music-only blocked HTTP redirects reported in the device log: Deezer HTTP URLs are cancelled and reopened over HTTPS, preserving encoded path/query/fragment values. Other HTTP destinations stay blocked. Each Music page permits at most three upgrades in 30 seconds; Home, Sign in and Reload reset the retry budget. Movie/TV navigation is unchanged.
 - Music diagnostics log HTTPS upgrade, redirect-loop prevention, page-start hostname/scheme, page-stop status and load-error code without URL paths or login tokens. Login parameter preservation, unsafe destinations and retry limits are covered by regression tests. Local Music rules tests, the full workflow regression suite, APK compilation and strict Android lint passed in [GitHub Actions run 44321181837](https://github.com/jdaraver2011/ja_app/actions/runs/44321181837). v2.2.1 is published as the latest device update. The temporary publication trigger has been removed. Device verification of Deezer login/navigation/playback is pending.

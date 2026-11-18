@@ -36,7 +36,7 @@ public final class JaMusicSourceCoordinator {
 
     /** Return this token with the asynchronous source result; never log source URLs. */
     public Request begin(String trackId, long positionMs, boolean autoplay) {
-        if (trackId == null || trackId.isBlank() || positionMs < 0)
+        if (trackId == null || trackId.trim().isEmpty() || positionMs < 0)
             throw new IllegalArgumentException("Track and nonnegative position required");
         pending = new Request(trackId, ++generation, positionMs);
         state = State.RESOLVING;

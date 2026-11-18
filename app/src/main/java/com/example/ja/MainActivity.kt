@@ -226,6 +226,7 @@ class MainActivity : ComponentActivity() {
     // Persist the order in which titles were favorited separately from the
     // watch-history timestamp, which changes whenever an episode is played.
     val favoritesOrder = remember { FavoritesDisplayOrder(appContext) }
+    var showMusicTab by remember { mutableStateOf(settings.showMusicTab) }
     var showBack by remember { mutableStateOf(settings.showBack) }
     var showRestore by remember { mutableStateOf(settings.showRestore) }
     var showPlayerDiagnostics by remember { mutableStateOf(settings.showPlayerDiagnostics) }
@@ -241,6 +242,7 @@ class MainActivity : ComponentActivity() {
     var confirmPreferredSourceReset by remember { mutableStateOf(false) }
     var preferredSourceResetStatus by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf("Movies") }
+    LaunchedEffect(showMusicTab) { if (!showMusicTab && tab == "Music") tab = "Movies" }
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
@@ -305,7 +307,7 @@ class MainActivity : ComponentActivity() {
     LaunchedEffect(openMusicRequest) {
         if (openMusicRequest > 0) {
             selected = null; selectedPerson = null; playback = null
-            detailsBackStack.clear(); tab = "Music"
+            detailsBackStack.clear(); tab = if (showMusicTab) "Music" else "Settings"
         }
     }
     var history by remember { mutableStateOf(emptyList<WatchItem>()) }
@@ -951,12 +953,13 @@ class MainActivity : ComponentActivity() {
         Text("JA", style = MaterialTheme.typography.headlineMedium, color = accent)
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(listOf("Movies", "TV", "Music", "Search", "Favorites", "Continue", "Settings")) { t ->
+            items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
+                listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
                 TvFocusButton(onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null }, colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)) { Text(t, color = Color.Black) }
             }
         }
         Spacer(Modifier.height(12.dp))
-        if (tab == "Music" && selected == null && selectedPerson == null) {
+        if (showMusicTab && tab == "Music" && selected == null && selectedPerson == null) {
             JaMusicScreen(Modifier.fillMaxWidth().weight(1f))
         } else JaCompactContent {
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
@@ -973,6 +976,15 @@ class MainActivity : ComponentActivity() {
         if (tab == "Settings" && selected == null) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 JaUpdateSettings()
+                Text("Music", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                TvSettingsToggle("Show Music tab", showMusicTab) {
+                    showMusicTab = it; settings.showMusicTab = it
+                    Log.i("JA_MUSIC", "TAB_VISIBILITY visible=$it")
+                }
+                Text("Hiding the tab does not stop active music. You can stop it below or from the music notification.",
+                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                JaMusicDiagnosticsSettings()
+                Spacer(Modifier.height(16.dp))
                 Text("VidSrc catalogue downloads", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 TvSettingsToggle("Download VidSrc ID lists daily", dailyVidSrcDownloads) {
                     JaVidSrcCatalog.setDailyDownloads(it)
@@ -1805,6 +1817,9 @@ internal class PlayerControlSettings(context: Context) {
     private val isTelevision =
         (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
             android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    var showMusicTab: Boolean
+        get() = prefs.getBoolean("show_music_tab", true)
+        set(value) { prefs.edit().putBoolean("show_music_tab", value).apply() }
     var showBack: Boolean
         get() = prefs.getBoolean("back", false)
         set(value) { prefs.edit().putBoolean("back", value).apply() }
