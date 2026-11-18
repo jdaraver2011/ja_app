@@ -1,0 +1,12 @@
+name: Check additional JA sources
+on:
+  push:
+    branches: [sources-movy-7movies]
+permissions:
+  contents: write
+jobs:
+  check:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: false
+    secrets: inherit

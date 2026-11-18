@@ -35,7 +35,9 @@ internal class PreferredSourceReset(context: Context) {
             id == "vidfast-vc" -> 2   // vidfast.vc
             id == "scottsmedia" -> 3  // player.scottsmedia.online
             id == "cinejoy" -> 4
-            else -> 5
+            id == "movy" -> 5
+            id == "7movies" -> 6
+            else -> 7
         }
         // Preserve existing provider order among other servers.
         val result = choices.withIndex()

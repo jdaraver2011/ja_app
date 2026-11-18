@@ -95,7 +95,7 @@ private fun prewarmPlayerAdBlocker(context: Context, mode: String) {
  * Only the enabled entries in PlaybackRegistry may be considered for playback.
  * This guard also blocks stale domain-ledger aliases and old preference IDs.
  */
-private val jaActiveSourceIds = listOf("vidsrc", "vidfast-vc", "scottsmedia", "cinejoy")
+private val jaActiveSourceIds = listOf("vidsrc", "vidfast-vc", "scottsmedia", "cinejoy", "movy", "7movies")
 
 private fun isJaPlaybackSourceEnabled(id: String): Boolean = id in jaActiveSourceIds
 
@@ -1108,7 +1108,7 @@ class MainActivity : ComponentActivity() {
                 Text(
                     "Default source order: " +
                         "1. VidSrc (vidsrc.sh), 2. VidFast (vidfast.vc), " +
-                        "3. ScottsMedia, 4. CineJoy (cinejoy.pk). " +
+                        "3. ScottsMedia, 4. CineJoy (cinejoy.pk), 5. Movy (movy.sx), 6. 7Movies (7movies.ac). " +
                         "TV episodes first try the last working source for that same series and season. " +
                         "Movies retain the default order. Each TV season learns independently. " +
                         "Reset clears saved season preferences. Watch progress stays intact.",
@@ -1130,7 +1130,7 @@ class MainActivity : ComponentActivity() {
                         title = { Text("Reset preferred sources?") },
                         text = { Text(
                             "All titles will start with VidSrc (vidsrc.sh), followed by " +
-                                "VidFast (vidfast.vc), ScottsMedia, then CineJoy (cinejoy.pk). " +
+                                "VidFast (vidfast.vc), ScottsMedia, CineJoy (cinejoy.pk), Movy, then 7Movies. " +
                                  "Saved TV-season preferences and other learned choices will be cleared. " +
                                 "Each season learns again when an episode starts playing. " +
                                 "Watch progress is preserved."
@@ -1140,7 +1140,7 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     val saved = preferredSourceReset.resetAll()
                                     preferredSourceResetStatus = if (saved)
-                                        "Season preferences cleared. Default order: VidSrc, VidFast, ScottsMedia, CineJoy."
+                                        "Season preferences cleared. Default order: VidSrc, VidFast, ScottsMedia, CineJoy, Movy, 7Movies."
                                     else "Reset could not be saved. Please retry."
                                     confirmPreferredSourceReset = false
                                 },

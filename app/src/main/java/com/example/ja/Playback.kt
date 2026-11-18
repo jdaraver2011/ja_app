@@ -102,6 +102,30 @@ class CineJoyEmbedProvider : PlaybackProvider {
     }
 }
 
+/** Additional source 5. Full Movy title/episode page; not a documented embed API. */
+class MovyProvider : PlaybackProvider {
+    override val id = "movy"
+    override val label = "Movy"
+    override fun resolve(request: PlaybackRequest): PlaybackSource? {
+        val url = JaAdditionalTmdbUrls.movy(
+            request.media.type, request.media.id, request.season, request.episode
+        ) ?: return null
+        return checkedSource(url, "www.movy.sx")
+    }
+}
+
+/** Additional source 6. Full 7Movies watch page using numeric TMDB IDs. */
+class SevenMoviesProvider : PlaybackProvider {
+    override val id = "7movies"
+    override val label = "7Movies"
+    override fun resolve(request: PlaybackRequest): PlaybackSource? {
+        val url = JaAdditionalTmdbUrls.sevenMovies(
+            request.media.type, request.media.id, request.season, request.episode
+        ) ?: return null
+        return checkedSource(url, "7movies.ac")
+    }
+}
+
 private fun PlaybackRequest.valid(): Boolean =
     media.id > 0 && media.type in setOf("movie", "tv") &&
         (media.type == "movie" || (season >= 0 && episode > 0))
@@ -113,7 +137,7 @@ private fun checkedSource(url: String, host: String): PlaybackSource? {
 }
 
 /**
- * Four registered providers in default preference order. TV seasons may
+ * Six registered providers in default preference order. TV seasons may
  * promote their locally learned working provider after this list is built.
  */
 class PlaybackRegistry(
@@ -121,7 +145,9 @@ class PlaybackRegistry(
         AuthorizedEmbedProvider(),
         VidFastEmbedProvider(),
         ScottsMediaEmbedProvider(),
-        CineJoyEmbedProvider()
+        CineJoyEmbedProvider(),
+        MovyProvider(),
+        SevenMoviesProvider()
     )
 ) {
     fun choices(request: PlaybackRequest): List<PlaybackChoice> =

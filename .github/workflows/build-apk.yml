@@ -88,6 +88,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-row-jump-tests" app/src/main/java/com/example/ja/JaRowJumpIndex.java tests/JaRowJumpIndexTest.java
           java -cp "$RUNNER_TEMP/ja-row-jump-tests" com.example.ja.JaRowJumpIndexTest
+      - name: Test additional TMDB source URLs
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-additional-source-tests" app/src/main/java/com/example/ja/JaAdditionalTmdbUrls.java tests/JaAdditionalTmdbUrlsTest.java
+          java -cp "$RUNNER_TEMP/ja-additional-source-tests" com.example.ja.JaAdditionalTmdbUrlsTest
       - name: Test startup ordering
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-startup-tests" app/src/main/java/com/example/ja/JaStartupBarrier.java tests/JaStartupBarrierTest.java
