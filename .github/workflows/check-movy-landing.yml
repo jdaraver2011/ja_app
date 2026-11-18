@@ -1,0 +1,12 @@
+name: Check Movy landing fix
+on:
+  push:
+    branches: [fix-movy-landing]
+permissions:
+  contents: write
+jobs:
+  check:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: false
+    secrets: inherit

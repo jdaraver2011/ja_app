@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "JA Experimental Iframe Auto-Start",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Opt-in attempt to start embedded video players in HTTP(S) frames.",
   "browser_specific_settings": {
     "gecko": {
@@ -15,6 +15,7 @@
         "https://*/*"
       ],
       "js": [
+        "movy-landing.js",
         "autoplay.js"
       ],
       "run_at": "document_idle",

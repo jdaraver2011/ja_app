@@ -12,6 +12,8 @@ Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.6-debu
 
 ## Current behavior and test status
 
+- Movy landing fix (not published): the auto-start extension activates only the main HomeBanner Play button on numeric movie/episode pages. It does not treat a playing hero preview as a reason to skip this step. Activation stops when Play disappears, on trusted user input or page changes, and has at most three attempts within 20 seconds. The inline player keeps the requested movie/season/episode URL. Real stream playback still needs device verification.
+
 - v2.2.6: Movy and 7Movies are appended to the playback registry and enabled-source allowlist. Default order is VidSrc, VidFast, ScottsMedia, CineJoy, Movy, 7Movies. TV season source promotion and Reset preferred sources include all six.
 - Movy uses https://www.movy.sx/movie/{tmdbId} and /tv/{tmdbId}/{season}/{episode}. The user confirmed the supplied /1/2 example is season 1 episode 2. 7Movies uses https://7movies.ac/movie/{tmdbId}/watch and /tv/{tmdbId}/watch?season={season}&episode={episode}. No undocumented autoplay parameter was added.
 - These are page adapters using the supplied URL formats, not verified stream resolvers or catalogue ID feeds. Primary VidSrc ID-feed/availability filtering is unchanged. Real playback, page auto-start, remote controls and resume behavior for the new sites need device verification. Successful HTTP or page loads alone do not verify media playback.
