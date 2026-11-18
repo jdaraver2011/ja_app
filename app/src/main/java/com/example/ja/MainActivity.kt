@@ -227,6 +227,7 @@ class MainActivity : ComponentActivity() {
     // watch-history timestamp, which changes whenever an episode is played.
     val favoritesOrder = remember { FavoritesDisplayOrder(appContext) }
     var showMusicTab by remember { mutableStateOf(settings.showMusicTab) }
+    var musicDesktopMode by remember { mutableStateOf(settings.musicDesktopMode) }
     var showBack by remember { mutableStateOf(settings.showBack) }
     var showRestore by remember { mutableStateOf(settings.showRestore) }
     var showPlayerDiagnostics by remember { mutableStateOf(settings.showPlayerDiagnostics) }
@@ -982,6 +983,13 @@ class MainActivity : ComponentActivity() {
                     Log.i("JA_MUSIC", "TAB_VISIBILITY visible=$it")
                 }
                 Text("Hiding the tab does not stop active music. You can stop it below or from the music notification.",
+                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                TvSettingsToggle("Use desktop site for Music", musicDesktopMode) {
+                    musicDesktopMode = it; settings.musicDesktopMode = it
+                    Log.i("JA_MUSIC", "DESKTOP_SITE_PREFERENCE enabled=$it")
+                }
+                Text("Requests Deezer's desktop website. After changing this, Stop Music and reopen it. " +
+                    "Saved Deezer login data is kept. Playback still depends on Deezer's account and regional availability.",
                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                 JaMusicDiagnosticsSettings()
                 Spacer(Modifier.height(16.dp))
@@ -1817,6 +1825,9 @@ internal class PlayerControlSettings(context: Context) {
     private val isTelevision =
         (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
             android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    var musicDesktopMode: Boolean
+        get() = prefs.getBoolean("music_desktop_site", true)
+        set(value) { prefs.edit().putBoolean("music_desktop_site", value).apply() }
     var showMusicTab: Boolean
         get() = prefs.getBoolean("show_music_tab", true)
         set(value) { prefs.edit().putBoolean("show_music_tab", value).apply() }

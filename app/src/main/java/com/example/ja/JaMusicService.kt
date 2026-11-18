@@ -24,7 +24,7 @@ class JaMusicService : Service() {
         private const val NOTICE = 218
         private const val PROFILE = "ja-deezer-music"
         const val OPEN_MUSIC = "ja.open.music"
-        const val HOME = "https://www.deezer.com/en/"
+        const val HOME = "https://www.deezer.com/en/channels/explore/"
         const val LOGIN = "https://account.deezer.com/en-us/login/"
         private const val OPEN = "ja.music.OPEN"
         private const val PLAY = "ja.music.PLAY"
@@ -38,7 +38,8 @@ class JaMusicService : Service() {
             val session: GeckoSession? = null, val running: Boolean = false,
             val playing: Boolean = false, val loading: Boolean = false,
             val canGoBack: Boolean = false, val host: String = "",
-            val title: String = "Deezer", val message: String? = null
+            val title: String = "Deezer", val message: String? = null,
+            val desktopSite: Boolean = true
         )
         private val mutable = MutableStateFlow(State())
         val state = mutable.asStateFlow()
@@ -79,6 +80,7 @@ class JaMusicService : Service() {
     private var receiverRegistered = false
     private var desiredUrl = HOME
     private var prepared = false
+    private var desktopMode = true
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { pause() }
     }
@@ -86,6 +88,7 @@ class JaMusicService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        desktopMode = PlayerControlSettings(this).musicDesktopMode
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL, "JA Music", NotificationManager.IMPORTANCE_LOW))
         audio = getSystemService(AudioManager::class.java)
@@ -110,7 +113,7 @@ class JaMusicService : Service() {
         else @Suppress("UnspecifiedRegisterReceiverFlag") registerReceiver(noisy,
             IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
         receiverRegistered = true
-        mutable.value = State(running = true, loading = true, message = "Preparing Deezer…")
+        mutable.value = State(running = true, loading = true, message = "Preparing Deezer…", desktopSite = desktopMode)
         updateNotification()
         createRoot()
         val runtime = JaGeckoRuntime.get(this)
@@ -119,7 +122,7 @@ class JaMusicService : Service() {
             prepared = true
             current()?.loadUri(desiredUrl)
         }
-        Log.i("JA_MUSIC", "SERVICE_CREATED")
+        Log.i("JA_MUSIC", "SERVICE_CREATED version=${BuildConfig.VERSION_NAME} desktopSite=$desktopMode")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -147,8 +150,14 @@ class JaMusicService : Service() {
         if (prepared) current()?.loadUri(HOME)
     }
     private fun newPage(open: Boolean = true): GeckoSession {
+        // Music sessions only; child/sign-in pages share this service's selected mode.
         val page = GeckoSession(GeckoSessionSettings.Builder().contextId(PROFILE)
+            .userAgentMode(if (desktopMode) GeckoSessionSettings.USER_AGENT_MODE_DESKTOP
+                else GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
+            .viewportMode(if (desktopMode) GeckoSessionSettings.VIEWPORT_MODE_DESKTOP
+                else GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
             .suspendMediaWhenInactive(false).build())
+        Log.i("JA_MUSIC", "SESSION_CREATED desktopSite=$desktopMode")
         val redirectGuard = JaMusicRules.RedirectGuard()
         redirectGuards[page] = redirectGuard
         var navigationMessage: String? = null
@@ -208,7 +217,7 @@ class JaMusicService : Service() {
                     publishPage()
                     navigationMessage = null
                     val target = android.net.Uri.parse(url)
-                    Log.i("JA_MUSIC", "PAGE_START scheme=${target.scheme} host=${target.host}")
+                    Log.i("JA_MUSIC", "PAGE_START scheme=${target.scheme} host=${target.host} desktopSite=$desktopMode")
                     mutable.value = mutable.value.copy(loading = true, message = null)
                 }
             }

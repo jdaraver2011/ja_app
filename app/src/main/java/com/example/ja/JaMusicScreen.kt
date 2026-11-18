@@ -36,7 +36,7 @@ internal fun JaMusicScreen(modifier: Modifier = Modifier) {
             Spacer(Modifier.height(12.dp))
             Text("A Deezer account is required. Playback availability depends on your plan and region.",
                 color = Color.White)
-            Text("Sign in directly on Deezer. JA does not collect your password.",
+            Text("This opens Deezer’s website. Its login is separate from the installed Deezer app. JA does not collect your password.",
                 color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(12.dp))
             Button(onClick = { open(JaMusicService.LOGIN) }) { Text("Sign in to Deezer") }
@@ -57,7 +57,7 @@ internal fun JaMusicScreen(modifier: Modifier = Modifier) {
                 Button(onClick = { JaMusicService.stop(context) }) { Text("Stop Music") }
                 TextButton(onClick = { confirmReset = true }) { Text("Reset login") }
             }
-            Text("Deezer • ${state.host.ifBlank { "Preparing…" }}",
+            Text("Deezer • ${if (state.desktopSite) "Desktop site requested" else "Mobile site"} • ${state.host.ifBlank { "Preparing…" }}",
                 color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
             state.message?.let { Text(it, color = Color(0xFFFFC67D), style = MaterialTheme.typography.bodySmall) }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())

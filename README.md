@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.2 (20202)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.3 (20203)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.2-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.3-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.2.3 changes Music's Home destination from the marketing homepage to Deezer's catalogue at https://www.deezer.com/en/channels/explore/.
+- Settings > Music > Use desktop site for Music defaults on and persists on the device. New Music sessions request Gecko's desktop user agent and desktop viewport. Child/sign-in windows use the same mode. Stop Music and reopen after changing the setting; stored login data is retained. The running Music header and JA_MUSIC logs identify the requested mode. Movie/TV sessions are unchanged.
+- This is a browser compatibility experiment. It may avoid the mobile app-install prompt; it does not establish native Deezer playback or guarantee free-account full-track availability. JA's browser login remains separate from the installed Deezer application.
+- Build, regressions, strict lint and publication are pending the v2.2.3 workflow. Device verification of the catalogue, login and playback is pending.
 
 - v2.2.2 adds Settings > Music > Show Music tab, on by default and saved on the device. Hiding the tab does not stop active music; Settings includes Stop Music while its service runs. Tapping a music notification while the tab is hidden opens Settings.
 - Settings > Music > Run simulated Music checks exercises the packaged experimental source coordinator with a fake player. Logs use JA_MUSIC_NATIVE and explicitly say SIMULATED / nativeDeezerPlayback=false. No login, network requests, audio decoding or native Deezer streaming occurs during those checks. Normal Music still uses the embedded Deezer web player.
