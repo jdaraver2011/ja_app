@@ -84,6 +84,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-music-source-tests" app/src/main/java/com/example/ja/experiments/music/JaMusicSourceCoordinator.java app/src/main/java/com/example/ja/experiments/music/JaMusicExperimentChecks.java
           java -cp "$RUNNER_TEMP/ja-music-source-tests" com.example.ja.experiments.music.JaMusicExperimentChecks
+      - name: Test row jump indexing
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-row-jump-tests" app/src/main/java/com/example/ja/JaRowJumpIndex.java tests/JaRowJumpIndexTest.java
+          java -cp "$RUNNER_TEMP/ja-row-jump-tests" com.example.ja.JaRowJumpIndexTest
       - name: Test startup ordering
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-startup-tests" app/src/main/java/com/example/ja/JaStartupBarrier.java tests/JaStartupBarrierTest.java
@@ -172,7 +176,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.2.4-debug
+          name: JA-2.2.5-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

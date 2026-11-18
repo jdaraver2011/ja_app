@@ -1,6 +1,7 @@
 package com.example.ja
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,6 +19,7 @@ internal class JaNetworksBrowseState {
     var directory by mutableStateOf<TmdbNetworkDirectory?>(null)
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
+    val jump = JaRowJumpState("TV:Networks")
     val listState = LazyListState()
     val rowStates = mutableMapOf<Int, LazyListState>()
 }
@@ -41,7 +43,9 @@ internal fun JaNetworksScreen(
         finally { state.loading = false }
     }
     LaunchedEffect(repo) { loadDirectory(false) }
-    Column(modifier) {
+    val entries = state.directory?.networks.orEmpty().map { JaJumpRow(it.id.toString(), it.name) }
+    JaRowJumpScrollEffect(state.jump, entries, state.listState)
+    Column(modifier.jaCancelPendingRowJump(state.jump, returnFocus)) {
         Text("TV Networks", style = MaterialTheme.typography.titleLarge, color = Color.White)
         Text("Browse shows by their TMDB network.", color = Color.LightGray,
             style = MaterialTheme.typography.bodySmall)
@@ -53,6 +57,7 @@ internal fun JaNetworksScreen(
                 Text(if (state.loading) "Loading…" else "Retry", color = Color.White)
             }
         }
+        JaRowJumpButton(state.jump, entries, state.listState)
         Spacer(Modifier.height(10.dp))
         LazyColumn(
             state = state.listState, modifier = Modifier.fillMaxWidth().weight(1f),
@@ -64,6 +69,7 @@ internal fun JaNetworksScreen(
             }
         }
     }
+    JaRowJumpPanel(state.jump, entries, networks = true)
 }
 
 @Composable
@@ -103,8 +109,13 @@ private fun JaNetworkRow(
     // LazyColumn composes only visible/near-visible rows. Requests are cancelled
     // on disposal, globally limited to three and cached for returning to details.
     LaunchedEffect(repo, network.id) { if (row == null) load(false) }
+    val emptyRequester = remember(network.id) { FocusRequester() }
+    JaRowJumpTargetEffect(state.jump, network.id.toString(), rowState,
+        row?.titles?.firstOrNull()?.let { titleKey(it) }, returnFocus, emptyRequester, loading)
     Column {
-        Text(network.name, style = MaterialTheme.typography.titleLarge, color = Color.White)
+        JaRowJumpHeading(network.name, emptyRequester, row?.titles.isNullOrEmpty()) {
+            state.jump.open(network.id.toString())
+        }
         Spacer(Modifier.height(8.dp))
         val current = row
         if (current == null || current.titles.isEmpty()) {
@@ -114,7 +125,8 @@ private fun JaNetworkRow(
                 Text(if (loading) "Loading shows…" else if (error != null) "Shows unavailable."
                     else "No shows listed for this network.", color = Color.LightGray)
                 if (!loading && (error != null || current?.hasMore == true)) {
-                    TvFocusButton(onClick = { scope.launch { load(current != null) } }) {
+                    TvFocusButton(onClick = { scope.launch { load(current != null) } },
+                        modifier = Modifier.jaOpenRowJump { state.jump.open(network.id.toString()) }) {
                         Text(if (error != null) "Retry" else "Load More", color = Color.White)
                     }
                 }
@@ -123,7 +135,10 @@ private fun JaNetworkRow(
             LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 items(current.titles, key = { it.id }) { title ->
-                    PosterTile(marked(title), returnFocus, titleKey(title)) { onOpen(title) }
+                    PosterTile(marked(title), returnFocus, titleKey(title),
+                        modifier = if (title == current.titles.firstOrNull())
+                            Modifier.jaRowJumpFirstTitle(state.jump, network.id.toString()) else Modifier
+                    ) { onOpen(title) }
                 }
                 if (current.hasMore || error != null) item(key = "network-more-${network.id}") {
                     TvFocusButton(

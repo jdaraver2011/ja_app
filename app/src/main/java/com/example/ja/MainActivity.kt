@@ -247,6 +247,7 @@ class MainActivity : ComponentActivity() {
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
+    val genreJumpStates = remember { mutableMapOf<String, JaRowJumpState>() }
     var continueView by remember { mutableStateOf("Movies") }
     val continueMovieGridState = rememberLazyGridState()
     val continueTvGridState = rememberLazyGridState()
@@ -1357,37 +1358,17 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 } else {
-                    if (genresLoading) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text("Loading genre rows…", color = Color.LightGray)
-                    }
-                    val sectionState = sectionScrollStates.getOrPut(tab) { LazyListState() }
-                    LazyColumn(state = sectionState, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                        items(genreRows, key = { it.name }) { row ->
-                            Column {
-                                Text(row.name, style = MaterialTheme.typography.titleLarge, color = Color.White)
-                                Spacer(Modifier.height(8.dp))
-                                val rowState = genreScrollStates.getOrPut("$tab:${row.name}") { LazyListState() }
-                                LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    items(outsideOther(row.titles), key = { "${it.type}-${it.id}" }) { item ->
-                                        PosterTile(marked(item), titleReturnFocus, "$tab:Genres:${row.name}:${item.type}:${item.id}") { open(item) }
-                                    }
-                                    if(row.hasMore) item(key="genre-more-${row.genreId}") {
-                                        val type=if(tab=="Movies")"movie" else "tv"
-                                        val loading=genreRowLoading["$type:${row.genreId}"]==true
-                                        TvFocusButton(onClick={loadMoreGenreRow(type,row)},
-                                            colors=ButtonDefaults.buttonColors(containerColor=accent),enabled=!genresLoading) {
-                                            Text(if(loading)"Loading…" else if(genreRowErrors.containsKey("$type:${row.genreId}"))"Retry" else "Load More",color=Color.Black)
-                                        }
-                                    }
-                                }
-                                genreRowErrors["${if(tab=="Movies")"movie" else "tv"}:${row.genreId}"]?.let {
-                                    Text(it,color=Color(0xFFFFA8A8),style=MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
-                    }
+                    JaGenreRows(
+                        tab = tab, rows = genreRows, loading = genresLoading,
+                        sectionState = sectionScrollStates.getOrPut(tab) { LazyListState() },
+                        rowStates = genreScrollStates, rowLoading = genreRowLoading, rowErrors = genreRowErrors,
+                        returnFocus = titleReturnFocus,
+                        jump = genreJumpStates.getOrPut(tab) { JaRowJumpState("$tab:Genres") },
+                        visibleTitles = { outsideOther(it) }, marked = { marked(it) },
+                        onOpen = { open(it) },
+                        onLoadMore = { row -> loadMoreGenreRow(if (isMovieTab) "movie" else "tv", row) },
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    )
                 }
             } else if (tab == "Favorites") {
                 LaunchedEffect(favoritesView) {
@@ -1563,12 +1544,12 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
 }
 
 @Composable internal fun PosterTile(item: TitleItem, returnFocus: JaTitleReturnFocus,
-    returnKey: String, onClick: () -> Unit) {
+    returnKey: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val requester = rememberTitleReturnRequester(returnFocus, returnKey)
     LaunchedEffect(item.id,item.type) { JaVidSrcCatalog.observe(item) }
     var focused by remember { mutableStateOf(false) }
     Column(
-        Modifier.width(140.dp).focusRequester(requester)
+        modifier.width(140.dp).focusRequester(requester)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) returnFocus.restored(returnKey) }
             .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(8.dp)) else Modifier)
             .clickable { returnFocus.opened(returnKey); onClick() }

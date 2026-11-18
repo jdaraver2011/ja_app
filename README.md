@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.4 (20204)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.5 (20205)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.4-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.5-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.2.5 adds a left-edge row jump panel to Movie Genres, TV Genres and TV Networks. On the first actual title in a row, Left opens it. Genres show names directly. Networks show A–Z (and # for numeric/symbol names) plus matching network names; unavailable letters are disabled. OK on a letter jumps to its first row, or Right enters the matching names to select an exact network. Back, Close, outside tap, or Right from the names dismisses to the origin row.
+- Choosing a row scrolls it into view, resets that row to its first title and focuses it. A loading network waits for its titles; an empty/unavailable row has a focusable heading. Manual directional input cancels a pending delayed focus handoff. Movie/TV genre jump state and TV network state are independent and live above title details, preserving existing return-to-card behavior.
+- A small Jump to row button supports touch and remote access below the existing navigation bars. Both main navigation bars retain their prior sizing/layout. Row jump diagnostics use JA_ROW_JUMP. The v2.2.4 preference defaults remain unchanged.
+- Row index regression tests passed locally for exact IDs, duplicate initials, missing letters, numeric and accented labels and reordered directories. APK build, full regressions, strict Android lint and publication are pending the v2.2.5 workflow. Remote/phone device verification remains pending.
 
 - v2.2.4 changes unset preferences: Match stream quality to TV output defaults off on Android TV (already off on phones); Show Music tab defaults off on all devices; Use desktop site for Music defaults off on all devices. Existing explicitly saved choices remain in effect. TV frame-rate matching and output-resolution matching retain their current defaults and saved settings.
 - Music's initial service state also defaults to mobile mode. No further Deezer integration work is included. Controls remain available in Settings to opt in. APK compilation, regression checks and strict Android lint passed in [GitHub Actions run 44355606062](https://github.com/jdaraver2011/ja_app/actions/runs/44355606062). v2.2.4 is published as the latest public device update. The temporary release trigger has been removed.
