@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.1.9 (20109)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.1 (20201)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,12 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.1.9-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.1-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.2.1 fixes the Music-only blocked HTTP redirects reported in the device log: Deezer HTTP URLs are cancelled and reopened over HTTPS, preserving encoded path/query/fragment values. Other HTTP destinations stay blocked. Each Music page permits at most three upgrades in 30 seconds; Home, Sign in and Reload reset the retry budget. Movie/TV navigation is unchanged.
+- Music diagnostics log HTTPS upgrade, redirect-loop prevention, page-start hostname/scheme, page-stop status and load-error code without URL paths or login tokens. Login parameter preservation, unsafe destinations and retry limits are covered by regression tests. Local Music rules tests passed; release build/lint and device verification are pending.
 
 - v2.1.9 changes only Music navigation: HTTPS links and redirects may cross hosts instead of being restricted to Deezer/sign-in-provider domains. User-info URLs, nonstandard ports, missing hosts and non-HTTPS schemes remain rejected. Gecko certificate verification is unchanged.
 - The Music header continues to show the current hostname. Rejected navigations log only scheme/hostname and the redirect flag, excluding paths, queries and fragments. Movie/TV provider navigation rules, music playback lifecycle, blockers, login storage and Home destination are unchanged.

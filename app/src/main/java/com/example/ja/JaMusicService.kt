@@ -52,7 +52,9 @@ class JaMusicService : Service() {
         fun stop(context: Context) { context.stopService(Intent(context, JaMusicService::class.java)) }
         fun playPause() { instance?.let { if (mutable.value.playing) it.pause() else it.play() } }
         fun back(): Boolean = instance?.backPage() ?: false
-        fun reload() { instance?.current()?.reload() }
+        fun reload() { instance?.let { service ->
+            service.current()?.let { page -> service.redirectGuards[page]?.reset(); page.reload() }
+        } }
         fun setVideoActive(active: Boolean) {
             videoActive = active
             if (active) instance?.pause()
@@ -68,6 +70,7 @@ class JaMusicService : Service() {
 
     private val pages = mutableListOf<GeckoSession>()
     private val canBack = mutableMapOf<GeckoSession, Boolean>()
+    private val redirectGuards = mutableMapOf<GeckoSession, JaMusicRules.RedirectGuard>()
     private var media: org.mozilla.geckoview.MediaSession? = null
     private lateinit var controls: AndroidMediaSession
     private lateinit var audio: AudioManager
@@ -146,10 +149,30 @@ class JaMusicService : Service() {
     private fun newPage(open: Boolean = true): GeckoSession {
         val page = GeckoSession(GeckoSessionSettings.Builder().contextId(PROFILE)
             .suspendMediaWhenInactive(false).build())
+        val redirectGuard = JaMusicRules.RedirectGuard()
+        redirectGuards[page] = redirectGuard
+        var navigationMessage: String? = null
         page.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
                 if (JaMusicRules.allowed(request.uri)) return null
-                mutable.value = mutable.value.copy(message = "Music only opens secure HTTPS web links.")
+                val upgraded = JaMusicRules.secureDeezerRedirect(request.uri)
+                if (upgraded != null) {
+                    if (redirectGuard.tryUpgrade(android.os.SystemClock.elapsedRealtime())) {
+                        Log.i("JA_MUSIC", "HTTPS_REDIRECT_UPGRADE host=${android.net.Uri.parse(upgraded).host}")
+                        // Cancel the insecure request before starting a separate HTTPS navigation.
+                        android.os.Handler(mainLooper).post {
+                            if (!destroying && pages.contains(session)) session.loadUri(upgraded)
+                        }
+                    } else {
+                        navigationMessage = "Deezer repeated an insecure redirect. Try Home or Sign in."
+                        if (session === current()) mutable.value = mutable.value.copy(
+                            loading = false, message = navigationMessage)
+                        Log.w("JA_MUSIC", "HTTPS_REDIRECT_LOOP_BLOCKED")
+                    }
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+                navigationMessage = "Music only opens secure HTTPS web links."
+                if (session === current()) mutable.value = mutable.value.copy(message = navigationMessage)
                 val target = android.net.Uri.parse(request.uri)
                 Log.i("JA_MUSIC", "NAVIGATION_BLOCKED scheme=${target.scheme.orEmpty()} " +
                     "host=${target.host.orEmpty()} redirect=${request.isRedirect}")
@@ -167,7 +190,7 @@ class JaMusicService : Service() {
                 if (session === current()) publishPage()
             }
             override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
-                if (!JaMusicRules.allowed(uri) || pages.size >= 3) return null
+                if ((!JaMusicRules.allowed(uri) && JaMusicRules.secureDeezerRedirect(uri) == null) || pages.size >= 3) return null
                 val child = newPage(open = false)
                 pages.add(child)
                 return GeckoResult.fromValue(child)
@@ -183,12 +206,16 @@ class JaMusicService : Service() {
             override fun onPageStart(session: GeckoSession, url: String) {
                 if (session === current()) {
                     publishPage()
+                    navigationMessage = null
+                    val target = android.net.Uri.parse(url)
+                    Log.i("JA_MUSIC", "PAGE_START scheme=${target.scheme} host=${target.host}")
                     mutable.value = mutable.value.copy(loading = true, message = null)
                 }
             }
             override fun onPageStop(session: GeckoSession, success: Boolean) {
+                Log.i("JA_MUSIC", "PAGE_STOP success=$success")
                 if (session === current()) mutable.value = mutable.value.copy(loading = false,
-                    message = if (success) null else "Deezer did not finish loading. Try Reload.")
+                    message = navigationMessage ?: if (success) null else "Deezer did not finish loading. Try Reload.")
             }
         }
         page.contentDelegate = object : GeckoSession.ContentDelegate {
@@ -196,6 +223,7 @@ class JaMusicService : Service() {
                 if (session === current() && pages.size > 1) {
                     pages.removeAt(pages.lastIndex).close()
                     canBack.remove(session)
+                    redirectGuards.remove(session)
                     publishPage()
                 }
             }
@@ -262,13 +290,14 @@ class JaMusicService : Service() {
     private fun navigate(url: String) {
         if (!JaMusicRules.allowed(url)) return
         desiredUrl = url
+        current()?.let { redirectGuards[it]?.reset() }
         if (prepared) current()?.loadUri(url)
     }
     private fun backPage(): Boolean {
         val page = current() ?: return false
         if (canBack[page] == true) { page.goBack(); return true }
         if (pages.size > 1) {
-            pages.removeAt(pages.lastIndex).close(); canBack.remove(page); publishPage(); return true
+            pages.removeAt(pages.lastIndex).close(); canBack.remove(page); redirectGuards.remove(page); publishPage(); return true
         }
         return false
     }
@@ -312,7 +341,7 @@ class JaMusicService : Service() {
     }
     private fun closePages() {
         media?.pause(); media = null
-        pages.forEach { it.close() }; pages.clear(); canBack.clear()
+        pages.forEach { it.close() }; pages.clear(); canBack.clear(); redirectGuards.clear()
         mutable.value = mutable.value.copy(session = null, playing = false)
     }
     override fun onDestroy() {
