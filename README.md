@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.5 (20205)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.6 (20206)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,14 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.5-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.6-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
 
-- Pending source additions on sources-movy-7movies (not a published device update): Movy and 7Movies are appended to the playback registry and enabled-source allowlist. Default order is VidSrc, VidFast, ScottsMedia, CineJoy, Movy, 7Movies. TV season source promotion and Reset preferred sources include all six.
+- v2.2.6: Movy and 7Movies are appended to the playback registry and enabled-source allowlist. Default order is VidSrc, VidFast, ScottsMedia, CineJoy, Movy, 7Movies. TV season source promotion and Reset preferred sources include all six.
 - Movy uses https://www.movy.sx/movie/{tmdbId} and /tv/{tmdbId}/{season}/{episode}. The user confirmed the supplied /1/2 example is season 1 episode 2. 7Movies uses https://7movies.ac/movie/{tmdbId}/watch and /tv/{tmdbId}/watch?season={season}&episode={episode}. No undocumented autoplay parameter was added.
 - These are page adapters using the supplied URL formats, not verified stream resolvers or catalogue ID feeds. Primary VidSrc ID-feed/availability filtering is unchanged. Real playback, page auto-start, remote controls and resume behavior for the new sites need device verification. Successful HTTP or page loads alone do not verify media playback.
-- URL construction and six-provider TV-season promotion tests passed locally. Full regression, compilation and strict lint checks are pending the source-branch workflow. No version bump or public update is included.
+- URL construction and six-provider TV-season promotion tests passed locally. Full regression, compilation and strict lint checks will run on the v2.2.6 publication workflow. Device playback verification remains required.
 
 - v2.2.5 adds a left-edge row jump panel to Movie Genres, TV Genres and TV Networks. On the first actual title in a row, Left opens it. Genres show names directly. Networks show A–Z (and # for numeric/symbol names) plus matching network names; unavailable letters are disabled. OK on a letter jumps to its first row, or Right enters the matching names to select an exact network. Back, Close, outside tap, or Right from the names dismisses to the origin row.
 - Choosing a row scrolls it into view, resets that row to its first title and focuses it. A loading network waits for its titles; an empty/unavailable row has a focusable heading. Manual directional input cancels a pending delayed focus handoff. Movie/TV genre jump state and TV network state are independent and live above title details, preserving existing return-to-card behavior.

@@ -1,12 +1,12 @@
-name: Check additional JA sources
+name: Publish JA v2.2.6
 on:
   push:
-    branches: [sources-movy-7movies]
+    branches: [v2.2.6]
 permissions:
   contents: write
 jobs:
-  check:
+  publish:
     uses: ./.github/workflows/build-apk.yml
     with:
-      publish_update: false
+      publish_update: true
     secrets: inherit
