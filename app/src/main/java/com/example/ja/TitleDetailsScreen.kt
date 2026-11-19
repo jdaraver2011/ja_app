@@ -478,6 +478,16 @@ private fun DetailsEpisodeCard(ep: EpisodeItem, watched: Boolean, resumePosition
                 minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(ep.name, color = Color.White, fontSize = 13.sp, minLines = 2, maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
+            val releaseDate = remember(ep.airDate) {
+                runCatching {
+                    java.time.LocalDate.parse(ep.airDate).format(
+                        java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", java.util.Locale.getDefault())
+                    )
+                }.getOrNull()
+            }
+            Text(releaseDate?.let { "Release: $it" } ?: "Release date unavailable",
+                color = detailsMuted, fontSize = 11.sp, minLines = 1, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
         }
         HorizontalDivider(color = detailsMuted.copy(alpha = 0.18f))
         Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(watchedShape)

@@ -13,8 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -159,18 +157,15 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
             if (networks) letterRequesters[initialLetter]?.requestFocus()
             else nameRequesters[origin]?.requestFocus()
         }
-        val menuDensity = LocalDensity.current
-        CompositionLocalProvider(LocalDensity provides Density(menuDensity.density * 0.5f, menuDensity.fontScale)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val panelWidth = minOf(360.dp, maxWidth * 0.43f)
+            val panelWidth = minOf(360.dp, maxWidth * 0.86f)
             Row(Modifier.fillMaxSize().onKeyEvent {
                 if (it.key == Key.DirectionRight) {
                     if (it.type == KeyEventType.KeyDown) state.dismiss()
                     true
                 } else false
             }) {
-                Column(Modifier.width(panelWidth).fillMaxHeight()) {
-                Surface(Modifier.fillMaxWidth().weight(1f), color = Color(0xFF1B2430)) {
+                Surface(Modifier.width(panelWidth).fillMaxHeight(), color = Color(0xFF1B2430)) {
                     Column(Modifier.fillMaxSize().padding(12.dp)) {
                         Text(if (networks) "Jump to network" else "Jump to genre",
                             style = MaterialTheme.typography.titleLarge, color = Color.White)
@@ -225,15 +220,10 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
                         TvFocusButton(onClick = { state.dismiss() }) { Text("Close", color = Color.White) }
                     }
                 }
-                Box(Modifier.fillMaxWidth().weight(1f).pointerInput(state) {
-                    detectTapGestures { state.dismiss() }
-                })
-                }
                 Box(Modifier.weight(1f).fillMaxHeight().pointerInput(state) {
                     detectTapGestures { state.dismiss() }
                 })
             }
-        }
         }
     }
 }

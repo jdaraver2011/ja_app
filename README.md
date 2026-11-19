@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.8 (20208)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.9 (20209)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,13 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.8-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.9-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.2.9 restores the shared Movie/TV Genre and TV Network Jump menu to the v2.2.7 size, including its full-height panel and original text/buttons/spacing. Row selection, A-Z navigation, focus restoration and dismissal behavior are retained.
+- Episode cards now show the TMDB air_date below the episode title, formatted as Release: Nov 18, 2026 (localized month name). Missing or invalid dates show Release date unavailable. All cards reserve one line for this date and retain two title lines. The optional one-day release filter introduced in v2.2.8 is unchanged.
+- Full regressions, signed APK compilation and Android lint are pending the v2.2.9 publication workflow. Device verification of restored menus and date labels remains required.
 
 - v2.2.8 adds Settings > Show TV episodes one day after release, enabled by default and persisted. When enabled, episode air_date must be a valid day earlier than the device's local today. Today, future and missing/invalid dates stay hidden. Disabling restores the unfiltered season list. Movie listings are unaffected.
 - Details, main Play/replay and episode actions use the same filtered list; playback entry and resume/start-over also recheck eligibility. Empty seasons show an unavailable message with Play disabled. Season buttons remain accessible. Raw dates stay cached; the displayed season metadata refreshes on date changes/foreground return. The existing minute date check updates an open details screen. No provider playback availability is inferred from air dates.
