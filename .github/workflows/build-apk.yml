@@ -77,6 +77,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-episode-release-tests" app/src/main/java/com/example/ja/JaEpisodeReleaseRules.java tests/JaEpisodeReleaseRulesTest.java
           java -cp "$RUNNER_TEMP/ja-episode-release-tests" com.example.ja.JaEpisodeReleaseRulesTest
+      - name: Test weather units and ZIP validation
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-weather-tests" app/src/main/java/com/example/ja/JaWeatherRules.java tests/JaWeatherRulesTest.java
+          java -cp "$RUNNER_TEMP/ja-weather-tests" com.example.ja.JaWeatherRulesTest
       - name: Test resume labels
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-resume-label-tests" app/src/main/java/com/example/ja/JaResumeLabels.java tests/JaResumeLabelsTest.java
@@ -185,7 +189,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.2.9-debug
+          name: JA-2.3.1-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

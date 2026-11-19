@@ -301,6 +301,16 @@ class MainActivity : ComponentActivity() {
     var selectedPerson by remember { mutableStateOf<TmdbPersonCredit?>(null) }
     val detailsBackStack = remember { mutableStateListOf<DetailReturnPoint>() }
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
+    val weather = rememberJaWeather(active = playback == null && !exiting)
+    var weatherOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var weatherReturnFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(weatherOpen, weatherReturnFocus) {
+        if (!weatherOpen && weatherReturnFocus) {
+            withFrameNanos { }
+            runCatching { weather.cardFocus.requestFocus() }
+            weatherReturnFocus = false
+        }
+    }
     var request by remember { mutableStateOf<PlaybackRequest?>(null) }
     // Ordered media candidates for the current title; never switch on a mere delay.
     var playbackChoices by remember { mutableStateOf(emptyList<PlaybackChoice>()) }
@@ -876,6 +886,7 @@ class MainActivity : ComponentActivity() {
     BackHandler {
         if (exiting) return@BackHandler
         when {
+            weatherOpen -> { weatherOpen = false; weatherReturnFocus = true }
             playback != null -> {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=ANDROID_BACK")
                 closePlayback()
@@ -899,6 +910,11 @@ class MainActivity : ComponentActivity() {
         Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) {
             Text("Closing JA…", color = Color.White)
         }
+        return
+    }
+    if (weatherOpen) {
+        JaWeatherPage(weather, onClose = { weatherOpen = false; weatherReturnFocus = true },
+            onSettings = { weatherOpen = false; tab = "Settings"; selected = null; selectedPerson = null; detailsBackStack.clear() })
         return
     }
     blockerTools?.let { pages ->
@@ -986,12 +1002,25 @@ class MainActivity : ComponentActivity() {
         return
     }
     Column(Modifier.fillMaxSize().background(bg).padding(16.dp)) {
-        Text("JA", style = MaterialTheme.typography.headlineMedium, color = accent)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("JA", style = MaterialTheme.typography.headlineMedium, color = accent, modifier = Modifier.weight(1f))
+            JaHeaderClock()
+        }
         Spacer(Modifier.height(12.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
-                listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
-                TvFocusButton(onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null }, colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)) { Text(t, color = Color.Black) }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val wideHeader = maxWidth >= 720.dp
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyRow(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
+                        listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
+                        TvFocusButton(onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null }, colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)) { Text(t, color = Color.Black) }
+                    }
+                    if (!wideHeader) item(key = "weather") {
+                        JaWeatherCard(weather) { exitGate.reset(); weatherOpen = true }
+                    }
+                }
+                if (wideHeader) JaWeatherCard(weather) { exitGate.reset(); weatherOpen = true }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -1012,6 +1041,7 @@ class MainActivity : ComponentActivity() {
         if (tab == "Settings" && selected == null) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 JaUpdateSettings()
+                JaWeatherSettings(weather)
                 Text("Music", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 TvSettingsToggle("Show Music tab", showMusicTab) {
                     showMusicTab = it; settings.showMusicTab = it

@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.9 (20209)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.3.1 (20301)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,17 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.9-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.3.1-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.3.1 adds a top-right device-local clock (MM-dd-yyyy hh:mm AM/PM), beside JA. The primary/sub navigation button sizes are unchanged.
+- A focusable local-weather summary sits beside navigation at wide widths. At narrow/portrait widths it is the next horizontally scrolling item after Settings. OK/tap opens a full weather page; Back returns focus to the weather card.
+- Settings > Weather > Preferred ZIP code saves a five-digit U.S. ZIP on this device. Clear removes the selection. ZIP centroid lookup uses HTTPS api.zippopotam.us; observations and alerts use HTTPS api.weather.gov with an identifying User-Agent. No location permission, account or API key is required. ZIP lookup coordinates represent the ZIP area, not precise device location.
+- The weather page shows temperature, description/icon, wind, humidity, dewpoint, ceiling (lowest broken/overcast/vertical-visibility base), visibility, pressure and wind chill. Units are Fahrenheit/mph/feet/miles/inHg. Missing measurements show an em dash. Observation time and station are explicit. Up to three nearby stations are tried when recent temperature observations are missing.
+- Live Actual, unexpired NWS alerts appear with severity, affected area, instructions and full text. Test/exercise/cancelled/expired alerts are excluded. Landscape uses three panels with independent scrolling for long contents and an Open full alert action; portrait uses a vertically scrolling page. No example/demo alert text is included.
+- Weather refreshes every ten minutes while JA is resumed and video playback is closed. Foreground return uses the same freshness check; Refresh bypasses the HTTP cache. Per-ZIP cached observations remain available during service/connection failures and are labeled saved/delayed; unavailable alert refreshes are identified. Observations older than three hours are marked delayed. NWS observations can be delayed upstream; a missing measurement is not invented.
+- Weather conversions, ZIP validation and actual/expired/demo alert filtering passed local tests. Live ZIP, NWS point/station observation and active-alert endpoints were checked. Signed APK compilation and strict lint run before public publication; visual layout, remote focus and real-device updating still require device verification.
 
 - v2.2.9 restores the shared Movie/TV Genre and TV Network Jump menu to the v2.2.7 size, including its full-height panel and original text/buttons/spacing. Row selection, A-Z navigation, focus restoration and dismissal behavior are retained.
 - Episode cards now show the TMDB air_date below the episode title, formatted as Release: Nov 18, 2026 (localized month name). Missing or invalid dates show Release date unavailable. All cards reserve one line for this date and retain two title lines. The optional one-day release filter introduced in v2.2.8 is unchanged.
