@@ -1481,7 +1481,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val gridState = if (favoriteType == "movie") favoriteMovieGridState else favoriteTvGridState
                     // Match Popular's adaptive cells, card size, and gaps on phones and TV.
-                    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 152.dp),
                             state = gridState,
@@ -1523,7 +1523,7 @@ class MainActivity : ComponentActivity() {
                         color = Color.LightGray)
                 } else {
                     val gridState = if (continueType == "movie") continueMovieGridState else continueTvGridState
-                    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 152.dp), state = gridState,
                             modifier = Modifier.fillMaxSize(),
