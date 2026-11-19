@@ -160,6 +160,11 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
         rows.maxOf { textMeasurer.measure(it.label, style = labelStyle, maxLines = 1).size.width }
     }
     val labelWidth = with(LocalDensity.current) { measuredWidth.toDp() } + 24.dp
+    val titleStyle = MaterialTheme.typography.titleLarge
+    val titleWidth = with(LocalDensity.current) {
+        textMeasurer.measure(if (networks) "Jump to network" else "Jump to genre", style = titleStyle,
+            maxLines = 1).size.width.toDp()
+    }
     Dialog(onDismissRequest = { state.dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         LaunchedEffect(Unit) {
             withFrameNanos { }; withFrameNanos { }
@@ -169,8 +174,8 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val letterWidth = 40.dp
             val extraWidth = if (networks) letterWidth + 8.dp else 0.dp
-            val panelWidth = minOf(labelWidth + extraWidth + 24.dp, maxWidth * 0.86f)
-            val nameWidth = (panelWidth - extraWidth - 24.dp).coerceAtLeast(48.dp)
+            val panelWidth = minOf(maxOf(labelWidth + extraWidth + 24.dp, titleWidth + 24.dp), maxWidth * 0.86f)
+            val nameWidth = minOf(labelWidth, panelWidth - extraWidth - 24.dp).coerceAtLeast(48.dp)
             Row(Modifier.fillMaxSize().onKeyEvent {
                 if (it.key == Key.DirectionRight) {
                     if (it.type == KeyEventType.KeyDown) state.dismiss()
