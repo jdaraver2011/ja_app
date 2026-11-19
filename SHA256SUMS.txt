@@ -26,7 +26,7 @@ c151f72934ca0055773c270929ec4eb2f59ca2b7428596ffe310cc9b5819ef07  app/src/main/j
 ac07f5e49a6113d43a4b863dd47fe07a0293992f78f4e2fd305821cffce5bd58  app/src/main/java/com/example/ja/JaMusicService.kt
 c1ea41195e8e9f69c85e4302ab79f6d8c47bcbc92c03dfddceaf2c20d31ca758  app/src/main/java/com/example/ja/JaNetworksScreen.kt
 47787b1eeb06120aae32a19ddc6f146d1bbe9c0d8976446c27159481584af483  app/src/main/java/com/example/ja/JaResumeLabels.java
-4b62441a1ba92275b642ce7af746dc760b9c5ae102f67ad5ce6d70936880df66  app/src/main/java/com/example/ja/JaRowJump.kt
+af633649d55241b8b3484d62a764f921adc68dd8c4c6481e4d05f4e719962f90  app/src/main/java/com/example/ja/JaRowJump.kt
 cd05d3b6fabbc14805edfc90544e5a28ce2a5b7addd290a5613e38f48ce637a5  app/src/main/java/com/example/ja/JaRowJumpIndex.java
 d50336b6d98e4b0392fa7ba1d819e033d8e2b035afd521b5017b268e74855acf  app/src/main/java/com/example/ja/JaSearchScreen.kt
 4fb40539ebd023865d85318ca63cb246ccdefce4a678d1c1ac4376010665424b  app/src/main/java/com/example/ja/JaTvSeasonSourceRules.java

@@ -169,7 +169,8 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
                     true
                 } else false
             }) {
-                Surface(Modifier.width(panelWidth).fillMaxHeight(0.5f), color = Color(0xFF1B2430)) {
+                Column(Modifier.width(panelWidth).fillMaxHeight()) {
+                Surface(Modifier.fillMaxWidth().weight(1f), color = Color(0xFF1B2430)) {
                     Column(Modifier.fillMaxSize().padding(12.dp)) {
                         Text(if (networks) "Jump to network" else "Jump to genre",
                             style = MaterialTheme.typography.titleLarge, color = Color.White)
@@ -223,6 +224,10 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
                         }
                         TvFocusButton(onClick = { state.dismiss() }) { Text("Close", color = Color.White) }
                     }
+                }
+                Box(Modifier.fillMaxWidth().weight(1f).pointerInput(state) {
+                    detectTapGestures { state.dismiss() }
+                })
                 }
                 Box(Modifier.weight(1f).fillMaxHeight().pointerInput(state) {
                     detectTapGestures { state.dismiss() }
