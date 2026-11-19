@@ -36,7 +36,7 @@ b26319ca55606349a8838fbf6cef4766468ce1e7486840ed99c24075bcaf8712  app/src/main/j
 20cb2320ba75bcedbc13878b912102968fe55571f8d44329fb4d5aef0b9c5a02  app/src/main/java/com/example/ja/JaWeatherHeader.kt
 3d7d03d6475b8cefe74f88702066a0b71660aceb97e355c7d1a45da88715ae5e  app/src/main/java/com/example/ja/JaWeatherRepository.kt
 65d462bd1c4f0337b2a63d37c433a62c2a1ca2292b9e944067f8e6a963d19e22  app/src/main/java/com/example/ja/JaWeatherRules.java
-dba15e73346c16b42f99f9f186b4654d9cdb918c2e08dc0b9ce559b2000f1356  app/src/main/java/com/example/ja/JaWeatherScreen.kt
+93a0ed95351f3266256f13f55a5da3b51c52b5f0d536f1fc771b334ca1cc9946  app/src/main/java/com/example/ja/JaWeatherScreen.kt
 d630c72bb0a8fd36cc807a28c3850e6cd28b27a6d695f4920c03fe1d6dff8e36  app/src/main/java/com/example/ja/MainActivity.kt
 dfc9dfb647eec6670d608d27951abb36331cb97a4d627e6b0d6d69d1fe24a603  app/src/main/java/com/example/ja/Models.kt
 1b2e98badedea3504db8f9d36e880539974fec3a22adb7ca271d7df7cf8c88e5  app/src/main/java/com/example/ja/Playback.kt
