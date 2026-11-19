@@ -31,8 +31,8 @@ internal class JaLiveTvRepository(private val context:Context) {
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
     private val client=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS)
         .callTimeout(120,TimeUnit.SECONDS).build()
-    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.1 (https://github.com/jdaraver2011/ja_app)").build()
-    private fun text(url:String,limit:Long):String = client.newCall(request(url)).execute().use { r ->
+    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.2 (https://github.com/jdaraver2011/ja_app)").build()
+    private fun text(url:String,limit:Long,timeoutSeconds:Long=120):String = client.newCall(request(url)).also{it.timeout().timeout(timeoutSeconds,TimeUnit.SECONDS)}.execute().use { r ->
         if(!r.isSuccessful)throw IOException("HTTP ${r.code}")
         val body=r.body?:throw IOException("Empty response")
         LimitedInput(body.byteStream(),limit).bufferedReader().use{it.readText()}
@@ -80,6 +80,24 @@ internal class JaLiveTvRepository(private val context:Context) {
         }
         return channels.values.sortedBy{it.name.lowercase()}
     }
+    /** Generated city/country lists can lag the stream API. Supplement only the exact selected channel/feed. */
+    suspend fun playbackChannel(channel:JaLiveChannel,force:Boolean=false):JaLiveChannel = withContext(Dispatchers.IO) {
+        val file=File(root,"streams.json")
+        val raw=try {
+            if(!force&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),3_600_000))file.readText()
+            else text("https://iptv-org.github.io/api/streams.json",16_000_000,8).also{JSONArray(it);write(file,it)}
+        }catch(e:CancellationException){throw e}catch(_:Exception){if(file.exists())file.readText() else return@withContext channel}
+        val data=JSONArray(raw)
+        val base=JaLiveTvRules.baseId(channel.id)
+        val feed=channel.id.substringAfter('@',"")
+        val extra=(0 until data.length()).map{data.getJSONObject(it)}.filter{
+            it.optString("channel")==base&&(feed.isBlank()||it.optString("feed")==feed)
+                &&it.optString("user_agent").let{v->v.isBlank()||v=="null"}
+                &&it.optString("referrer").let{v->v.isBlank()||v=="null"}
+        }.map{it.optString("url")}.filter{webUrl(it)}
+        channel.copy(urls=(channel.urls+extra).distinct())
+    }
+
     // One compressed download per six hours; keep only matching channel schedules for 48 hours.
     suspend fun guide(channels:List<JaLiveChannel>,force:Boolean=false):JaLiveGuide = withContext(Dispatchers.IO) {
         val cancellation=currentCoroutineContext()

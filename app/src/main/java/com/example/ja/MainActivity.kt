@@ -929,7 +929,7 @@ class MainActivity : ComponentActivity() {
         return
     }
     liveChannel?.let { channel ->
-        JaLiveTvPlayer(channel) { liveChannel = null }
+        JaLiveTvPlayer(channel, liveTv.repository) { liveChannel = null }
         return
     }
     if (weatherOpen) {

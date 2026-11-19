@@ -1,6 +1,8 @@
 package com.example.ja
 
 import android.view.ViewGroup
+import android.os.SystemClock
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +33,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
@@ -160,41 +164,126 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,zip:String,onPlay:(JaLiveChannel
 private val ColorGold=androidx.compose.ui.graphics.Color(0xFFE5A43B)
 private fun time(value:Long):String=DateTimeFormatter.ofPattern("h:mm a",Locale.US).withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
+/** Resolve current alternatives before creating a player; no Movie/TV source changes. */
 @Composable
-internal fun JaLiveTvPlayer(channel:JaLiveChannel,onClose:()->Unit) {
+internal fun JaLiveTvPlayer(channel:JaLiveChannel,repository:JaLiveTvRepository,onClose:()->Unit) {
+    var revision by remember(channel){mutableIntStateOf(0)}
+    var resolved by remember(channel){mutableStateOf<JaLiveChannel?>(null)}
+    BackHandler(onBack=onClose)
+    LaunchedEffect(channel,revision){
+        resolved=null
+        resolved=try{repository.playbackChannel(channel,revision>0)}catch(e:CancellationException){throw e}catch(_:Exception){channel}
+        Log.i("JA_LIVE_TV","SOURCES_READY channel=${channel.id} count=${resolved?.urls?.size}")
+    }
+    val ready=resolved
+    if(ready==null)Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black),contentAlignment=Alignment.Center){
+        Text("Connecting to ${channel.name}…",color=androidx.compose.ui.graphics.Color.White)
+    }else key(revision){JaLiveTvSession(ready,onRetry={revision++},onClose=onClose)}
+}
+
+private data class JaLiveReconnect(val target:Int,val reason:String,val delayMs:Long)
+
+@Composable
+private fun JaLiveTvSession(channel:JaLiveChannel,onRetry:()->Unit,onClose:()->Unit) {
     val context=LocalContext.current
     val owner=LocalLifecycleOwner.current
+    var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
+    var wantsPlayback by remember(channel){mutableStateOf(true)}
     var source by remember(channel){mutableIntStateOf(0)}
-    var retry by remember(channel){mutableIntStateOf(0)}
-    var error by remember(channel,source,retry){mutableStateOf<String?>(null)}
-    val player=remember(channel,source,retry){ExoPlayer.Builder(context).build().apply{
+    var generation by remember(channel){mutableIntStateOf(0)}
+    val failures=remember(channel){IntArray(channel.urls.size)}
+    val ended=remember(channel){BooleanArray(channel.urls.size)}
+    var recovery by remember(channel){mutableStateOf<JaLiveReconnect?>(null)}
+    var error by remember(channel){mutableStateOf<String?>(null)}
+    val player=remember(channel,source,generation){ExoPlayer.Builder(context).build().apply{
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)
-        setMediaItem(MediaItem.fromUri(channel.urls[source]));prepare();playWhenReady=true
+        setMediaItem(MediaItem.fromUri(channel.urls[source]));prepare();playWhenReady=wantsPlayback&&resumed
     }}
-    BackHandler(onBack=onClose)
+    fun reconnect(reason:String,finished:Boolean=false) {
+        if(recovery!=null||error!=null)return
+        failures[source]++
+        if(finished)ended[source]=true
+        val target=JaLiveTvRecovery.next(source,failures,ended)
+        Log.w("JA_LIVE_TV","RECOVERY channel=${channel.id} source=$source reason=$reason next=$target")
+        if(target<0){
+            error=if(ended.all{it})"No ongoing live feed is available for this channel. Its listed feeds have ended."
+                else "The channel could not reconnect. Try again or choose another channel."
+        }else recovery=JaLiveReconnect(target,reason,JaLiveTvRecovery.backoff(failures[source]))
+        // stop() preserves playWhenReady. Never repeat a finite clip to simulate live TV.
+        player.stop()
+    }
+    LaunchedEffect(player,recovery,resumed,wantsPlayback){
+        val pending=recovery?:return@LaunchedEffect
+        if(!resumed||!wantsPlayback)return@LaunchedEffect
+        delay(pending.delayMs)
+        recovery=null;error=null;source=pending.target;generation++
+    }
     DisposableEffect(player,owner){
         JaMusicService.setVideoActive(true)
-        var resume=true
-        val listener=object:Player.Listener{override fun onPlayerError(failure:PlaybackException){
-            if(source+1<channel.urls.size)source++ else error="This channel is unavailable (${failure.errorCodeName}). Try again or choose another channel."
-        }}
-        val observer=LifecycleEventObserver{_,event->when(event){
-            Lifecycle.Event.ON_PAUSE->{resume=player.playWhenReady;player.pause()}
-            Lifecycle.Event.ON_RESUME->if(resume)player.play()
-            else->Unit
-        }}
+        var internalChange=false
+        val listener=object:Player.Listener{
+            override fun onPlayerError(failure:PlaybackException){
+                reconnect(if(failure.errorCode==PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW)"BEHIND_LIVE_WINDOW" else failure.errorCodeName)
+            }
+            override fun onTimelineChanged(timeline:Timeline,reason:Int){
+                val manifest=player.currentManifest as? HlsManifest
+                if(manifest?.mediaPlaylist?.hasEndTag==true)reconnect("HLS_ENDLIST",true)
+                else if(!timeline.isEmpty)Log.i("JA_LIVE_TV","TIMELINE channel=${channel.id} source=$source live=${player.isCurrentMediaItemLive} dynamic=${player.isCurrentMediaItemDynamic}")
+            }
+            override fun onPlaybackStateChanged(state:Int){
+                if(state==Player.STATE_ENDED&&wantsPlayback)reconnect("PLAYBACK_ENDED",true)
+            }
+            override fun onPlayWhenReadyChanged(playWhenReady:Boolean,reason:Int){
+                if(!internalChange&&(reason==Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
+                    ||reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY))wantsPlayback=playWhenReady
+            }
+        }
+        val observer=LifecycleEventObserver{_,event->
+            internalChange=true
+            when(event){
+                Lifecycle.Event.ON_PAUSE->{resumed=false;player.pause()}
+                Lifecycle.Event.ON_RESUME->{resumed=true;if(wantsPlayback&&recovery==null&&error==null)player.play()}
+                else->Unit
+            }
+            internalChange=false
+        }
         player.addListener(listener);owner.lifecycle.addObserver(observer)
+        Log.i("JA_LIVE_TV","OPEN channel=${channel.id} source=$source generation=$generation")
         onDispose{owner.lifecycle.removeObserver(observer);player.removeListener(listener);player.release();JaMusicService.setVideoActive(false)}
+    }
+    LaunchedEffect(player){
+        var lastPosition=player.currentPosition
+        var lastProgress=SystemClock.elapsedRealtime()
+        var healthySince=0L
+        while(isActive){
+            delay(1000)
+            val now=SystemClock.elapsedRealtime()
+            val position=player.currentPosition
+            if(position!=lastPosition||!resumed||!wantsPlayback||player.playbackSuppressionReason!=Player.PLAYBACK_SUPPRESSION_REASON_NONE){
+                lastProgress=now;lastPosition=position
+            }
+            if(player.isPlaying){
+                if(healthySince==0L)healthySince=now
+                if(now-healthySince>=60000){failures[source]=0;healthySince=now}
+            }else healthySince=0L
+            if(player.playbackState in listOf(Player.STATE_READY,Player.STATE_BUFFERING)
+                &&JaLiveTvRecovery.stalled(resumed,wantsPlayback,
+                    player.playbackSuppressionReason!=Player.PLAYBACK_SUPPRESSION_REASON_NONE,recovery!=null,lastProgress,now)){
+                reconnect("NO_PROGRESS_30S")
+            }
+        }
     }
     Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)){
         AndroidView(factory={PlayerView(it).apply{
             layoutParams=ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
             this.player=player;useController=true;keepScreenOn=true;requestFocus()
         }},update={it.player=player},modifier=Modifier.fillMaxSize(),onReset=null,onRelease={it.player=null;it.keepScreenOn=false})
+        if(recovery!=null)Text("Reconnecting live stream…",color=androidx.compose.ui.graphics.Color.White,
+            modifier=Modifier.align(Alignment.TopCenter).background(androidx.compose.ui.graphics.Color(0xCC202832)).padding(12.dp))
         error?.let{message->Column(Modifier.align(Alignment.Center).background(androidx.compose.ui.graphics.Color(0xDD202832)).padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally){
             Text(message,color=androidx.compose.ui.graphics.Color.White)
-            TvFocusButton(onClick={retry++}){Text("Retry")}
+            TvFocusButton(onClick=onRetry){Text("Refresh sources and retry")}
             TvFocusButton(onClick=onClose){Text("Back to channels")}
         }}
     }

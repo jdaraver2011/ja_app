@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.4.1 (20401)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.4.2 (20402)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.4.1-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.4.2-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.4.2 addresses the reported one-minute CBS Miami stop. Inspection of the old country-playlist URL found ten 6.006-second segments ending with EXT-X-ENDLIST, dated November 11. This is a completed recording, not an app-imposed playback timer. The current iptv-org stream API includes an alternate also published on CBS's own Miami live page; its sampled media playlist has no ENDLIST. Actual continuous playback still requires device verification.
+- Before opening Live TV, JA supplements only the selected exact channel/feed with current iptv-org stream API alternatives (one-hour metadata cache, eight-second request deadline, original playlist fallback). It skips HLS manifests explicitly marked ended rather than replaying a finite clip. Ended feeds remain rejected for that session.
+- Live errors, behind-live-window failures and thirty seconds without progress trigger bounded reconnect attempts with backoff and same-channel alternatives. Reopening starts at the source's default/live position. Healthy playback resets transient attempt counts after one minute; this is not a playback duration limit. Recovery stops when paused/backgrounded/closed, respects audio suppression, and provides a Refresh sources and retry action if all candidates fail. JA_LIVE_TV diagnostics report channel ID, source index, timeline live/dynamic flags and recovery reason without full stream URLs. Movie/TV embedded playback is unchanged.
+- Local recovery tests cover retry budgets, ended-feed exclusion, alternate selection, backoff and pause/background/audio-suppression guards. Signed build, full regressions and strict lint are pending. This is a test build; no public updater publication is enabled.
 
 - v2.4.1 adds TV > Live TV after Networks. United States is the default playlist; three nearest indexed US city playlists appear alongside it using the Preferred ZIP code shared with Weather. All 227 supported city playlist locations are indexed from iptv-org metadata plus GeoNames coordinates (attributions in assets/live-tv/README.md). Geographic proximity is not a broadcast-market guarantee. Each city is a separate list, not merged into United States.
 - Live TV uses vertically scrolling, searchable channel rows with logos, Now/Next program titles and local times. Selecting a row starts fullscreen native Media3 HLS playback, returns to the selected row on Back, and tries alternate URLs for the same playlist channel on player errors. Playback pauses offscreen, owns audio focus, pauses Music, and avoids adding live channels to Movie/TV watch history. Existing embedded Movie/TV players are unchanged.
