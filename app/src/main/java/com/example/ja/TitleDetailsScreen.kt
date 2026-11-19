@@ -57,6 +57,8 @@ fun TitleDetailsScreen(
     seasons: List<Int>,
     season: Int,
     episodes: List<EpisodeItem>,
+    episodesLoading: Boolean = false,
+    episodesError: String? = null,
     onSeasonSelected: (Int) -> Unit,
     onEpisodePlay: (EpisodeItem) -> Unit,
     restoreScrollY: Int? = null,
@@ -220,7 +222,7 @@ fun TitleDetailsScreen(
                             ) {
                                 DetailsActionButton(
                                     if (item.type == "movie") "▶  Play" else nextEpisode?.let { "▶ S${it.season} E${it.episode}" }
-                                        ?: if (episodes.isEmpty()) "Loading episodes…" else "✓ Season watched",
+                                        ?: if (episodesLoading) "Loading episodes…" else "No episodes available",
                                     primary = true, compact = compact,
                                     modifier = Modifier.focusRequester(playFocus),
                                     enabled = playEnabled, onClick = onPlay)
@@ -255,7 +257,7 @@ fun TitleDetailsScreen(
             DetailsHeading("Seasons & Episodes")
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (seasons.isEmpty()) {
-                    Text("Loading seasons…", color = detailsMuted, fontSize = 13.sp)
+                    Text(episodesError ?: if (episodesLoading) "Loading seasons…" else "No seasons available", color = detailsMuted, fontSize = 13.sp)
                 } else {
                     LazyRow(state = seasonRow, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(seasons, key = { it }) { candidate ->
@@ -265,6 +267,10 @@ fun TitleDetailsScreen(
                             )
                         }
                     }
+                }
+                if (episodes.isEmpty()) {
+                    Text(episodesError ?: if (episodesLoading) "Loading episodes…" else "No released episodes available",
+                        color = detailsMuted, fontSize = 13.sp)
                 }
                 if (episodes.isNotEmpty()) {
                     LazyRow(state = episodeRow, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

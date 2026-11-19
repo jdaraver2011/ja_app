@@ -211,7 +211,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     LaunchedEffect(catalogueGeneration, catalogueDate) { JaVidSrcCatalog.refreshOverdue() }
-    val repo = remember { TmdbRepository() }
+    val repo = remember(catalogueDate, catalogueGeneration) { TmdbRepository() }
     val movieCatalogueRepo = remember(catalogueDate, catalogueGeneration, sourceDataVersion) { TmdbRepository() }
     val detailsRepo = remember { TmdbDetailsRepository() }
     val peopleRepo = remember { TmdbPersonRepository() }
@@ -229,6 +229,7 @@ class MainActivity : ComponentActivity() {
     var showMusicTab by remember { mutableStateOf(settings.showMusicTab) }
     var musicDesktopMode by remember { mutableStateOf(settings.musicDesktopMode) }
     var showBack by remember { mutableStateOf(settings.showBack) }
+    var delayTvEpisodes by remember { mutableStateOf(settings.delayTvEpisodes) }
     var showRestore by remember { mutableStateOf(settings.showRestore) }
     var showPlayerDiagnostics by remember { mutableStateOf(settings.showPlayerDiagnostics) }
     // Match frame rate by default on televisions; phones remain disabled.
@@ -342,6 +343,25 @@ class MainActivity : ComponentActivity() {
     var seasons by remember { mutableStateOf(emptyList<Int>()) }
     var season by remember { mutableIntStateOf(1) }
     var episodes by remember { mutableStateOf(emptyList<EpisodeItem>()) }
+    var episodesLoading by remember { mutableStateOf(false) }
+    var episodesError by remember { mutableStateOf<String?>(null) }
+    var episodeReload by remember { mutableIntStateOf(0) }
+    val visibleEpisodes = remember(episodes, delayTvEpisodes, catalogueDate) {
+        episodes.filter { JaEpisodeReleaseRules.visible(it.airDate, catalogueDate, delayTvEpisodes) }
+    }
+    // Reload metadata on a new local day or foreground refresh. Keep unfiltered
+    // dates in the cache so disabling the setting restores the full list.
+    LaunchedEffect(selected?.id, selected?.type, season, seasons, catalogueDate, catalogueGeneration, episodeReload) {
+        val title = selected
+        if (title?.type != "tv" || season !in seasons) return@LaunchedEffect
+        episodesLoading = true
+        episodesError = null
+        episodes = emptyList()
+        try { episodes = repo.episodes(title.id, season) }
+        catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+        catch (problem: Exception) { episodesError = "Episodes unavailable. Select the season to retry." }
+        finally { episodesLoading = false }
+    }
     var error by remember { mutableStateOf<String?>(null) }
     var playbackLoading by remember { mutableStateOf(false) }
     fun refreshHistory() {
@@ -641,6 +661,7 @@ class MainActivity : ComponentActivity() {
         pendingPlayFocus = true
         titleScrollBookmarks.remove("${item.type}:${item.id}")
         selected = item; episodes = emptyList(); seasons = emptyList()
+        episodesLoading = item.type == "tv"; episodesError = null
         JaVidSrcCatalog.observe(item)
         // Details load TMDB metadata only; no provider HTTP or hidden-video tests.
         Log.i("JA_SERVERS", "DETAILS_NO_PROBES type=${item.type} tmdb=${item.id}")
@@ -649,12 +670,15 @@ class MainActivity : ComponentActivity() {
                 val loadedSeasons = repo.seasons(item.id)
                 val selectedSeason = history.firstOrNull { it.mediaId == item.id && it.mediaType == "tv" &&
                     it.episode > 0 && it.season in loadedSeasons }?.season ?: loadedSeasons.firstOrNull() ?: 1
-                val loadedEpisodes = repo.episodes(item.id, selectedSeason)
                 // Ignore an old response if the user has already navigated away.
                 if (selected?.id == item.id && selected?.type == item.type) {
-                    seasons = loadedSeasons; season = selectedSeason; episodes = loadedEpisodes
+                    seasons = loadedSeasons; season = selectedSeason
+                    if (loadedSeasons.isEmpty()) episodesLoading = false
                 }
-            } catch (e: Exception) { if (selected?.id == item.id) error = e.message }
+            } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+            catch (e: Exception) { if (selected?.id == item.id) {
+                error = e.message; episodesError = "Seasons unavailable. Reopen this title to retry."; episodesLoading = false
+            } }
         }
     }
     fun open(item: TitleItem, fromDetails: Boolean = false) {
@@ -718,7 +742,16 @@ class MainActivity : ComponentActivity() {
     var resumePositionMs by remember { mutableStateOf(0L) }
     var restartFromBeginning by remember { mutableStateOf(false) }
     var resumeLookupBusy by remember { mutableStateOf(false) }
+    fun episodeAllowed(item: TitleItem, s: Int, e: Int): Boolean {
+        if (item.type != "tv" || !delayTvEpisodes) return true
+        val ep = if (selected?.id == item.id && selected?.type == "tv")
+            episodes.firstOrNull { it.season == s && it.episode == e } else null
+        val allowed = ep != null && JaEpisodeReleaseRules.visible(ep.airDate, java.time.LocalDate.now(), true)
+        if (!allowed) error = "This episode is not available under the release-date filter."
+        return allowed
+    }
     fun startPlayback(item: TitleItem, s: Int = 0, e: Int = 0, startAtMs: Long = 0L, restart: Boolean = false) {
+        if (!episodeAllowed(item, s, e)) return
         JaMusicService.setVideoActive(true)
         // Direct playback: no HTTP preflight, no detached verification, and no
         // HTTP ranking. TV seasons can reuse a locally learned working source.
@@ -774,6 +807,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     fun play(item: TitleItem, s: Int = 0, e: Int = 0) {
+        if (!episodeAllowed(item, s, e)) return
         if (resumeLookupBusy) return
         resumeLookupBusy = true
         scope.launch {
@@ -1012,6 +1046,13 @@ class MainActivity : ComponentActivity() {
                     Text("Download ID lists now")
                 }
                 Spacer(Modifier.height(16.dp))
+                Text("TV episode release dates", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                TvSettingsToggle("Show TV episodes one day after release", delayTvEpisodes) {
+                    delayTvEpisodes = it; settings.delayTvEpisodes = it
+                }
+                Text("When enabled, only episodes dated yesterday or earlier appear. Today's, future and missing dates are hidden. Uses this device's local calendar date. Turn off to show all episodes.",
+                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(16.dp))
                 Text("Player controls", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text("Choose which controls appear over GeckoView. Android's system Back action still exits playback.", color = Color.LightGray)
                 TvSettingsToggle("Show Back button", showBack) { showBack = it; settings.showBack = it }
@@ -1200,7 +1241,7 @@ class MainActivity : ComponentActivity() {
                 onPlay = {
                     playbackReturnToPlay = true
                     if (item.type == "movie") play(item)
-                    else (nextUnwatchedEpisode(item.id, episodes, watched) ?: episodes.firstOrNull())
+                    else (nextUnwatchedEpisode(item.id, visibleEpisodes, watched) ?: visibleEpisodes.firstOrNull())
                         ?.let { play(item, it.season, it.episode) }
                 },
                 onToggleFavorite = {
@@ -1215,17 +1256,18 @@ class MainActivity : ComponentActivity() {
                 onOpenPerson = { person -> openPerson(person) },
                 seasons = seasons,
                 season = season,
-                episodes = episodes,
+                episodes = visibleEpisodes,
+                episodesLoading = episodesLoading,
+                episodesError = episodesError,
                 onSeasonSelected = { chosen ->
                     pendingEpisodeFocus = null
                     season = chosen
                     episodes = emptyList()
-                    scope.launch {
-                        try {
-                            val loaded = repo.episodes(item.id, chosen)
-                            if (selected?.id == item.id && selected?.type == item.type && season == chosen) episodes = loaded
-                        } catch (ex: Exception) { error = ex.message }
-                    }
+                    episodesLoading = true
+                    episodesError = null
+                    // Retry even when the selected season is clicked again.
+                    episodeReload += 1
+
                 },
                 onEpisodePlay = { ep -> playbackReturnToPlay=false;play(item, ep.season, ep.episode) },
                 restoreScrollY = if (pendingPlayFocus) null else titleScrollBookmarks["${item.type}:${item.id}"],
@@ -1806,6 +1848,9 @@ internal class PlayerControlSettings(context: Context) {
     private val isTelevision =
         (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
             android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    var delayTvEpisodes: Boolean
+        get() = prefs.getBoolean("tv_episode_release_delay", true)
+        set(value) { prefs.edit().putBoolean("tv_episode_release_delay", value).apply() }
     var musicDesktopMode: Boolean
         get() = prefs.getBoolean("music_desktop_site", false)
         set(value) { prefs.edit().putBoolean("music_desktop_site", value).apply() }

@@ -236,6 +236,6 @@ class TmdbRepository {
         val key = "$id:$season"
         episodeCache.get(key)?.let { return it }
         val arr = fetch("tv/$id/season/$season").getJSONArray("episodes")
-        return (0 until arr.length()).map { arr.getJSONObject(it) }.map { EpisodeItem(season, it.getInt("episode_number"), it.optString("name")) }.also { episodeCache.put(key, it) }
+        return (0 until arr.length()).map { arr.getJSONObject(it) }.map { EpisodeItem(season, it.getInt("episode_number"), it.optString("name"), it.optString("air_date").takeIf { date -> date.isNotBlank() && date != "null" }) }.also { episodeCache.put(key, it) }
     }
 }

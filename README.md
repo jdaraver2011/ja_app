@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.2.7 (20207)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.2.8 (20208)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.7-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.2.8-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.2.8 adds Settings > Show TV episodes one day after release, enabled by default and persisted. When enabled, episode air_date must be a valid day earlier than the device's local today. Today, future and missing/invalid dates stay hidden. Disabling restores the unfiltered season list. Movie listings are unaffected.
+- Details, main Play/replay and episode actions use the same filtered list; playback entry and resume/start-over also recheck eligibility. Empty seasons show an unavailable message with Play disabled. Season buttons remain accessible. Raw dates stay cached; the displayed season metadata refreshes on date changes/foreground return. The existing minute date check updates an open details screen. No provider playback availability is inferred from air dates.
+- Movie/TV Genre and TV Network Jump to panels are half their previous width/height and use half-size text, controls, spacing and focus borders. The fullscreen dialog backdrop and outside-tap dismissal remain; top navigation and catalogue cards are unchanged.
+- Release-date policy tests passed locally. Full regression checks, APK compilation and strict lint are pending the v2.2.8 publication workflow. Device verification of date rollover, settings and reduced menus remains required.
 
 - v2.2.7: default order is VidSrc, VidFast, ScottsMedia, Movy, 7Movies, CineJoy. Registry, allowlist, reset text and legacy reset ranking agree; learned TV-season preferences may still promote a working source.
 - A 7Movies TV-watch-only stylesheet hides the identified episode sidebar and lower page body, expanding the existing watch-player stage to the viewport. It preserves the selected episode query, player iframe, session/token initialization, server controls and player menus. It does not extract a raw embed URL. CSS selectors were checked against the live HTML and stylesheet; device rendering/playback remains pending. Signed APK compilation, regressions and strict Android lint passed in [run 44404375003](https://github.com/jdaraver2011/ja_app/actions/runs/44404375003). v2.2.7 is published as the latest public device update. The temporary release trigger has been removed.

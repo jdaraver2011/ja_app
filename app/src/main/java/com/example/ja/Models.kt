@@ -7,7 +7,7 @@ data class TitleItem(val id: Int, val title: String, val overview: String, val p
     val backdropUrl get() = backdrop?.let { "https://image.tmdb.org/t/p/w780$it" }
 }
 
-data class EpisodeItem(val season: Int, val episode: Int, val name: String)
+data class EpisodeItem(val season: Int, val episode: Int, val name: String, val airDate: String? = null)
 
 @Entity(tableName = "watch_items", primaryKeys = ["mediaId", "mediaType", "season", "episode"])
 data class WatchItem(val mediaId: Int, val mediaType: String, val season: Int = 0, val episode: Int = 0, val title: String, val poster: String?, val favorite: Boolean = false, val positionMs: Long = 0, val updatedAt: Long = System.currentTimeMillis())
