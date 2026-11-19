@@ -305,6 +305,15 @@ class MainActivity : ComponentActivity() {
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
     val weather = rememberJaWeather(active = playback == null && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    SideEffect {
+        weather.returnToNavigation = {
+            scope.launch {
+                navigationRowState.scrollToItem(if (showMusicTab) 6 else 5)
+                withFrameNanos { }; withFrameNanos { }
+                weather.navigationFocus.requestFocus()
+            }
+        }
+    }
     var weatherOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var weatherReturnFocus by remember { mutableStateOf(false) }
     LaunchedEffect(weatherOpen, weatherReturnFocus) {
@@ -1020,7 +1029,7 @@ class MainActivity : ComponentActivity() {
             items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
                 listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
                 TvFocusButton(
-                    modifier = if (t == "Settings") Modifier.onGloballyPositioned { weatherHeader.settings = it.boundsInRoot() } else Modifier,
+                    modifier = if (t == "Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings = it.boundsInRoot() } else Modifier,
                     onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null },
                     colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)
                 ) { Text(t, color = Color.Black) }

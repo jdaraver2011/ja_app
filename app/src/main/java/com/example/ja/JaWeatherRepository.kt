@@ -16,12 +16,15 @@ internal data class JaWeatherAlert(
     val event: String, val severity: String, val headline: String,
     val area: String, val description: String, val instruction: String, val expires: String
 )
+internal data class JaForecastPeriod(val name: String, val start: String, val end: String, val day: Boolean,
+    val temperature: String, val description: String, val icon: String?, val rainChance: String)
 internal data class JaWeatherData(
     val zip: String, val place: String, val station: String, val observationTime: String,
     val temperature: String, val conditions: String, val icon: String?,
     val humidity: String, val dewpoint: String, val ceiling: String, val visibility: String,
     val pressure: String, val windChill: String, val wind: String, val alerts: List<JaWeatherAlert>,
-    val fetchedAt: Long, val stale: Boolean = false, val alertsAvailable: Boolean = true
+    val fetchedAt: Long, val latitude: Double = Double.NaN, val longitude: Double = Double.NaN,
+    val forecast: List<JaForecastPeriod> = emptyList(), val forecastAvailable: Boolean = false, val stale: Boolean = false, val alertsAvailable: Boolean = true
 )
 
 /** Small independent client: no TMDB/player work, API keys or location permission. */
@@ -41,7 +44,7 @@ internal class JaWeatherRepository(context: Context) {
         val uri = java.net.URI(url)
         require(uri.scheme == "https" && uri.host in setOf("api.weather.gov", "api.zippopotam.us"))
         val builder = Request.Builder().url(url)
-            .header("User-Agent", "JA/2.3.3 (https://github.com/jdaraver2011/ja_app)")
+            .header("User-Agent", "JA/2.3.4 (https://github.com/jdaraver2011/ja_app)")
             .header("Accept", "application/geo+json, application/json")
         if (force) builder.header("Cache-Control", "no-cache")
         client.newCall(builder.build()).execute().use { response ->
@@ -70,7 +73,7 @@ internal class JaWeatherRepository(context: Context) {
         val key = "snapshot_$zip"
         val cached = prefs.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
         val cachedData = cached?.let { runCatching { parse(zip, it) }.getOrNull() }
-        if (!force && cachedData != null && JaWeatherRules.cacheFresh(cachedData.fetchedAt, System.currentTimeMillis())) {
+        if (!force && cachedData != null && cached?.has("forecast") == true && JaWeatherRules.cacheFresh(cachedData.fetchedAt, System.currentTimeMillis())) {
             return@withContext cachedData
         }
         try {
@@ -99,11 +102,17 @@ internal class JaWeatherRepository(context: Context) {
                 val candidate = runCatching { get("https://api.weather.gov/stations/$id/observations/latest", true)
                     .getJSONObject("properties") }.getOrNull() ?: continue
                 if (observation == null) { observation = candidate; stationName = station.optString("name", id) }
-                if (current(candidate)) { observation = candidate; stationName = station.optString("name", id); break }
+                if (current(candidate) && (!current(observation!!) || runCatching {
+                    Instant.parse(candidate.optString("timestamp")).isAfter(Instant.parse(observation!!.optString("timestamp")))
+                }.getOrDefault(false))) { observation = candidate; stationName = station.optString("name", id) }
             }
             val obs = observation ?: throw IOException("No nearby station observations available")
             val alerts = runCatching { get("https://api.weather.gov/alerts/active?point=$point", true) }.getOrNull()
-            val raw = JSONObject().put("place", location.getString("place")).put("station", stationName)
+            val forecast = runCatching { get(points.getString("forecast"), true) }.getOrNull()
+            val raw = JSONObject().put("latitude", lat).put("longitude", lon)
+                .put("forecast", forecast ?: cached?.optJSONObject("forecast") ?: JSONObject())
+                .put("forecastAvailable", forecast != null)
+                .put("place", location.getString("place")).put("station", stationName)
                 .put("observation", obs).put("alerts", alerts ?: JSONObject())
                 .put("alertsAvailable", alerts != null).put("fetchedAt", System.currentTimeMillis())
             prefs.edit().putString(key, raw.toString()).apply()
@@ -138,6 +147,17 @@ internal class JaWeatherRepository(context: Context) {
         val (direction, _) = quantity(p, "windDirection")
         val speed = field(p, "windSpeed", JaWeatherRules::milesPerHour)
         val wind = if (speed == null) "—" else if (speed == 0.0) "Calm" else "${JaWeatherRules.direction(direction)} ${JaWeatherRules.number(speed, 0, " mph")}"
+        val forecastItems = raw.optJSONObject("forecast")?.optJSONObject("properties")?.optJSONArray("periods")
+        val forecast = (0 until (forecastItems?.length() ?: 0)).mapNotNull { i ->
+            val f = forecastItems!!.getJSONObject(i)
+            if (runCatching { Instant.parse(f.getString("endTime")).isBefore(Instant.now()) }.getOrDefault(true)) return@mapNotNull null
+            val chance = f.optJSONObject("probabilityOfPrecipitation")
+            JaForecastPeriod(f.optString("name"), f.optString("startTime"), f.optString("endTime"), f.optBoolean("isDaytime"),
+                "${f.optInt("temperature")}°${f.optString("temperatureUnit")}", f.optString("shortForecast"),
+                f.optString("icon").takeIf { it.startsWith("https://api.weather.gov/") },
+                if (chance == null || chance.isNull("value")) "" else "${chance.optInt("value")}%")
+        }
+        val location = prefs.getString("location_$zip", null)?.let { runCatching { JSONObject(it) }.getOrNull() }
         return JaWeatherData(zip, raw.getString("place"), raw.optString("station"), p.optString("timestamp"),
             format("temperature", 0, "°F", JaWeatherRules::fahrenheit), p.optString("textDescription").ifBlank { "Conditions unavailable" },
             p.optString("icon").takeIf { it.startsWith("https://api.weather.gov/") },
@@ -145,6 +165,9 @@ internal class JaWeatherRepository(context: Context) {
             format("dewpoint", 0, "°F", JaWeatherRules::fahrenheit), JaWeatherRules.number(bases.minOrNull(), 0, " ft"),
             format("visibility", 1, " mi") { v, u -> JaWeatherRules.distance(v, u, false) },
             JaWeatherRules.number(pressure, 2, " inHg"), format("windChill", 0, "°F", JaWeatherRules::fahrenheit),
-            wind, alerts, raw.optLong("fetchedAt"), stale = !current(p), alertsAvailable = raw.optBoolean("alertsAvailable", false))
+            wind, alerts, raw.optLong("fetchedAt"),
+            latitude = raw.optDouble("latitude", location?.optString("lat")?.toDoubleOrNull() ?: Double.NaN),
+            longitude = raw.optDouble("longitude", location?.optString("lon")?.toDoubleOrNull() ?: Double.NaN),
+            forecast = forecast, forecastAvailable = raw.optBoolean("forecastAvailable"), stale = !current(p), alertsAvailable = raw.optBoolean("alertsAvailable", false))
     }
 }

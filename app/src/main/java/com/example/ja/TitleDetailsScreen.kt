@@ -1,6 +1,8 @@
 package com.example.ja
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -36,6 +38,7 @@ private val detailsAccent = Color(0xFFE5A43B)
 private val detailsSurface = Color(0xFF202832)
 private val detailsMuted = Color(0xFFB5BEC6)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TitleDetailsScreen(
     item: TitleItem,
@@ -113,6 +116,8 @@ fun TitleDetailsScreen(
         detailsScrollState.scrollTo(0)
         withFrameNanos { }
         playFocus.requestFocus()
+        withFrameNanos { }; withFrameNanos { }
+        detailsScrollState.scrollTo(0)
         onPlayFocusRestored()
     }
 
@@ -153,10 +158,18 @@ fun TitleDetailsScreen(
         ?.let { "https://image.tmdb.org/t/p/w1280$it" }
     val rating = details?.rating ?: item.rating.takeIf { it > 0 }
 
+    val normalBringIntoView = LocalBringIntoViewSpec.current
+    val initialPlaySpec = remember { object : BringIntoViewSpec {
+        override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float) = 0f
+    } }
+    CompositionLocalProvider(LocalBringIntoViewSpec provides if(pendingPlayFocus) initialPlaySpec else normalBringIntoView) {
     Column(
         Modifier.fillMaxSize().background(detailsBg).verticalScroll(detailsScrollState),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(if(item.type == "movie") "Movie" else "TV Show", color=detailsMuted,fontSize=13.sp,lineHeight=16.sp)
+        }
         // This background belongs to the scrolling upper section only.
         // matchParentSize lets content determine height without a banner spacer.
         Box(Modifier.fillMaxWidth().clipToBounds()) {
@@ -367,6 +380,7 @@ fun TitleDetailsScreen(
             "This product uses the TMDB API but is not endorsed or certified by TMDB.",
             color = detailsMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp, bottom = 18.dp)
         )
+    }
     }
 }
 

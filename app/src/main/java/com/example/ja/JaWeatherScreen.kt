@@ -19,6 +19,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +54,8 @@ internal class JaWeatherState(val repository: JaWeatherRepository) {
     var revision by mutableIntStateOf(0)
     var completedRevision = 0
     val cardFocus = FocusRequester()
+    val navigationFocus = FocusRequester()
+    var returnToNavigation: (() -> Unit)? = null
     fun saveZip(value: String) {
         if (value == zip) return
         repository.saveZip(value); data = null; error = null; zip = value
@@ -132,12 +139,17 @@ internal fun JaWeatherCard(state: JaWeatherState, modifier: Modifier = Modifier,
     var focused by remember { mutableStateOf(false) }
     val data = state.data?.takeIf { it.zip == state.zip }
     BoxWithConstraints(modifier
-        .focusRequester(state.cardFocus).onFocusChanged { focused = it.isFocused }
+        .onPreviewKeyEvent { event ->
+            if (event.key == Key.DirectionLeft && state.returnToNavigation != null) {
+                if (event.type == KeyEventType.KeyDown) state.returnToNavigation?.invoke()
+                true
+            } else false
+        }.focusRequester(state.cardFocus).onFocusChanged { focused = it.isFocused }
         .border(if (focused) 2.dp else 1.dp, if (focused) Color.White else Color(0xFF394655), RoundedCornerShape(8.dp))
         .background(Color(0xFF1C2632), RoundedCornerShape(8.dp)).clickable(onClick = onClick)) {
         val compact = maxHeight < 65.dp
-        val scale = if (compact) 1f else minOf(maxWidth.value / 216f, maxHeight.value / 84f).coerceAtLeast(0.5f)
-        val inset = (if (compact) 5f else 8f * scale).dp
+        val scale = if (compact) 1f else minOf(maxWidth.value / 216f, maxHeight.value / 120f).coerceAtLeast(0.5f)
+        val inset = (if (compact) 3f else 8f * scale).dp
         val summary = when {
             state.zip.isBlank() -> "Set preferred ZIP code in Settings"
             state.loading -> "Loading weather for ${state.zip}…"
@@ -146,18 +158,29 @@ internal fun JaWeatherCard(state: JaWeatherState, modifier: Modifier = Modifier,
         Column(Modifier.fillMaxSize().padding(inset), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy((if (compact) 1f else 4f * scale).dp, Alignment.CenterVertically)) {
             Text(data?.place ?: "Local weather", color = weatherGold, fontSize = (if (compact) 11f else 13f * scale).sp,
-                lineHeight = (if (compact) 13f else 16f * scale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                lineHeight = (if (compact) 12f else 16f * scale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             if (data != null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center) {
                     data.icon?.let {
-                        AsyncImage(it, null, Modifier.size((if (compact) 20f else 32f * scale).dp))
+                        AsyncImage(it, null, Modifier.size((if (compact) 16f else 32f * scale).dp))
                         Spacer(Modifier.width((if (compact) 6f else 8f * scale).dp))
                     }
                     Text("${data.temperature}  ${data.conditions}", color = Color.White,
                         fontSize = (if (compact) 12f else 13f * scale).sp,
                         lineHeight = (if (compact) 14f else 16f * scale).sp, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
+                }
+                if(compact) Text("${data.wind} · Humidity ${data.humidity}",color=Color.LightGray,fontSize=9.sp,lineHeight=10.sp,maxLines=1,
+                    overflow=TextOverflow.Ellipsis,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
+                if (!compact) {
+                    Text("Wind ${data.wind} · Humidity ${data.humidity}", color = Color.White,
+                        fontSize = (10f*scale).sp, lineHeight = (14f*scale).sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    val next = data.forecast.firstOrNull()
+                    Text(next?.let { "${it.name}: ${it.temperature} · ${it.description}" } ?: "Observed ${weatherTime(data.observationTime)}",
+                        color = Color.LightGray, fontSize = (10f*scale).sp, lineHeight = (14f*scale).sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 }
                 if (!compact) Text(when {
                     data.stale -> "Saved / delayed weather · Open details"
@@ -185,88 +208,104 @@ internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSetting
     var alertDetails by remember { mutableStateOf(false) }
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF111725)).padding(16.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF111725)).padding(12.dp)) {
         val wide = maxWidth >= 700.dp && maxWidth > maxHeight
-        val pageScroll = rememberScrollState()
-        Column(if (wide) Modifier.fillMaxSize() else Modifier.fillMaxSize().verticalScroll(pageScroll),
-            verticalArrangement = Arrangement.spacedBy(if (wide) 6.dp else 10.dp)) {
+        Column(if (wide) Modifier.fillMaxSize() else Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvFocusButton(onClick = onClose, modifier = Modifier.focusRequester(firstFocus)) { Text("Back") }
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                var focused by remember { mutableStateOf(false) }
+                FilledIconButton(onClick = { state.revision++ }, enabled = !state.loading,
+                    modifier = Modifier.size(36.dp).focusRequester(firstFocus).onFocusChanged { focused=it.isFocused }
+                        .border(if(focused)2.dp else 0.dp, if(focused)Color.White else Color.Transparent, RoundedCornerShape(18.dp))
+                        .semantics { contentDescription = "Refresh weather" }) {
+                    Text("↻",fontSize=24.sp)
+                }
                 Column(Modifier.weight(1f)) {
-                    Text("Current Conditions", color = weatherGold, fontSize = if (wide) 22.sp else 19.sp)
-                    data?.let { Text("${it.place} · ${it.zip}", color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    Text("Current Conditions", color=weatherGold,fontSize=20.sp,lineHeight=24.sp)
+                    Text(data?.let { "${it.place} · ${it.zip}" } ?: "Local weather",color=Color.White,fontSize=12.sp,lineHeight=15.sp)
                 }
-                if (wide) JaHeaderClock()
+                if(wide) JaHeaderClock()
             }
-            if (!wide) JaHeaderClock(Modifier.fillMaxWidth())
-            if (data == null) {
-                Text(if (state.zip.isBlank()) "Set your preferred U.S. ZIP code to display local weather." else
-                    state.error ?: "Loading weather for ${state.zip}…", color = Color.White)
-                TvFocusButton(onClick = onSettings) { Text("Weather settings") }
-                if (state.zip.isNotBlank()) TvFocusButton(onClick = { state.revision++ }, enabled = !state.loading) { Text("Retry") }
+            if(!wide) JaHeaderClock(Modifier.fillMaxWidth())
+            if(data==null) {
+                Text(if(state.zip.isBlank()) "Set your preferred ZIP code in Settings." else state.error ?: "Loading weather…", color=Color.White)
+                TvFocusButton(onClick=onSettings) { Text("Weather settings") }
             } else {
-                if (data.stale) Text("Saved or delayed observations — check the observation time below.", color = weatherGold)
-                if (!data.alertsAvailable) Text("Active alerts could not be refreshed. Alert status is unavailable.", color = weatherGold)
-                val selectedAlert = data.alerts.getOrNull(alertIndex)
-                if (wide) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    WeatherAlertList(data, alertIndex, Modifier.weight(0.23f).fillMaxHeight().verticalScroll(rememberScrollState())) { alertIndex = it }
-                    WeatherConditions(data, Modifier.weight(0.51f).fillMaxHeight().verticalScroll(rememberScrollState()).focusable())
-                    WeatherAffectedArea(selectedAlert, Modifier.weight(0.26f).fillMaxHeight().verticalScroll(rememberScrollState()).focusable())
+                if(data.stale) Text("Saved/delayed observation · ${weatherTime(data.observationTime)}",color=weatherGold,fontSize=11.sp)
+                if(!data.alertsAvailable) Text("Alert status unavailable",color=weatherGold,fontSize=11.sp)
+                val alert=data.alerts.getOrNull(alertIndex)
+                if(wide) Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    WeatherAlertList(data,alertIndex,Modifier.weight(0.22f).fillMaxHeight().verticalScroll(rememberScrollState())) { alertIndex=it }
+                    WeatherConditions(data,state.revision,Modifier.weight(0.56f).fillMaxHeight().verticalScroll(rememberScrollState()))
+                    WeatherAffectedArea(alert,Modifier.weight(0.22f).fillMaxHeight().verticalScroll(rememberScrollState()).focusable())
                 } else {
-                    WeatherConditions(data, Modifier.fillMaxWidth())
-                    WeatherAlertList(data, alertIndex, Modifier.fillMaxWidth()) { alertIndex = it }
-                    WeatherAffectedArea(selectedAlert, Modifier.fillMaxWidth())
+                    WeatherConditions(data,state.revision,Modifier.fillMaxWidth())
+                    WeatherAlertList(data,alertIndex,Modifier.fillMaxWidth()) { alertIndex=it }
+                    WeatherAffectedArea(alert,Modifier.fillMaxWidth())
                 }
-                selectedAlert?.let { a ->
-                    if (wide) TvFocusButton(onClick = { alertDetails = true }, modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = weatherRed)) {
-                        Text("${a.event} · Open full alert", color = Color.White, fontSize = 13.sp, maxLines = 1)
-                    } else Column(Modifier.fillMaxWidth().background(weatherRed).padding(12.dp)) {
-                        Text(a.headline.ifBlank { a.event }, color = Color.White, fontSize = 16.sp)
-                        Text(a.description, color = Color.White, fontSize = 13.sp)
-                        Text("Expires: ${weatherTime(a.expires)}", color = weatherGold, fontSize = 12.sp)
+                if(alert!=null) {
+                    TvFocusButton(onClick={alertDetails=true},colors=ButtonDefaults.buttonColors(containerColor=weatherRed)) {
+                        Text("${alert.event} · Full alert",color=Color.White,fontSize=12.sp,maxLines=1)
                     }
-                    if (alertDetails) AlertDialog(onDismissRequest = { alertDetails = false },
-                        title = { Text(a.event) },
-                        text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                            Text(a.headline); Text(a.area); Text(a.description)
-                            if (a.instruction.isNotBlank()) Text(a.instruction)
-                            Text("Expires: ${weatherTime(a.expires)}")
-                        } }, confirmButton = { TvFocusButton(onClick = { alertDetails = false }) { Text("Close") } })
+                    if(alertDetails) AlertDialog(onDismissRequest={alertDetails=false},title={Text(alert.event)},
+                        text={Column(Modifier.verticalScroll(rememberScrollState())) {
+                            Text(alert.headline);Text(alert.area);Text(alert.description)
+                            if(alert.instruction.isNotBlank())Text(alert.instruction)
+                            Text("Expires: ${weatherTime(alert.expires)}")
+                        }},confirmButton={TvFocusButton(onClick={alertDetails=false}){Text("Close")}})
                 }
-                Text("Observed: ${weatherTime(data.observationTime)} · ${data.station}", color = Color.LightGray, fontSize = 12.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TvFocusButton(onClick = { state.revision++ }, enabled = !state.loading) { Text(if (state.loading) "Refreshing…" else "Refresh") }
-                    TvFocusButton(onClick = onSettings) { Text("Change ZIP code") }
-                }
+                WeatherExtendedForecast(data)
+                Text("Observed: ${weatherTime(data.observationTime)} · ${data.station}",color=Color.LightGray,fontSize=10.sp,lineHeight=12.sp,maxLines=2)
+                Text("Updated: ${weatherTime(Instant.ofEpochMilli(data.fetchedAt).toString())}${if(state.loading) " · Updating…" else " · Automatic refresh every 15 minutes"}",
+                    color=Color.LightGray,fontSize=10.sp,lineHeight=12.sp,maxLines=1)
             }
-            Text("Source: National Weather Service · Missing measurements shown as — · ZIP lookup: Zippopotam.us",
-                color = Color.LightGray, fontSize = 11.sp)
-            if (!wide) Spacer(Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
-private fun WeatherConditions(data: JaWeatherData, modifier: Modifier) {
-    Column(modifier.background(weatherBlue, RoundedCornerShape(6.dp)).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(data.temperature, color = Color.White, fontSize = 38.sp)
-                Text(data.conditions, color = Color.White, fontSize = 18.sp)
-            }
-            data.icon?.let { AsyncImage(it, data.conditions, Modifier.size(68.dp)) }
+private fun WeatherConditions(data: JaWeatherData, revision: Int, modifier: Modifier) {
+    Column(modifier.background(weatherBlue,RoundedCornerShape(6.dp)).padding(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+            Text(data.temperature,color=Color.White,fontSize=26.sp,lineHeight=30.sp)
+            Spacer(Modifier.width(8.dp))
+            Text(data.conditions,color=Color.White,fontSize=13.sp,lineHeight=16.sp,modifier=Modifier.weight(1f),maxLines=2)
+            data.icon?.let { AsyncImage(it,null,Modifier.size(36.dp)) }
         }
-        for ((label, value) in listOf("Wind" to data.wind, "Humidity" to data.humidity, "Dewpoint" to data.dewpoint,
-            "Ceiling" to data.ceiling, "Visibility" to data.visibility, "Pressure" to data.pressure, "Wind chill" to data.windChill)) {
-            Row(Modifier.fillMaxWidth()) {
-                Text("$label:", color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                Text(value, color = Color.White, fontSize = 16.sp, textAlign = TextAlign.End)
+        val fields=listOf("Wind" to data.wind,"Humidity" to data.humidity,"Dewpoint" to data.dewpoint,
+            "Ceiling" to data.ceiling,"Visibility" to data.visibility,"Pressure" to data.pressure,"Wind chill" to data.windChill)
+        for(pair in fields.chunked(2)) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            pair.forEach { (label,value)-> Text("$label: $value",color=Color.White,fontSize=11.sp,lineHeight=14.sp,modifier=Modifier.weight(1f),maxLines=1) }
+        }
+        JaWeatherAnimationWindows(data,revision)
+    }
+}
+
+@Composable
+private fun WeatherExtendedForecast(data: JaWeatherData) {
+    var expanded by remember(data.zip) { mutableStateOf<JaForecastPeriod?>(null) }
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        Text("Extended Forecast${if(!data.forecastAvailable) " · Forecast update unavailable" else ""}",color=weatherGold,fontSize=15.sp,lineHeight=18.sp)
+        if(data.forecast.isEmpty()) Text("Forecast unavailable",color=Color.LightGray,fontSize=12.sp)
+        else LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            items(data.forecast,key={it.start}) { period ->
+                var focused by remember { mutableStateOf(false) }
+                Column(Modifier.width(100.dp).height(118.dp).onFocusChanged {focused=it.isFocused}
+                    .border(if(focused)2.dp else 1.dp,if(focused)Color.White else Color(0xFF33445E),RoundedCornerShape(5.dp))
+                    .background(Color(0xFF1C2632)).clickable {expanded=period}.padding(5.dp),horizontalAlignment=Alignment.CenterHorizontally,
+                    verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                    Text(period.name,color=Color.White,fontSize=11.sp,lineHeight=13.sp,maxLines=1)
+                    period.icon?.let{AsyncImage(it,null,Modifier.size(36.dp))}
+                    Text("${if(period.day) "High" else "Low"} ${period.temperature}",color=if(period.day)Color(0xFFFFBA91) else Color(0xFF8ED5FF),fontSize=11.sp,lineHeight=13.sp)
+                    Text(period.description,color=Color.White,fontSize=10.sp,lineHeight=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis,textAlign=TextAlign.Center)
+                    if(period.rainChance.isNotBlank()) Text("Rain ${period.rainChance}",color=Color.LightGray,fontSize=9.sp,lineHeight=10.sp)
+                }
             }
         }
     }
+    expanded?.let{p->AlertDialog(onDismissRequest={expanded=null},title={Text(p.name)},text={Text("${p.temperature} · ${p.description}\n${p.rainChance.takeIf{it.isNotBlank()}?.let{"Precipitation: $it"}.orEmpty()}")},
+        confirmButton={TvFocusButton(onClick={expanded=null}){Text("Close")}})}
 }
 
 @Composable
