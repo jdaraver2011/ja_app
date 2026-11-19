@@ -47,6 +47,7 @@ internal class JaWeatherState(val repository: JaWeatherRepository) {
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var revision by mutableIntStateOf(0)
+    var completedRevision = 0
     val cardFocus = FocusRequester()
     fun saveZip(value: String) {
         if (value == zip) return
@@ -70,7 +71,8 @@ internal fun rememberJaWeather(active: Boolean): JaWeatherState {
     LaunchedEffect(state.zip, state.revision, active, resumed) {
         if (!active || !resumed || !JaWeatherRules.validZip(state.zip)) return@LaunchedEffect
         val zip = state.zip
-        var force = state.revision > 0
+        val requestedRevision = state.revision
+        var force = requestedRevision > state.completedRevision
         while (isActive) {
             state.loading = true
             try {
@@ -78,7 +80,7 @@ internal fun rememberJaWeather(active: Boolean): JaWeatherState {
                 if (state.zip == zip) { state.data = result; state.error = null }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { if (state.zip == zip) state.error = "Weather unavailable. Check your ZIP code or connection." }
-            finally { state.loading = false }
+            finally { state.completedRevision = requestedRevision; state.loading = false }
             force = false
             delay(10 * 60 * 1000L)
         }

@@ -302,6 +302,7 @@ class MainActivity : ComponentActivity() {
     val detailsBackStack = remember { mutableStateListOf<DetailReturnPoint>() }
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
     val weather = rememberJaWeather(active = playback == null && !exiting)
+    val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
     var weatherOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var weatherReturnFocus by remember { mutableStateOf(false) }
     LaunchedEffect(weatherOpen, weatherReturnFocus) {
@@ -1010,7 +1011,7 @@ class MainActivity : ComponentActivity() {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val wideHeader = maxWidth >= 720.dp
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LazyRow(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                LazyRow(state = navigationRowState, modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
                         listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
