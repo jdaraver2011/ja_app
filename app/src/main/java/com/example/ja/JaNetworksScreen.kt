@@ -46,6 +46,7 @@ internal fun JaNetworksScreen(
     val entries = state.directory?.networks.orEmpty().map { JaJumpRow(it.id.toString(), it.name) }
     JaRowJumpScrollEffect(state.jump, entries, state.listState)
     Column(modifier.jaCancelPendingRowJump(state.jump, returnFocus)) {
+        Column(Modifier.jaWeatherIntroWidth()) {
         Text("TV Networks", style = MaterialTheme.typography.titleLarge, color = Color.White)
         Text("Browse shows by their TMDB network.", color = Color.LightGray,
             style = MaterialTheme.typography.bodySmall)
@@ -59,8 +60,9 @@ internal fun JaNetworksScreen(
         }
         JaRowJumpButton(state.jump, entries, state.listState)
         Spacer(Modifier.height(10.dp))
+        }
         LazyColumn(
-            state = state.listState, modifier = Modifier.fillMaxWidth().weight(1f),
+            state = state.listState, modifier = Modifier.fillMaxWidth().weight(1f).jaWeatherContentStart(),
             verticalArrangement = Arrangement.spacedBy(18.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {

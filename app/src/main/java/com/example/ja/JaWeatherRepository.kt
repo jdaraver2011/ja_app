@@ -41,7 +41,7 @@ internal class JaWeatherRepository(context: Context) {
         val uri = java.net.URI(url)
         require(uri.scheme == "https" && uri.host in setOf("api.weather.gov", "api.zippopotam.us"))
         val builder = Request.Builder().url(url)
-            .header("User-Agent", "JA/2.3.1 (https://github.com/jdaraver2011/ja_app)")
+            .header("User-Agent", "JA/2.3.2 (https://github.com/jdaraver2011/ja_app)")
             .header("Accept", "application/geo+json, application/json")
         if (force) builder.header("Cache-Control", "no-cache")
         client.newCall(builder.build()).execute().use { response ->
@@ -70,7 +70,7 @@ internal class JaWeatherRepository(context: Context) {
         val key = "snapshot_$zip"
         val cached = prefs.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
         val cachedData = cached?.let { runCatching { parse(zip, it) }.getOrNull() }
-        if (!force && cachedData != null && System.currentTimeMillis() - cachedData.fetchedAt in 0L..599999L) {
+        if (!force && cachedData != null && JaWeatherRules.cacheFresh(cachedData.fetchedAt, System.currentTimeMillis())) {
             return@withContext cachedData
         }
         try {
@@ -96,13 +96,13 @@ internal class JaWeatherRepository(context: Context) {
                 val station = stations.getJSONObject(i).getJSONObject("properties")
                 val id = station.getString("stationIdentifier")
                 if (!id.matches(Regex("[A-Za-z0-9_-]+"))) continue
-                val candidate = runCatching { get("https://api.weather.gov/stations/$id/observations/latest", force)
+                val candidate = runCatching { get("https://api.weather.gov/stations/$id/observations/latest", true)
                     .getJSONObject("properties") }.getOrNull() ?: continue
                 if (observation == null) { observation = candidate; stationName = station.optString("name", id) }
                 if (current(candidate)) { observation = candidate; stationName = station.optString("name", id); break }
             }
             val obs = observation ?: throw IOException("No nearby station observations available")
-            val alerts = runCatching { get("https://api.weather.gov/alerts/active?point=$point", force) }.getOrNull()
+            val alerts = runCatching { get("https://api.weather.gov/alerts/active?point=$point", true) }.getOrNull()
             val raw = JSONObject().put("place", location.getString("place")).put("station", stationName)
                 .put("observation", obs).put("alerts", alerts ?: JSONObject())
                 .put("alertsAvailable", alerts != null).put("fetchedAt", System.currentTimeMillis())

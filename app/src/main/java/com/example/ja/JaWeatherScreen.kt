@@ -82,7 +82,9 @@ internal fun rememberJaWeather(active: Boolean): JaWeatherState {
             catch (_: Exception) { if (state.zip == zip) state.error = "Weather unavailable. Check your ZIP code or connection." }
             finally { state.completedRevision = requestedRevision; state.loading = false }
             force = false
-            delay(10 * 60 * 1000L)
+            // Resume checks the existing snapshot's age instead of restarting its 15-minute clock.
+            delay(JaWeatherRules.refreshDelay(state.data?.takeIf { it.zip == zip }?.fetchedAt ?: 0L,
+                System.currentTimeMillis()))
         }
     }
     return state
@@ -129,29 +131,38 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
 internal fun JaWeatherCard(state: JaWeatherState, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val data = state.data?.takeIf { it.zip == state.zip }
-    Column(modifier.width(216.dp).heightIn(min = 76.dp)
+    BoxWithConstraints(modifier
         .focusRequester(state.cardFocus).onFocusChanged { focused = it.isFocused }
         .border(if (focused) 2.dp else 1.dp, if (focused) Color.White else Color(0xFF394655), RoundedCornerShape(8.dp))
-        .background(Color(0xFF1C2632), RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(8.dp)) {
-        Text(data?.place ?: "Local weather", color = weatherGold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (data != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                data.icon?.let { AsyncImage(it, null, Modifier.size(32.dp)) }
-                Text("${data.temperature}  ${data.conditions}", color = Color.White, fontSize = 13.sp,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            }
-            Text(when {
-                data.stale -> "Saved / delayed weather · Open details"
-                !data.alertsAvailable -> "Alerts unavailable · Open details"
-                data.alerts.isNotEmpty() -> "${data.alerts.size} active alert(s) · Open details"
-                else -> "Current conditions · Open details"
-            }, color = if (data.alerts.isNotEmpty()) Color(0xFFFFB6A8) else Color.LightGray, fontSize = 10.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        } else Text(when {
+        .background(Color(0xFF1C2632), RoundedCornerShape(8.dp)).clickable(onClick = onClick)) {
+        val compact = maxHeight < 65.dp
+        val scale = if (compact) 1f else minOf(maxWidth.value / 216f, maxHeight.value / 76f).coerceAtLeast(0.5f)
+        val inset = (if (compact) 5f else 8f * scale).dp
+        val summary = when {
             state.zip.isBlank() -> "Set preferred ZIP code in Settings"
             state.loading -> "Loading weather for ${state.zip}…"
             else -> state.error ?: "Open weather for ${state.zip}"
-        }, color = Color.White, fontSize = 12.sp, maxLines = 2)
+        }
+        Column(Modifier.fillMaxSize().padding(inset), verticalArrangement = Arrangement.SpaceBetween) {
+            Text(data?.place ?: "Local weather", color = weatherGold, fontSize = (if (compact) 11f else 13f * scale).sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (data != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    data.icon?.let { AsyncImage(it, null, Modifier.size((if (compact) 20f else 32f * scale).dp)) }
+                    Text("${data.temperature}  ${data.conditions}", color = Color.White,
+                        fontSize = (if (compact) 12f else 13f * scale).sp,
+                        maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
+                if (!compact) Text(when {
+                    data.stale -> "Saved / delayed weather · Open details"
+                    !data.alertsAvailable -> "Alerts unavailable · Open details"
+                    data.alerts.isNotEmpty() -> "${data.alerts.size} active alert(s) · Open details"
+                    else -> "Current conditions · Open details"
+                }, color = if (data.alerts.isNotEmpty()) Color(0xFFFFB6A8) else Color.LightGray, fontSize = (10f * scale).sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else Text(summary, color = Color.White, fontSize = (if (compact) 10f else 12f * scale).sp,
+                maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

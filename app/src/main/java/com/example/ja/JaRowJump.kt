@@ -19,6 +19,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -151,6 +154,12 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
     LaunchedEffect(letter) {
         if (networks) namesState.scrollToItem(matches.indexOfFirst { it.id == origin }.coerceAtLeast(0))
     }
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelLarge
+    val measuredWidth = remember(rows, textMeasurer, labelStyle) {
+        rows.maxOf { textMeasurer.measure(it.label, style = labelStyle, maxLines = 1).size.width }
+    }
+    val labelWidth = with(LocalDensity.current) { measuredWidth.toDp() } + 24.dp
     Dialog(onDismissRequest = { state.dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         LaunchedEffect(Unit) {
             withFrameNanos { }; withFrameNanos { }
@@ -158,7 +167,10 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
             else nameRequesters[origin]?.requestFocus()
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val panelWidth = minOf(360.dp, maxWidth * 0.86f)
+            val letterWidth = 40.dp
+            val extraWidth = if (networks) letterWidth + 8.dp else 0.dp
+            val panelWidth = minOf(labelWidth + extraWidth + 24.dp, maxWidth * 0.86f)
+            val nameWidth = (panelWidth - extraWidth - 24.dp).coerceAtLeast(48.dp)
             Row(Modifier.fillMaxSize().onKeyEvent {
                 if (it.key == Key.DirectionRight) {
                     if (it.type == KeyEventType.KeyDown) state.dismiss()
@@ -169,14 +181,15 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
                     Column(Modifier.fillMaxSize().padding(12.dp)) {
                         Text(if (networks) "Jump to network" else "Jump to genre",
                             style = MaterialTheme.typography.titleLarge, color = Color.White)
-                        Text(if (networks) "OK on a letter jumps. Right selects a network. Back closes."
-                            else "Choose a genre. Back or Right closes.",
+                        if (!networks) Text("Choose a genre. Back or Right closes.",
                             style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
+                        Spacer(Modifier.height(8.dp))
                         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (networks) LazyColumn(state = lettersState, modifier = Modifier.width(60.dp).fillMaxHeight()) {
+                            if (networks) LazyColumn(state = lettersState, modifier = Modifier.width(letterWidth).fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 items(letters, key = { it }) { item ->
                                     val available = rows.any { JaRowJumpIndex.initial(it.label) == item }
-                                    TvFocusButton(
+                                    JaJumpChoiceButton(
                                         enabled = available,
                                         onClick = { sorted.firstOrNull { JaRowJumpIndex.initial(it.label) == item }?.let { state.choose(it.id) } },
                                         modifier = Modifier.fillMaxWidth().focusRequester(letterRequesters.getValue(item))
@@ -197,9 +210,10 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
                                     ) { Text(item, color = if (letter == item) Color.Black else Color.White) }
                                 }
                             }
-                            LazyColumn(state = namesState, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            LazyColumn(state = namesState, modifier = Modifier.width(nameWidth).fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 items(matches, key = { it.id }) { item ->
-                                    TvFocusButton(onClick = { state.choose(item.id) },
+                                    JaJumpChoiceButton(onClick = { state.choose(item.id) },
                                         modifier = Modifier.fillMaxWidth().focusRequester(nameRequesters.getValue(item.id))
                                             .onPreviewKeyEvent { event ->
                                                 if (networks && event.key == Key.DirectionLeft) {
@@ -213,11 +227,13 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
                                             },
                                         colors = ButtonDefaults.buttonColors(containerColor =
                                             if (item.id == origin) Color(0xFFE5A43B) else Color.DarkGray)
-                                    ) { Text(item.label, color = if (item.id == origin) Color.Black else Color.White) }
+                                    ) { Text(item.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        color = if (item.id == origin) Color.Black else Color.White) }
                                 }
                             }
                         }
-                        TvFocusButton(onClick = { state.dismiss() }) { Text("Close", color = Color.White) }
+                        Spacer(Modifier.height(8.dp))
+                        JaJumpChoiceButton(onClick = { state.dismiss() }, modifier = Modifier.width(nameWidth)) { Text("Close", color = Color.White) }
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight().pointerInput(state) {
@@ -226,4 +242,17 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
             }
         }
     }
+}
+
+/** Compact padding, unchanged label typography, and a visible remote focus border. */
+@Composable
+private fun JaJumpChoiceButton(
+    onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    colors: ButtonColors = ButtonDefaults.buttonColors(), content: @Composable RowScope.() -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    Button(onClick = onClick, enabled = enabled, modifier = modifier.height(36.dp)
+        .onFocusChanged { focused = it.isFocused }, colors = colors,
+        border = jaButtonFocusBorder(focused),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), content = content)
 }

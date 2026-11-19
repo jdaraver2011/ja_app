@@ -51,6 +51,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -881,6 +883,7 @@ class MainActivity : ComponentActivity() {
         pendingEpisodeFocus = playbackEpisodeTarget
         refreshHistory()
     }
+    val weatherHeader = remember(tab, moviesView, tvView, selected?.id, selectedPerson?.id) { JaWeatherHeaderState() }
     LaunchedEffect(tab, selected?.id, selectedPerson?.id, playback, searchGenre, blockerTools) {
         exitGate.reset()
     }
@@ -1002,26 +1005,28 @@ class MainActivity : ComponentActivity() {
         }
         return
     }
-    Column(Modifier.fillMaxSize().background(bg).padding(16.dp)) {
+    Box(Modifier.fillMaxSize().background(bg).padding(16.dp)) {
+    JaWeatherHeaderFrame(weatherHeader, weather, navigationRowState,
+        onOpen = { exitGate.reset(); weatherOpen = true }) { sideWeather ->
+    Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("JA", style = MaterialTheme.typography.headlineMedium, color = accent, modifier = Modifier.weight(1f))
             JaHeaderClock()
         }
         Spacer(Modifier.height(12.dp))
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val wideHeader = maxWidth >= 720.dp
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LazyRow(state = navigationRowState, modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
-                        listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
-                        TvFocusButton(onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null }, colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)) { Text(t, color = Color.Black) }
-                    }
-                    if (!wideHeader) item(key = "weather") {
-                        JaWeatherCard(weather) { exitGate.reset(); weatherOpen = true }
-                    }
-                }
-                if (wideHeader) JaWeatherCard(weather) { exitGate.reset(); weatherOpen = true }
+        LazyRow(state = navigationRowState, modifier = Modifier.fillMaxWidth()
+            .onGloballyPositioned { weatherHeader.navigation = it.boundsInRoot() },
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
+                listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
+                TvFocusButton(
+                    modifier = if (t == "Settings") Modifier.onGloballyPositioned { weatherHeader.settings = it.boundsInRoot() } else Modifier,
+                    onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)
+                ) { Text(t, color = Color.Black) }
+            }
+            if (!sideWeather) item(key = "weather") {
+                JaWeatherCard(weather, Modifier.width(216.dp).height(48.dp)) { exitGate.reset(); weatherOpen = true }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -1029,13 +1034,13 @@ class MainActivity : ComponentActivity() {
             JaMusicScreen(Modifier.fillMaxWidth().weight(1f))
         } else JaCompactContent {
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
-        error?.let { Text(it, color = Color(0xFFFFA8A8)) }
+        error?.let { Text(it, modifier = Modifier.jaWeatherIntroWidth(), color = Color(0xFFFFA8A8)) }
         if (selected == null && selectedPerson == null && (tab == "Movies" || (tab == "Search" && searchGenre?.type == "movie"))) {
             if (vidSrcSnapshot.busy || (!vidSrcSnapshot.ready && dailyVidSrcDownloads)) Text(
                 if (vidSrcSnapshot.ready) "Updating VidSrc catalogue…" else "Preparing VidSrc catalogue…",
-                color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                modifier = Modifier.jaWeatherIntroWidth(), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
             vidSrcSnapshot.error?.let {
-                Text(it, color = Color(0xFFFFA8A8), style = MaterialTheme.typography.bodySmall)
+                Text(it, modifier = Modifier.jaWeatherIntroWidth(), color = Color(0xFFFFA8A8), style = MaterialTheme.typography.bodySmall)
                 if (!vidSrcSnapshot.busy) TvSecondaryButton("Retry source refresh", false) { JaVidSrcCatalog.refreshOverdue(force = true) }
             }
         }
@@ -1369,18 +1374,9 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(pageFocusId) {
                         val id = pageFocusId ?: return@LaunchedEffect
                         val index = titles.indexOfFirst { it.id == id }
-                        if (index >= 0) gridState.scrollToItem(index + 1)
+                        if (index >= 0) gridState.scrollToItem(index)
                     }
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 152.dp),
-                        state = gridState,
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(bottom = 24.dp)
-                    ) {
-                        item(span = { GridItemSpan(maxLineSpan) }, key = "popular-title") {
-                            Column {
+                    Column(Modifier.jaWeatherIntroWidth()) {
                                 Text(if (isOther) "Upcoming & CAM Movies" else if (isMovieTab) "Popular Movies" else "Popular TV Shows",
                                     style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 Text("${titles.size} titles loaded", color = Color.LightGray)
@@ -1394,7 +1390,15 @@ class MainActivity : ComponentActivity() {
                                         else "No upcoming or confirmed CAM movies found.", color = Color.LightGray)
                                 }
                             }
-                        }
+                    Spacer(Modifier.height(14.dp))
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 152.dp),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize().jaWeatherContentStart(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
                         gridItems(titles, key = { "popular-${it.type}-${it.id}" }) { item ->
                             JaSearchTitleCard(marked(item),
                                 badge = if (isOther) { if (item.id in vidSrcQuality.cams) "CAM" else "Upcoming" } else null,
@@ -1419,7 +1423,7 @@ class MainActivity : ComponentActivity() {
                                     TvFocusButton(
                                         onClick = {
                                             if (!loading) {
-                                                val index = lastLoadedRowIndex(gridState, titles.size, 1)
+                                                val index = lastLoadedRowIndex(gridState, titles.size, 0)
                                                 pageFocusId = titles.getOrNull(index)?.id
                                                 if (isOther) loadMoreOther() else if (isMovieTab) loadMorePopular() else loadMorePopularTV()
                                             }
@@ -1556,6 +1560,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         }
+    }
+    }
     }
 }
 

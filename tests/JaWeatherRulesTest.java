@@ -29,6 +29,12 @@ public class JaWeatherRulesTest {
         check(!JaWeatherRules.activeActualAlert("Actual","Cancel","2026-11-19T16:00:00Z",now));
         check(!JaWeatherRules.activeActualAlert("Actual","Alert","2026-11-19T14:00:00Z",now));
         check(!JaWeatherRules.activeActualAlert("Actual","Alert","invalid",now));
+        check(JaWeatherRules.cacheFresh(1000,1000));
+        check(JaWeatherRules.cacheFresh(1000,900999));
+        check(!JaWeatherRules.cacheFresh(1000,901000));
+        check(!JaWeatherRules.cacheFresh(1000,999));
+        check(JaWeatherRules.refreshDelay(1000,841000) == 60000);
+        check(JaWeatherRules.refreshDelay(1000,901000) == 900000);
         System.out.println("Weather unit and ZIP tests passed");
     }
 }

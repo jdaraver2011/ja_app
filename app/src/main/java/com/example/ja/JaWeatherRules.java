@@ -5,6 +5,14 @@ import java.util.Locale;
 /** Unit conversion and validation shared by current-condition displays. */
 public final class JaWeatherRules {
     private JaWeatherRules() {}
+    public static final long REFRESH_INTERVAL_MS = 15L * 60 * 1000;
+    public static boolean cacheFresh(long fetchedAt, long now) {
+        long age = now - fetchedAt;
+        return age >= 0 && age < REFRESH_INTERVAL_MS;
+    }
+    public static long refreshDelay(long fetchedAt, long now) {
+        return cacheFresh(fetchedAt, now) ? REFRESH_INTERVAL_MS - (now - fetchedAt) : REFRESH_INTERVAL_MS;
+    }
     public static boolean validZip(String zip) { return zip != null && zip.matches("[0-9]{5}"); }
     public static boolean activeActualAlert(String status, String messageType, String expires, long nowMillis) {
         if (!"Actual".equals(status) || "Cancel".equals(messageType)) return false;

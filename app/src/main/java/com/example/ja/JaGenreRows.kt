@@ -26,13 +26,15 @@ internal fun JaGenreRows(
     val entries = rows.map { JaJumpRow(it.genreId.toString(), it.name) }
     JaRowJumpScrollEffect(jump, entries, sectionState)
     Column(modifier.jaCancelPendingRowJump(jump, returnFocus)) {
+        Column(Modifier.jaWeatherIntroWidth()) {
         JaRowJumpButton(jump, entries, sectionState)
         Spacer(Modifier.height(8.dp))
         if (loading) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Text("Loading genre rows…", color = Color.LightGray)
         }
-        LazyColumn(state = sectionState, modifier = Modifier.fillMaxWidth().weight(1f),
+        }
+        LazyColumn(state = sectionState, modifier = Modifier.fillMaxWidth().weight(1f).jaWeatherContentStart(),
             verticalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             items(rows, key = { it.genreId }) { row ->
                 val titles = visibleTitles(row.titles)
