@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.3.2 (20302)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current testing version: **2.3.3 (20303)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,14 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.3.2-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.3.3-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.3.3 capitalizes the measured and displayed pop-out headings as Jump to Network and Jump to Genre. Both assumed-action instruction paragraphs are removed. The v2.3.2 longest-label sizing, typography, focus border and A-Z navigation remain in place; the user confirmed v2.3.2 Jump to Network layout and device updating.
+- Home weather content is centered horizontally and vertically as a group, with centered location/status text and a proportional gap between the condition icon and temperature. Scaling includes line height and the new group spacing. The existing weather bounds, saved ZIP code, full-screen weather page and 15-minute refresh policy are retained.
+- Favorites and Continue use the same 152dp adaptive grid cells, 12dp horizontal gaps, 14dp vertical gaps, 24dp bottom padding, 140dp card/190dp poster and two-line 13sp title label as Movie/TV Popular. Their old maximum of four columns is removed; they retain vertical scrolling, Movie/TV selectors, item keys and focus return. Continue keeps its resume-time/episode labels. The section-heading-to-grid gap now matches Popular's 14dp.
+- Weather timing/unit/ZIP/alert, row-jump indexing and resume-label tests passed locally. Full regressions, signed APK compilation and strict Android lint must pass before publication. Device verification of weather centering, Favorites/Continue spacing and menu headings remains required.
 
 - v2.3.2 restores the original primary-to-secondary navigation spacing. In landscape, when all main buttons fit with room for weather, the weather summary spans from just after Settings to the existing right margin, aligned with the main row and ending above catalogue content. The weather card is placed independently of the row height, and text/icon scale together within its measured bounds. Narrow/portrait layouts retain a compact, focusable weather item after Settings in the scrolling navigation row.
 - Popular/Other introduction text is stationary above the title grid, providing a stable weather boundary while posters scroll. Grid indexes and Load More focus targets now count titles from zero. Genre/Network introductions provide their own stationary boundary; full-width title rows remain available below it. Header text is constrained to the left introduction area to avoid overlapping weather. Outside those catalogues the summary stays within the navigation row's height.

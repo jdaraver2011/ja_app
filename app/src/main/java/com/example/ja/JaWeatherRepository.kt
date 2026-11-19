@@ -41,7 +41,7 @@ internal class JaWeatherRepository(context: Context) {
         val uri = java.net.URI(url)
         require(uri.scheme == "https" && uri.host in setOf("api.weather.gov", "api.zippopotam.us"))
         val builder = Request.Builder().url(url)
-            .header("User-Agent", "JA/2.3.2 (https://github.com/jdaraver2011/ja_app)")
+            .header("User-Agent", "JA/2.3.3 (https://github.com/jdaraver2011/ja_app)")
             .header("Accept", "application/geo+json, application/json")
         if (force) builder.header("Cache-Control", "no-cache")
         client.newCall(builder.build()).execute().use { response ->

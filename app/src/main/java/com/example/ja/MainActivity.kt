@@ -1475,23 +1475,15 @@ class MainActivity : ComponentActivity() {
                 val favoriteTitles = orderedIds.mapNotNull { favoriteById[it] }
                     .map { TitleItem(it.mediaId, it.title, "", it.poster, null, it.mediaType) }
                 Text("Favorite $favoritesView", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(14.dp))
                 if (favoriteTitles.isEmpty()) {
                     Text("No favorite ${if (favoriteType == "movie") "movies" else "TV shows"} yet.", color = Color.LightGray)
                 } else {
                     val gridState = if (favoriteType == "movie") favoriteMovieGridState else favoriteTvGridState
-                    // Constrain the grid below the two tab buttons. A capped
-                    // column count ensures eight favorites form multiple
-                    // vertical rows even on a wide Android TV display.
+                    // Match Popular's adaptive cells, card size, and gaps on phones and TV.
                     BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                        val columnCount = when {
-                            jaContentBaseWidth(maxWidth) < 340.dp -> 1
-                            jaContentBaseWidth(maxWidth) < 640.dp -> 2
-                            jaContentBaseWidth(maxWidth) < 960.dp -> 3
-                            else -> 4
-                        }
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(columnCount),
+                            columns = GridCells.Adaptive(minSize = 152.dp),
                             state = gridState,
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1525,21 +1517,15 @@ class MainActivity : ComponentActivity() {
                         .distinctBy { it.mediaId }
                 }
                 Text("Continue $continueView", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(14.dp))
                 if (continueItems.isEmpty()) {
                     Text("No ${if (continueType == "movie") "movies" else "TV shows"} to continue yet.",
                         color = Color.LightGray)
                 } else {
                     val gridState = if (continueType == "movie") continueMovieGridState else continueTvGridState
                     BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                        val columnCount = when {
-                            jaContentBaseWidth(maxWidth) < 340.dp -> 1
-                            jaContentBaseWidth(maxWidth) < 640.dp -> 2
-                            jaContentBaseWidth(maxWidth) < 960.dp -> 3
-                            else -> 4
-                        }
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(columnCount), state = gridState,
+                            columns = GridCells.Adaptive(minSize = 152.dp), state = gridState,
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),

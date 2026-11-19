@@ -136,22 +136,28 @@ internal fun JaWeatherCard(state: JaWeatherState, modifier: Modifier = Modifier,
         .border(if (focused) 2.dp else 1.dp, if (focused) Color.White else Color(0xFF394655), RoundedCornerShape(8.dp))
         .background(Color(0xFF1C2632), RoundedCornerShape(8.dp)).clickable(onClick = onClick)) {
         val compact = maxHeight < 65.dp
-        val scale = if (compact) 1f else minOf(maxWidth.value / 216f, maxHeight.value / 76f).coerceAtLeast(0.5f)
+        val scale = if (compact) 1f else minOf(maxWidth.value / 216f, maxHeight.value / 84f).coerceAtLeast(0.5f)
         val inset = (if (compact) 5f else 8f * scale).dp
         val summary = when {
             state.zip.isBlank() -> "Set preferred ZIP code in Settings"
             state.loading -> "Loading weather for ${state.zip}…"
             else -> state.error ?: "Open weather for ${state.zip}"
         }
-        Column(Modifier.fillMaxSize().padding(inset), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.fillMaxSize().padding(inset), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy((if (compact) 1f else 4f * scale).dp, Alignment.CenterVertically)) {
             Text(data?.place ?: "Local weather", color = weatherGold, fontSize = (if (compact) 11f else 13f * scale).sp,
-                lineHeight = (if (compact) 13f else 16f * scale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                lineHeight = (if (compact) 13f else 16f * scale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             if (data != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    data.icon?.let { AsyncImage(it, null, Modifier.size((if (compact) 20f else 32f * scale).dp)) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center) {
+                    data.icon?.let {
+                        AsyncImage(it, null, Modifier.size((if (compact) 20f else 32f * scale).dp))
+                        Spacer(Modifier.width((if (compact) 6f else 8f * scale).dp))
+                    }
                     Text("${data.temperature}  ${data.conditions}", color = Color.White,
                         fontSize = (if (compact) 12f else 13f * scale).sp,
-                        lineHeight = (if (compact) 14f else 16f * scale).sp, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        lineHeight = (if (compact) 14f else 16f * scale).sp, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
                 }
                 if (!compact) Text(when {
                     data.stale -> "Saved / delayed weather · Open details"
@@ -159,9 +165,10 @@ internal fun JaWeatherCard(state: JaWeatherState, modifier: Modifier = Modifier,
                     data.alerts.isNotEmpty() -> "${data.alerts.size} active alert(s) · Open details"
                     else -> "Current conditions · Open details"
                 }, color = if (data.alerts.isNotEmpty()) Color(0xFFFFB6A8) else Color.LightGray, fontSize = (10f * scale).sp, lineHeight = (12f * scale).sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             } else Text(summary, color = Color.White, fontSize = (if (compact) 10f else 12f * scale).sp,
-                lineHeight = (if (compact) 12f else 14f * scale).sp, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
+                lineHeight = (if (compact) 12f else 14f * scale).sp, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }
 }

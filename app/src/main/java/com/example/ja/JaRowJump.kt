@@ -162,7 +162,7 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
     val labelWidth = with(LocalDensity.current) { measuredWidth.toDp() } + 24.dp
     val titleStyle = MaterialTheme.typography.titleLarge
     val titleWidth = with(LocalDensity.current) {
-        textMeasurer.measure(if (networks) "Jump to network" else "Jump to genre", style = titleStyle,
+        textMeasurer.measure(if (networks) "Jump to Network" else "Jump to Genre", style = titleStyle,
             maxLines = 1).size.width.toDp()
     }
     Dialog(onDismissRequest = { state.dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -184,10 +184,8 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
             }) {
                 Surface(Modifier.width(panelWidth).fillMaxHeight(), color = Color(0xFF1B2430)) {
                     Column(Modifier.fillMaxSize().padding(12.dp)) {
-                        Text(if (networks) "Jump to network" else "Jump to genre",
+                        Text(if (networks) "Jump to Network" else "Jump to Genre",
                             style = MaterialTheme.typography.titleLarge, color = Color.White)
-                        if (!networks) Text("Choose a genre. Back or Right closes.",
-                            style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
                         Spacer(Modifier.height(8.dp))
                         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (networks) LazyColumn(state = lettersState, modifier = Modifier.width(letterWidth).fillMaxHeight(),
