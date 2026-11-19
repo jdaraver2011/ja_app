@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.ja"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20305
-        versionName = "2.3.5"
+        versionCode = 20401
+        versionName = "2.4.1"
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
         require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
         buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")
@@ -63,6 +63,7 @@ dependencies {
     kapt("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.21")
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
 

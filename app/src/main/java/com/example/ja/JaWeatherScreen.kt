@@ -129,13 +129,13 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
             unfocusedLabelColor = Color.LightGray))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TvFocusButton(onClick = {
-            if (JaWeatherRules.validZip(entry)) { state.saveZip(entry); message = "Weather ZIP code saved." }
+            if (JaWeatherRules.validZip(entry)) { state.saveZip(entry); message = "Preferred ZIP code saved." }
             else message = "Enter a five-digit U.S. ZIP code."
         }) { Text("Save ZIP code") }
-        TvFocusButton(onClick = { entry = ""; state.saveZip(""); message = "Weather ZIP code cleared." }) { Text("Clear") }
+        TvFocusButton(onClick = { entry = ""; state.saveZip(""); message = "Preferred ZIP code cleared." }) { Text("Clear") }
     }
     message?.let { Text(it, color = Color.LightGray) }
-    Text("Saved on this device. U.S. weather: National Weather Service. ZIP lookup: Zippopotam.us. No location permission required.",
+    Text("Used for Weather and nearby Live TV playlists. Saved on this device. U.S. weather: National Weather Service. ZIP lookup: Zippopotam.us. No location permission required.",
         color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
 }
@@ -226,13 +226,13 @@ internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSetting
                         .border(if(focused)2.dp else 0.dp, if(focused)Color.White else Color.Transparent, RoundedCornerShape(18.dp))
                         .semantics { contentDescription = "Refresh weather" }) {
                     val symbolColor=LocalContentColor.current
-                    Canvas(Modifier.size(22.dp)) {
+                    Canvas(Modifier.size(24.dp)) {
                         val radius=size.minDimension*0.34f
                         val middle=center
                         drawArc(symbolColor,30f,285f,false,Offset(middle.x-radius,middle.y-radius),Size(radius*2,radius*2),
                             style=Stroke(width=2.dp.toPx(),cap=StrokeCap.Round))
                         val tip=Offset(middle.x+radius*0.7071f,middle.y-radius*0.7071f)
-                        val back=3.dp.toPx();val side=2.dp.toPx()
+                        val back=6.dp.toPx();val side=3.5.dp.toPx()
                         val arrow=Path().apply {
                             moveTo(tip.x,tip.y)
                             lineTo(tip.x-0.7071f*(back+side),tip.y-0.7071f*(back-side))

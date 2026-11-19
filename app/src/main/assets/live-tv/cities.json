@@ -1,0 +1,1591 @@
+[
+  {
+    "code": "usaac",
+    "name": "Bloomfield",
+    "state": "CT",
+    "lat": 41.82649,
+    "lon": -72.73009
+  },
+  {
+    "code": "usabq",
+    "name": "Albuquerque",
+    "state": "NM",
+    "lat": 35.08449,
+    "lon": -106.65114
+  },
+  {
+    "code": "usact",
+    "name": "Waco",
+    "state": "TX",
+    "lat": 31.54933,
+    "lon": -97.14667
+  },
+  {
+    "code": "usaev",
+    "name": "Asheville",
+    "state": "NC",
+    "lat": 35.60095,
+    "lon": -82.55402
+  },
+  {
+    "code": "usahn",
+    "name": "Athens",
+    "state": "GA",
+    "lat": 33.96095,
+    "lon": -83.37794
+  },
+  {
+    "code": "usalb",
+    "name": "Albany",
+    "state": "NY",
+    "lat": 42.65258,
+    "lon": -73.75623
+  },
+  {
+    "code": "usanp",
+    "name": "Annapolis",
+    "state": "MD",
+    "lat": 38.97859,
+    "lon": -76.49184
+  },
+  {
+    "code": "usapf",
+    "name": "Naples",
+    "state": "FL",
+    "lat": 26.14234,
+    "lon": -81.79596
+  },
+  {
+    "code": "usash",
+    "name": "Nashua",
+    "state": "NH",
+    "lat": 42.76537,
+    "lon": -71.46757
+  },
+  {
+    "code": "usasi",
+    "name": "Ashland",
+    "state": "OR",
+    "lat": 42.19458,
+    "lon": -122.70948
+  },
+  {
+    "code": "usatl",
+    "name": "Atlanta",
+    "state": "GA",
+    "lat": 33.749,
+    "lon": -84.38798
+  },
+  {
+    "code": "usauc",
+    "name": "Aurora",
+    "state": "CO",
+    "lat": 39.72943,
+    "lon": -104.83192
+  },
+  {
+    "code": "usaum",
+    "name": "Austin",
+    "state": "MN",
+    "lat": 43.66663,
+    "lon": -92.97464
+  },
+  {
+    "code": "usaus",
+    "name": "Austin",
+    "state": "TX",
+    "lat": 30.26715,
+    "lon": -97.74306
+  },
+  {
+    "code": "usazo",
+    "name": "Kalamazoo",
+    "state": "MI",
+    "lat": 42.29171,
+    "lon": -85.58723
+  },
+  {
+    "code": "usbal",
+    "name": "Baltimore",
+    "state": "MD",
+    "lat": 39.29038,
+    "lon": -76.61219
+  },
+  {
+    "code": "usbbi",
+    "name": "Bradenton",
+    "state": "FL",
+    "lat": 27.49893,
+    "lon": -82.57482
+  },
+  {
+    "code": "usbdr",
+    "name": "Bridgeport",
+    "state": "CT",
+    "lat": 41.17923,
+    "lon": -73.18945
+  },
+  {
+    "code": "usbfl",
+    "name": "Bakersfield",
+    "state": "CA",
+    "lat": 35.37329,
+    "lon": -119.01871
+  },
+  {
+    "code": "usbgk",
+    "name": "Brighton",
+    "state": "CO",
+    "lat": 39.98526,
+    "lon": -104.82053
+  },
+  {
+    "code": "usbl8",
+    "name": "Bolton",
+    "state": "CT",
+    "lat": 41.7689,
+    "lon": -72.4396
+  },
+  {
+    "code": "usbma",
+    "name": "Brookline",
+    "state": "MA",
+    "lat": 42.33176,
+    "lon": -71.12116
+  },
+  {
+    "code": "usbms",
+    "name": "Billerica",
+    "state": "MA",
+    "lat": 42.55843,
+    "lon": -71.26895
+  },
+  {
+    "code": "usbos",
+    "name": "Boston",
+    "state": "MA",
+    "lat": 42.35843,
+    "lon": -71.05977
+  },
+  {
+    "code": "usbtl",
+    "name": "Battle Creek",
+    "state": "MI",
+    "lat": 42.3173,
+    "lon": -85.17816
+  },
+  {
+    "code": "usbtr",
+    "name": "Baton Rouge",
+    "state": "LA",
+    "lat": 30.44332,
+    "lon": -91.18747
+  },
+  {
+    "code": "usbun",
+    "name": "Buena Park",
+    "state": "CA",
+    "lat": 33.86751,
+    "lon": -117.99812
+  },
+  {
+    "code": "usbur",
+    "name": "Burbank",
+    "state": "CA",
+    "lat": 34.18084,
+    "lon": -118.30897
+  },
+  {
+    "code": "usbvh",
+    "name": "Beverly Hills",
+    "state": "CA",
+    "lat": 34.07362,
+    "lon": -118.40036
+  },
+  {
+    "code": "uscc2",
+    "name": "Cape Coral",
+    "state": "FL",
+    "lat": 26.56285,
+    "lon": -81.94953
+  },
+  {
+    "code": "usccr",
+    "name": "Concord",
+    "state": "CA",
+    "lat": 37.97798,
+    "lon": -122.03107
+  },
+  {
+    "code": "uscek",
+    "name": "Cerritos",
+    "state": "CA",
+    "lat": 33.85835,
+    "lon": -118.06479
+  },
+  {
+    "code": "uscgi",
+    "name": "Cape Girardeau",
+    "state": "MO",
+    "lat": 37.30588,
+    "lon": -89.51815
+  },
+  {
+    "code": "usch3",
+    "name": "Chino Hills",
+    "state": "CA",
+    "lat": 33.9938,
+    "lon": -117.75888
+  },
+  {
+    "code": "uscha",
+    "name": "Chattanooga",
+    "state": "TN",
+    "lat": 35.04563,
+    "lon": -85.30968
+  },
+  {
+    "code": "uschi",
+    "name": "Chicago",
+    "state": "IL",
+    "lat": 41.85003,
+    "lon": -87.65005
+  },
+  {
+    "code": "uschs",
+    "name": "Charleston",
+    "state": "SC",
+    "lat": 32.77632,
+    "lon": -79.93275
+  },
+  {
+    "code": "usclb",
+    "name": "Clinton",
+    "state": "CT",
+    "lat": 41.2912,
+    "lon": -72.528
+  },
+  {
+    "code": "uscld",
+    "name": "Carlsbad",
+    "state": "CA",
+    "lat": 33.15809,
+    "lon": -117.35059
+  },
+  {
+    "code": "uscle",
+    "name": "Cleveland",
+    "state": "OH",
+    "lat": 41.4995,
+    "lon": -81.69541
+  },
+  {
+    "code": "usclt",
+    "name": "Charlotte",
+    "state": "NC",
+    "lat": 35.22709,
+    "lon": -80.84313
+  },
+  {
+    "code": "uscmh",
+    "name": "Columbus",
+    "state": "OH",
+    "lat": 39.96118,
+    "lon": -82.99879
+  },
+  {
+    "code": "uscmi",
+    "name": "Champaign",
+    "state": "IL",
+    "lat": 40.11642,
+    "lon": -88.24338
+  },
+  {
+    "code": "uscqv",
+    "name": "Cleveland",
+    "state": "GA",
+    "lat": 34.5839,
+    "lon": -83.75
+  },
+  {
+    "code": "uscrp",
+    "name": "Corpus Christi",
+    "state": "TX",
+    "lat": 27.80058,
+    "lon": -97.39638
+  },
+  {
+    "code": "uscrz",
+    "name": "Ceres",
+    "state": "CA",
+    "lat": 37.59493,
+    "lon": -120.95771
+  },
+  {
+    "code": "uscsl",
+    "name": "San Luis Obispo",
+    "state": "CA",
+    "lat": 35.28275,
+    "lon": -120.65962
+  },
+  {
+    "code": "uscvg",
+    "name": "Cincinnati",
+    "state": "OH",
+    "lat": 39.12711,
+    "lon": -84.51439
+  },
+  {
+    "code": "uscyi",
+    "name": "Cloverdale",
+    "state": "CA",
+    "lat": 38.7931,
+    "lon": -123.0074
+  },
+  {
+    "code": "uscyq",
+    "name": "Cypress",
+    "state": "CA",
+    "lat": 33.81696,
+    "lon": -118.03729
+  },
+  {
+    "code": "usczm",
+    "name": "Costa Mesa",
+    "state": "CA",
+    "lat": 33.64113,
+    "lon": -117.91867
+  },
+  {
+    "code": "usd5w",
+    "name": "Dagsboro",
+    "state": "DE",
+    "lat": 38.5596,
+    "lon": -75.2113
+  },
+  {
+    "code": "usdab",
+    "name": "Daytona Beach",
+    "state": "FL",
+    "lat": 29.21081,
+    "lon": -81.02283
+  },
+  {
+    "code": "usdal",
+    "name": "Dallas",
+    "state": "TX",
+    "lat": 32.78306,
+    "lon": -96.80667
+  },
+  {
+    "code": "usday",
+    "name": "Dayton",
+    "state": "OH",
+    "lat": 39.75895,
+    "lon": -84.19161
+  },
+  {
+    "code": "usden",
+    "name": "Denver",
+    "state": "CO",
+    "lat": 39.73915,
+    "lon": -104.9847
+  },
+  {
+    "code": "usdet",
+    "name": "Detroit",
+    "state": "MI",
+    "lat": 42.33143,
+    "lon": -83.04575
+  },
+  {
+    "code": "usdlh",
+    "name": "Duluth",
+    "state": "MN",
+    "lat": 46.78327,
+    "lon": -92.10658
+  },
+  {
+    "code": "usdmo",
+    "name": "Sedalia",
+    "state": "MO",
+    "lat": 38.70446,
+    "lon": -93.22826
+  },
+  {
+    "code": "usdnp",
+    "name": "Derry",
+    "state": "NH",
+    "lat": 42.89175,
+    "lon": -71.31201
+  },
+  {
+    "code": "usdsm",
+    "name": "Des Moines",
+    "state": "IA",
+    "lat": 41.60054,
+    "lon": -93.60911
+  },
+  {
+    "code": "useka",
+    "name": "Eureka",
+    "state": "CA",
+    "lat": 40.80207,
+    "lon": -124.16367
+  },
+  {
+    "code": "uselp",
+    "name": "El Paso",
+    "state": "TX",
+    "lat": 31.75872,
+    "lon": -106.48693
+  },
+  {
+    "code": "usewr",
+    "name": "Newark",
+    "state": "NJ",
+    "lat": 40.73566,
+    "lon": -74.17237
+  },
+  {
+    "code": "useyw",
+    "name": "Key West",
+    "state": "FL",
+    "lat": 24.55524,
+    "lon": -81.78163
+  },
+  {
+    "code": "usfat",
+    "name": "Fresno",
+    "state": "CA",
+    "lat": 36.74773,
+    "lon": -119.77237
+  },
+  {
+    "code": "usfeb",
+    "name": "Fernandina Beach",
+    "state": "FL",
+    "lat": 30.6697,
+    "lon": -81.4626
+  },
+  {
+    "code": "usfhm",
+    "name": "Framingham",
+    "state": "MA",
+    "lat": 42.27926,
+    "lon": -71.41617
+  },
+  {
+    "code": "usflo",
+    "name": "Florence",
+    "state": "SC",
+    "lat": 34.19543,
+    "lon": -79.76256
+  },
+  {
+    "code": "usfmy",
+    "name": "Fort Myers",
+    "state": "FL",
+    "lat": 26.62168,
+    "lon": -81.84059
+  },
+  {
+    "code": "usfnl",
+    "name": "Fort Collins",
+    "state": "CO",
+    "lat": 40.58526,
+    "lon": -105.08442
+  },
+  {
+    "code": "usfpr",
+    "name": "Fort Pierce",
+    "state": "FL",
+    "lat": 27.44671,
+    "lon": -80.32561
+  },
+  {
+    "code": "usfwt",
+    "name": "Fort Worth",
+    "state": "TX",
+    "lat": 32.72541,
+    "lon": -97.32085
+  },
+  {
+    "code": "usfxg",
+    "name": "Fredericksburg",
+    "state": "TX",
+    "lat": 30.2817,
+    "lon": -98.8799
+  },
+  {
+    "code": "usgcc",
+    "name": "Gillette",
+    "state": "WY",
+    "lat": 44.29109,
+    "lon": -105.50222
+  },
+  {
+    "code": "usgda",
+    "name": "Glendale",
+    "state": "AZ",
+    "lat": 33.53865,
+    "lon": -112.18599
+  },
+  {
+    "code": "usgir",
+    "name": "Gilroy",
+    "state": "CA",
+    "lat": 37.00578,
+    "lon": -121.56828
+  },
+  {
+    "code": "usgls",
+    "name": "Galveston",
+    "state": "TX",
+    "lat": 29.30135,
+    "lon": -94.7977
+  },
+  {
+    "code": "usgnv",
+    "name": "Gainesville",
+    "state": "FL",
+    "lat": 29.65163,
+    "lon": -82.32483
+  },
+  {
+    "code": "usgoe",
+    "name": "Golden",
+    "state": "CO",
+    "lat": 39.75554,
+    "lon": -105.2211
+  },
+  {
+    "code": "usgpt",
+    "name": "Gulfport",
+    "state": "MS",
+    "lat": 30.36742,
+    "lon": -89.09282
+  },
+  {
+    "code": "usgrb",
+    "name": "Green Bay",
+    "state": "WI",
+    "lat": 44.51916,
+    "lon": -88.01983
+  },
+  {
+    "code": "usgrx",
+    "name": "Garland",
+    "state": "TX",
+    "lat": 32.91262,
+    "lon": -96.63888
+  },
+  {
+    "code": "usgv9",
+    "name": "Greenville",
+    "state": "SC",
+    "lat": 34.85262,
+    "lon": -82.39401
+  },
+  {
+    "code": "ushdu",
+    "name": "Hudson",
+    "state": "NH",
+    "lat": 42.769,
+    "lon": -71.4121
+  },
+  {
+    "code": "ushig",
+    "name": "Higganum",
+    "state": "CT",
+    "lat": 41.4682,
+    "lon": -72.5751
+  },
+  {
+    "code": "ushnl",
+    "name": "Honolulu",
+    "state": "HI",
+    "lat": 21.30694,
+    "lon": -157.85833
+  },
+  {
+    "code": "ushou",
+    "name": "Houston",
+    "state": "TX",
+    "lat": 29.76328,
+    "lon": -95.36327
+  },
+  {
+    "code": "ushtd",
+    "name": "Huntington Beach",
+    "state": "CA",
+    "lat": 33.6603,
+    "lon": -117.99923
+  },
+  {
+    "code": "ushvn",
+    "name": "New Haven",
+    "state": "CT",
+    "lat": 41.30815,
+    "lon": -72.92816
+  },
+  {
+    "code": "usict",
+    "name": "Wichita",
+    "state": "KS",
+    "lat": 37.69224,
+    "lon": -97.33754
+  },
+  {
+    "code": "usifp",
+    "name": "Bullhead City",
+    "state": "AZ",
+    "lat": 35.14778,
+    "lon": -114.5683
+  },
+  {
+    "code": "usilg",
+    "name": "Wilmington",
+    "state": "DE",
+    "lat": 39.74595,
+    "lon": -75.54659
+  },
+  {
+    "code": "usilm",
+    "name": "Wilmington",
+    "state": "NC",
+    "lat": 34.23556,
+    "lon": -77.94604
+  },
+  {
+    "code": "usiyh",
+    "name": "Miami Beach",
+    "state": "FL",
+    "lat": 25.79065,
+    "lon": -80.13005
+  },
+  {
+    "code": "usjax",
+    "name": "Jacksonville",
+    "state": "FL",
+    "lat": 30.33218,
+    "lon": -81.65565
+  },
+  {
+    "code": "usjgt",
+    "name": "Belmont",
+    "state": "MA",
+    "lat": 42.39593,
+    "lon": -71.17867
+  },
+  {
+    "code": "usjgx",
+    "name": "Glendale",
+    "state": "CA",
+    "lat": 34.14251,
+    "lon": -118.25508
+  },
+  {
+    "code": "usjnu",
+    "name": "Juneau",
+    "state": "AK",
+    "lat": 58.30194,
+    "lon": -134.41972
+  },
+  {
+    "code": "usjot",
+    "name": "Joliet",
+    "state": "IL",
+    "lat": 41.52519,
+    "lon": -88.0834
+  },
+  {
+    "code": "usjst",
+    "name": "Johnstown",
+    "state": "PA",
+    "lat": 40.32674,
+    "lon": -78.92197
+  },
+  {
+    "code": "uskck",
+    "name": "Kansas City",
+    "state": "KS",
+    "lat": 39.11417,
+    "lon": -94.62746
+  },
+  {
+    "code": "uskft",
+    "name": "West Frankfort",
+    "state": "IL",
+    "lat": 37.8979,
+    "lon": -88.9307
+  },
+  {
+    "code": "usknl",
+    "name": "Kingsland",
+    "state": "GA",
+    "lat": 30.79996,
+    "lon": -81.68983
+  },
+  {
+    "code": "uslas",
+    "name": "Las Vegas",
+    "state": "NV",
+    "lat": 36.17497,
+    "lon": -115.13722
+  },
+  {
+    "code": "uslax",
+    "name": "Los Angeles",
+    "state": "CA",
+    "lat": 34.05223,
+    "lon": -118.24368
+  },
+  {
+    "code": "uslbj",
+    "name": "Calabasas",
+    "state": "CA",
+    "lat": 34.15778,
+    "lon": -118.63842
+  },
+  {
+    "code": "uslcb",
+    "name": "Lucerne Valley",
+    "state": "CA",
+    "lat": 34.447,
+    "lon": -116.9189
+  },
+  {
+    "code": "uslee",
+    "name": "Leesburg",
+    "state": "FL",
+    "lat": 28.81082,
+    "lon": -81.87786
+  },
+  {
+    "code": "uslex",
+    "name": "Lexington",
+    "state": "KY",
+    "lat": 37.98869,
+    "lon": -84.47772
+  },
+  {
+    "code": "uslia",
+    "name": "Lima",
+    "state": "OH",
+    "lat": 40.74255,
+    "lon": -84.10523
+  },
+  {
+    "code": "uslit",
+    "name": "Little Rock",
+    "state": "AR",
+    "lat": 34.74648,
+    "lon": -92.28959
+  },
+  {
+    "code": "usljk",
+    "name": "Lakewood",
+    "state": "CO",
+    "lat": 39.70471,
+    "lon": -105.08137
+  },
+  {
+    "code": "uslmr",
+    "name": "Leominster",
+    "state": "MA",
+    "lat": 42.52509,
+    "lon": -71.75979
+  },
+  {
+    "code": "uslnk",
+    "name": "Lincoln",
+    "state": "NE",
+    "lat": 40.8,
+    "lon": -96.66696
+  },
+  {
+    "code": "uslns",
+    "name": "Lancaster",
+    "state": "PA",
+    "lat": 40.03788,
+    "lon": -76.30551
+  },
+  {
+    "code": "uslov",
+    "name": "Loveland",
+    "state": "CO",
+    "lat": 40.39776,
+    "lon": -105.07498
+  },
+  {
+    "code": "uslpc",
+    "name": "Lompoc",
+    "state": "CA",
+    "lat": 34.63915,
+    "lon": -120.45794
+  },
+  {
+    "code": "uslqq",
+    "name": "Lakewood",
+    "state": "CA",
+    "lat": 33.85363,
+    "lon": -118.13396
+  },
+  {
+    "code": "uslto",
+    "name": "Littleton",
+    "state": "CO",
+    "lat": 39.61332,
+    "lon": -105.01665
+  },
+  {
+    "code": "uslui",
+    "name": "Louisville",
+    "state": "KY",
+    "lat": 38.25424,
+    "lon": -85.75941
+  },
+  {
+    "code": "uslxi",
+    "name": "Lexington",
+    "state": "MA",
+    "lat": 42.44732,
+    "lon": -71.2245
+  },
+  {
+    "code": "uslxx",
+    "name": "Los Gatos",
+    "state": "CA",
+    "lat": 37.22661,
+    "lon": -121.97468
+  },
+  {
+    "code": "usmcn",
+    "name": "Macon",
+    "state": "GA",
+    "lat": 32.84069,
+    "lon": -83.6324
+  },
+  {
+    "code": "usmem",
+    "name": "Memphis",
+    "state": "TN",
+    "lat": 35.14953,
+    "lon": -90.04898
+  },
+  {
+    "code": "usmes",
+    "name": "Minneapolis",
+    "state": "MN",
+    "lat": 44.97997,
+    "lon": -93.26384
+  },
+  {
+    "code": "usmht",
+    "name": "Manchester",
+    "state": "NH",
+    "lat": 42.99564,
+    "lon": -71.45479
+  },
+  {
+    "code": "usmia",
+    "name": "Miami",
+    "state": "FL",
+    "lat": 25.77427,
+    "lon": -80.19366
+  },
+  {
+    "code": "usmjk",
+    "name": "Morro Bay",
+    "state": "CA",
+    "lat": 35.37265,
+    "lon": -120.8473
+  },
+  {
+    "code": "usmkc",
+    "name": "Kansas City",
+    "state": "MO",
+    "lat": 39.09973,
+    "lon": -94.57857
+  },
+  {
+    "code": "usmke",
+    "name": "Milwaukee",
+    "state": "WI",
+    "lat": 43.0389,
+    "lon": -87.90647
+  },
+  {
+    "code": "usmkl",
+    "name": "Jackson",
+    "state": "TN",
+    "lat": 35.61452,
+    "lon": -88.81395
+  },
+  {
+    "code": "usmob",
+    "name": "Mobile",
+    "state": "AL",
+    "lat": 30.69436,
+    "lon": -88.04305
+  },
+  {
+    "code": "usmoi",
+    "name": "Monroe",
+    "state": "MI",
+    "lat": 41.91643,
+    "lon": -83.39771
+  },
+  {
+    "code": "usmsy",
+    "name": "New Orleans",
+    "state": "LA",
+    "lat": 29.95465,
+    "lon": -90.07507
+  },
+  {
+    "code": "usmy3",
+    "name": "Monterey",
+    "state": "CA",
+    "lat": 36.60024,
+    "lon": -121.89468
+  },
+  {
+    "code": "usnak",
+    "name": "Natick",
+    "state": "MA",
+    "lat": 42.28343,
+    "lon": -71.3495
+  },
+  {
+    "code": "usndz",
+    "name": "Steele",
+    "state": "ND",
+    "lat": 46.8524,
+    "lon": -99.9336
+  },
+  {
+    "code": "usnfc",
+    "name": "Nevada City",
+    "state": "CA",
+    "lat": 39.3017,
+    "lon": -120.9717
+  },
+  {
+    "code": "usnrh",
+    "name": "New Port Richey",
+    "state": "FL",
+    "lat": 28.24418,
+    "lon": -82.71927
+  },
+  {
+    "code": "usnwc",
+    "name": "New Canaan",
+    "state": "CT",
+    "lat": 41.14676,
+    "lon": -73.49484
+  },
+  {
+    "code": "usnwt",
+    "name": "New Britain",
+    "state": "CT",
+    "lat": 41.66121,
+    "lon": -72.77954
+  },
+  {
+    "code": "usnyc",
+    "name": "New York City",
+    "state": "NY",
+    "lat": 40.71427,
+    "lon": -74.00597
+  },
+  {
+    "code": "usoaj",
+    "name": "Jacksonville",
+    "state": "NC",
+    "lat": 34.75405,
+    "lon": -77.43024
+  },
+  {
+    "code": "usocn",
+    "name": "Oceanside",
+    "state": "CA",
+    "lat": 33.19587,
+    "lon": -117.37948
+  },
+  {
+    "code": "usogg",
+    "name": "Kahului",
+    "state": "HI",
+    "lat": 20.88933,
+    "lon": -156.47293
+  },
+  {
+    "code": "usokc",
+    "name": "Oklahoma City",
+    "state": "OK",
+    "lat": 35.46756,
+    "lon": -97.51643
+  },
+  {
+    "code": "usoma",
+    "name": "Omaha",
+    "state": "NE",
+    "lat": 41.25626,
+    "lon": -95.94043
+  },
+  {
+    "code": "usont",
+    "name": "Ontario",
+    "state": "CA",
+    "lat": 34.06334,
+    "lon": -117.65089
+  },
+  {
+    "code": "usorb",
+    "name": "Orange",
+    "state": "CT",
+    "lat": 41.2815,
+    "lon": -73.0287
+  },
+  {
+    "code": "usorc",
+    "name": "Oregon City",
+    "state": "OR",
+    "lat": 45.35734,
+    "lon": -122.60676
+  },
+  {
+    "code": "usorl",
+    "name": "Orlando",
+    "state": "FL",
+    "lat": 28.53834,
+    "lon": -81.37924
+  },
+  {
+    "code": "usp2c",
+    "name": "Pinole",
+    "state": "CA",
+    "lat": 38.00437,
+    "lon": -122.29886
+  },
+  {
+    "code": "uspao",
+    "name": "Palo Alto",
+    "state": "CA",
+    "lat": 37.44188,
+    "lon": -122.14302
+  },
+  {
+    "code": "uspat",
+    "name": "Paterson",
+    "state": "NJ",
+    "lat": 40.91677,
+    "lon": -74.17181
+  },
+  {
+    "code": "uspbf",
+    "name": "Pine Bluff",
+    "state": "AR",
+    "lat": 34.22843,
+    "lon": -92.0032
+  },
+  {
+    "code": "uspbi",
+    "name": "West Palm Beach",
+    "state": "FL",
+    "lat": 26.71534,
+    "lon": -80.05337
+  },
+  {
+    "code": "uspfq",
+    "name": "Pacifica",
+    "state": "CA",
+    "lat": 37.61383,
+    "lon": -122.48692
+  },
+  {
+    "code": "usphl",
+    "name": "Philadelphia",
+    "state": "PA",
+    "lat": 39.95238,
+    "lon": -75.16362
+  },
+  {
+    "code": "usphx",
+    "name": "Phoenix",
+    "state": "AZ",
+    "lat": 33.44838,
+    "lon": -112.07404
+  },
+  {
+    "code": "uspit",
+    "name": "Pittsburgh",
+    "state": "PA",
+    "lat": 40.44062,
+    "lon": -79.99589
+  },
+  {
+    "code": "usppm",
+    "name": "Pompano Beach",
+    "state": "FL",
+    "lat": 26.23786,
+    "lon": -80.12477
+  },
+  {
+    "code": "uspqc",
+    "name": "Pomona",
+    "state": "CA",
+    "lat": 34.05529,
+    "lon": -117.75228
+  },
+  {
+    "code": "uspvd",
+    "name": "Providence",
+    "state": "RI",
+    "lat": 41.82399,
+    "lon": -71.41283
+  },
+  {
+    "code": "uspzl",
+    "name": "Port Saint Lucie",
+    "state": "FL",
+    "lat": 27.29393,
+    "lon": -80.35033
+  },
+  {
+    "code": "usrcu",
+    "name": "Rancho Cucamonga",
+    "state": "CA",
+    "lat": 34.1064,
+    "lon": -117.59311
+  },
+  {
+    "code": "usrdg",
+    "name": "Reading",
+    "state": "PA",
+    "lat": 40.33565,
+    "lon": -75.92687
+  },
+  {
+    "code": "usric",
+    "name": "Richmond",
+    "state": "VA",
+    "lat": 37.55376,
+    "lon": -77.46026
+  },
+  {
+    "code": "usril",
+    "name": "Rifle",
+    "state": "CO",
+    "lat": 39.5491,
+    "lon": -107.7898
+  },
+  {
+    "code": "usrkv",
+    "name": "Rockville",
+    "state": "MD",
+    "lat": 39.084,
+    "lon": -77.15276
+  },
+  {
+    "code": "usroc",
+    "name": "Rochester",
+    "state": "NY",
+    "lat": 43.15478,
+    "lon": -77.61556
+  },
+  {
+    "code": "usrok",
+    "name": "Rocky Hill",
+    "state": "CT",
+    "lat": 41.6583,
+    "lon": -72.6632
+  },
+  {
+    "code": "ussac",
+    "name": "Sacramento",
+    "state": "CA",
+    "lat": 38.58157,
+    "lon": -121.4944
+  },
+  {
+    "code": "ussan",
+    "name": "San Diego",
+    "state": "CA",
+    "lat": 32.71571,
+    "lon": -117.16472
+  },
+  {
+    "code": "ussat",
+    "name": "San Antonio",
+    "state": "TX",
+    "lat": 29.42412,
+    "lon": -98.49363
+  },
+  {
+    "code": "ussbn",
+    "name": "South Bend",
+    "state": "IN",
+    "lat": 41.68338,
+    "lon": -86.25001
+  },
+  {
+    "code": "ussbt",
+    "name": "San Bernardino",
+    "state": "CA",
+    "lat": 34.10834,
+    "lon": -117.28977
+  },
+  {
+    "code": "ussby",
+    "name": "Salisbury",
+    "state": "MD",
+    "lat": 38.36067,
+    "lon": -75.59937
+  },
+  {
+    "code": "ussck",
+    "name": "Stockton",
+    "state": "CA",
+    "lat": 37.9577,
+    "lon": -121.29078
+  },
+  {
+    "code": "usscz",
+    "name": "Santa Clara",
+    "state": "CA",
+    "lat": 37.35411,
+    "lon": -121.95524
+  },
+  {
+    "code": "ussea",
+    "name": "Seattle",
+    "state": "WA",
+    "lat": 47.60621,
+    "lon": -122.33207
+  },
+  {
+    "code": "ussfb",
+    "name": "Sanford",
+    "state": "FL",
+    "lat": 28.80055,
+    "lon": -81.27312
+  },
+  {
+    "code": "ussfo",
+    "name": "San Francisco",
+    "state": "CA",
+    "lat": 37.77493,
+    "lon": -122.41942
+  },
+  {
+    "code": "ussjc",
+    "name": "San Jose",
+    "state": "CA",
+    "lat": 37.33939,
+    "lon": -121.89496
+  },
+  {
+    "code": "ussjj",
+    "name": "Sherman Oaks",
+    "state": "CA",
+    "lat": 34.15112,
+    "lon": -118.44925
+  },
+  {
+    "code": "usslc",
+    "name": "Salt Lake City",
+    "state": "UT",
+    "lat": 40.76078,
+    "lon": -111.89105
+  },
+  {
+    "code": "ussmo",
+    "name": "Santa Monica",
+    "state": "CA",
+    "lat": 34.01949,
+    "lon": -118.49138
+  },
+  {
+    "code": "ussmx",
+    "name": "Santa Maria",
+    "state": "CA",
+    "lat": 34.95303,
+    "lon": -120.43572
+  },
+  {
+    "code": "ussnk",
+    "name": "Snyder",
+    "state": "TX",
+    "lat": 32.7315,
+    "lon": -100.91755
+  },
+  {
+    "code": "ussns",
+    "name": "Salinas",
+    "state": "CA",
+    "lat": 36.67774,
+    "lon": -121.6555
+  },
+  {
+    "code": "ussor",
+    "name": "Sonora",
+    "state": "CA",
+    "lat": 37.9957,
+    "lon": -120.3368
+  },
+  {
+    "code": "usspi",
+    "name": "Springfield",
+    "state": "IL",
+    "lat": 39.80172,
+    "lon": -89.64371
+  },
+  {
+    "code": "ussru",
+    "name": "Santa Cruz",
+    "state": "CA",
+    "lat": 36.97412,
+    "lon": -122.0308
+  },
+  {
+    "code": "usssk",
+    "name": "Southampton",
+    "state": "NY",
+    "lat": 40.8943,
+    "lon": -72.3999
+  },
+  {
+    "code": "usstp",
+    "name": "Saint Paul",
+    "state": "MN",
+    "lat": 44.94441,
+    "lon": -93.09327
+  },
+  {
+    "code": "usstz",
+    "name": "Scottsdale",
+    "state": "AZ",
+    "lat": 33.50921,
+    "lon": -111.89903
+  },
+  {
+    "code": "ussuu",
+    "name": "Fairfield",
+    "state": "CA",
+    "lat": 38.24936,
+    "lon": -122.03997
+  },
+  {
+    "code": "usszg",
+    "name": "Sebastian",
+    "state": "FL",
+    "lat": 27.81641,
+    "lon": -80.47061
+  },
+  {
+    "code": "ustht",
+    "name": "Thornton",
+    "state": "CO",
+    "lat": 39.86804,
+    "lon": -104.97192
+  },
+  {
+    "code": "ustiw",
+    "name": "Tacoma",
+    "state": "WA",
+    "lat": 47.25288,
+    "lon": -122.44429
+  },
+  {
+    "code": "ustlh",
+    "name": "Tallahassee",
+    "state": "FL",
+    "lat": 30.43826,
+    "lon": -84.28073
+  },
+  {
+    "code": "ustmc",
+    "name": "Temecula",
+    "state": "CA",
+    "lat": 33.49364,
+    "lon": -117.14836
+  },
+  {
+    "code": "ustol",
+    "name": "Toledo",
+    "state": "OH",
+    "lat": 41.66394,
+    "lon": -83.55521
+  },
+  {
+    "code": "ustpa",
+    "name": "Tampa",
+    "state": "FL",
+    "lat": 27.94752,
+    "lon": -82.45843
+  },
+  {
+    "code": "usttn",
+    "name": "Trenton",
+    "state": "NJ",
+    "lat": 40.21705,
+    "lon": -74.74294
+  },
+  {
+    "code": "ustul",
+    "name": "Tulsa",
+    "state": "OK",
+    "lat": 36.15398,
+    "lon": -95.99277
+  },
+  {
+    "code": "ustuz",
+    "name": "Tucson",
+    "state": "AZ",
+    "lat": 32.22174,
+    "lon": -110.92648
+  },
+  {
+    "code": "ustvc",
+    "name": "Traverse City",
+    "state": "MI",
+    "lat": 44.76306,
+    "lon": -85.62063
+  },
+  {
+    "code": "usubs",
+    "name": "Columbus",
+    "state": "MS",
+    "lat": 33.49567,
+    "lon": -88.42726
+  },
+  {
+    "code": "usuyj",
+    "name": "Steubenville",
+    "state": "OH",
+    "lat": 40.36979,
+    "lon": -80.63396
+  },
+  {
+    "code": "usvbr",
+    "name": "Barre",
+    "state": "VT",
+    "lat": 44.1945,
+    "lon": -72.4936
+  },
+  {
+    "code": "usvis",
+    "name": "Visalia",
+    "state": "CA",
+    "lat": 36.33023,
+    "lon": -119.29206
+  },
+  {
+    "code": "usvlo",
+    "name": "Vallejo",
+    "state": "CA",
+    "lat": 38.10409,
+    "lon": -122.25664
+  },
+  {
+    "code": "uswai",
+    "name": "Waitsfield",
+    "state": "VT",
+    "lat": 44.1889,
+    "lon": -72.8283
+  },
+  {
+    "code": "uswas",
+    "name": "Washington",
+    "state": "DC",
+    "lat": 38.89511,
+    "lon": -77.03637
+  },
+  {
+    "code": "uswct",
+    "name": "West Chester",
+    "state": "PA",
+    "lat": 39.96097,
+    "lon": -75.60804
+  },
+  {
+    "code": "uswhr",
+    "name": "Whittier",
+    "state": "CA",
+    "lat": 33.97918,
+    "lon": -118.03284
+  },
+  {
+    "code": "uswko",
+    "name": "Weslaco",
+    "state": "TX",
+    "lat": 26.15952,
+    "lon": -97.99084
+  },
+  {
+    "code": "uswmx",
+    "name": "West Monroe",
+    "state": "LA",
+    "lat": 32.49303333333334,
+    "lon": -92.17360000000001
+  },
+  {
+    "code": "uswwu",
+    "name": "West Hollywood",
+    "state": "CA",
+    "lat": 34.09001,
+    "lon": -118.36174
+  },
+  {
+    "code": "usxfr",
+    "name": "Fontana",
+    "state": "CA",
+    "lat": 34.09223,
+    "lon": -117.43505
+  },
+  {
+    "code": "usxfx",
+    "name": "Grants Pass",
+    "state": "OR",
+    "lat": 42.43933,
+    "lon": -123.33067
+  },
+  {
+    "code": "usxlu",
+    "name": "Seaside",
+    "state": "CA",
+    "lat": 36.61107,
+    "lon": -121.85162
+  },
+  {
+    "code": "usxmg",
+    "name": "Maple Grove",
+    "state": "MN",
+    "lat": 45.07246,
+    "lon": -93.45579
+  },
+  {
+    "code": "usxsk",
+    "name": "Shaker Heights",
+    "state": "OH",
+    "lat": 41.47394,
+    "lon": -81.53707
+  },
+  {
+    "code": "usyum",
+    "name": "Yuma",
+    "state": "AZ",
+    "lat": 32.72532,
+    "lon": -114.6244
+  },
+  {
+    "code": "uszgv",
+    "name": "North Miami Beach",
+    "state": "FL",
+    "lat": 25.93315,
+    "lon": -80.16255
+  }
+]

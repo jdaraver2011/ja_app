@@ -303,7 +303,9 @@ class MainActivity : ComponentActivity() {
     var selectedPerson by remember { mutableStateOf<TmdbPersonCredit?>(null) }
     val detailsBackStack = remember { mutableStateListOf<DetailReturnPoint>() }
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
-    val weather = rememberJaWeather(active = playback == null && !exiting)
+    val liveTv = remember { JaLiveTvState(JaLiveTvRepository(appContext)) }
+    var liveChannel by remember { mutableStateOf<JaLiveChannel?>(null) }
+    val weather = rememberJaWeather(active = playback == null && liveChannel == null && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
     SideEffect {
         weather.returnToNavigation = {
@@ -617,11 +619,11 @@ class MainActivity : ComponentActivity() {
             } finally { tvPopularLoading = false }
         }
     }
-    LaunchedEffect(playback,playbackLoading) {
-        JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading)
-        JaMusicService.setVideoActive(playback != null || playbackLoading)
+    LaunchedEffect(playback,playbackLoading,liveChannel) {
+        JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading || liveChannel != null)
+        JaMusicService.setVideoActive(playback != null || playbackLoading || liveChannel != null)
     }
-    val catalogueVisible = selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
+    val catalogueVisible = liveChannel == null && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.
     LaunchedEffect(catalogueGeneration, catalogueDate, catalogueVisible, tab, searchGenre, sourceDataVersion) {
         val genre = searchGenre
@@ -899,6 +901,7 @@ class MainActivity : ComponentActivity() {
     BackHandler {
         if (exiting) return@BackHandler
         when {
+            liveChannel != null -> { liveChannel = null }
             weatherOpen -> { weatherOpen = false; weatherReturnFocus = true }
             playback != null -> {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=ANDROID_BACK")
@@ -923,6 +926,10 @@ class MainActivity : ComponentActivity() {
         Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) {
             Text("Closing JA…", color = Color.White)
         }
+        return
+    }
+    liveChannel?.let { channel ->
+        JaLiveTvPlayer(channel) { liveChannel = null }
         return
     }
     if (weatherOpen) {
@@ -1354,7 +1361,7 @@ class MainActivity : ComponentActivity() {
                 val activeView = if (isMovieTab) moviesView else tvView
                 JaUnscaledTopBar {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks")).forEach { view ->
+                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks", "Live TV")).forEach { view ->
                             TvSecondaryButton(
                                 text = view,
                                 selected = activeView == view,
@@ -1364,7 +1371,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                if (!isMovieTab && activeView == "Networks") {
+                if (!isMovieTab && activeView == "Live TV") {
+                    JaLiveTvScreen(liveTv, weather.zip, onPlay = { liveChannel = it },
+                        modifier = Modifier.fillMaxWidth().weight(1f))
+                } else if (!isMovieTab && activeView == "Networks") {
                     JaNetworksScreen(
                         repo = networksRepo, state = networksState, returnFocus = titleReturnFocus,
                         marked = { marked(it) }, onOpen = { open(it) },
