@@ -1,7 +1,8 @@
-2504dc4b261b4f33dcd487d9b27d27404b84ce88b11077c20d6135f3a2320703  .github/workflows/build-apk.yml
-bd7f1c7bdee0932abaa7b82a37f13250437d0569676b4b33ab54651232917321  README.md
+949dafd135f81e741cf989c421de639bdbddd8e544fdef2a88d81a44c90c5d7c  .github/workflows/build-apk.yml
+8d92b519fb9596f88e6973dbfc631d5bdbc6b62f9cb07d17b525c18b12a16990  .github/workflows/publish-v2.3.5.yml
+65ff1a3771db4993b7b4602ef1e1dda97610192ef2b637136d9c6f55da0cb142  README.md
 f9662b2810af35c765e4ab1de5fcd640487ea8a9f15fef3460053d449c8141cd  UPDATE-SETUP.md
-5f22e46dab9685c8b1accf21436fbb83e0855bdb414e2e9b8bb2b5035729fc9f  app/build.gradle.kts
+27f08674dab239dde858e38dcfeb8dbe0d55690b332c590d25299c4b5d65eea8  app/build.gradle.kts
 3fa750378ec87de6f6d74044345683e326f6c387dbac46f6380724b8bb612266  app/src/main/AndroidManifest.xml
 be213e358a38b1ef1818c51c527fc6a94ec322af5a94ef65c7d053b4602087f6  app/src/main/assets/ja_autoplay/manifest.json
 baafa6f29ade6728b8d6903073b33cfd58d9966aec55045515255ca3193e7eb8  app/src/main/assets/ja_autoplay/movy-landing.js
@@ -33,11 +34,11 @@ d50336b6d98e4b0392fa7ba1d819e033d8e2b035afd521b5017b268e74855acf  app/src/main/j
 13438b96888b7301825b5498eccfd3c4fc0c23721374141ac70439670f195c83  app/src/main/java/com/example/ja/JaUpdateRules.java
 b26319ca55606349a8838fbf6cef4766468ce1e7486840ed99c24075bcaf8712  app/src/main/java/com/example/ja/JaUpdateSettings.kt
 20cb2320ba75bcedbc13878b912102968fe55571f8d44329fb4d5aef0b9c5a02  app/src/main/java/com/example/ja/JaWeatherHeader.kt
-92d26ac42b98692371d34dc4e385f157670dca2e1dba83ed97219b0d2317bc30  app/src/main/java/com/example/ja/JaWeatherImagery.kt
+75963465eeddd060e22f9f8771552b00a0635871c51140efa6af45a5de5207f1  app/src/main/java/com/example/ja/JaWeatherImagery.kt
 fd5ea683999d54e9c1e26002682b82daf64d42000730b97f0b6d786375862ea3  app/src/main/java/com/example/ja/JaWeatherMediaRules.java
-46e497bde6ff110086b16c4b18868711492371b140ab36cfbe6859254d11fbbc  app/src/main/java/com/example/ja/JaWeatherRepository.kt
+42e69bc823dfd9fe34a1941c62acc7f4aceb96eca8441d3b56c6d3ccac9c40fc  app/src/main/java/com/example/ja/JaWeatherRepository.kt
 65d462bd1c4f0337b2a63d37c433a62c2a1ca2292b9e944067f8e6a963d19e22  app/src/main/java/com/example/ja/JaWeatherRules.java
-0a975bb50f4c846397184635ca7be03e74a04002d4da5c4f5dfee236376dbfe6  app/src/main/java/com/example/ja/JaWeatherScreen.kt
+ee1ec81dba54fae677b18e1226c373d0bd6091024c71b20c35680b838076d727  app/src/main/java/com/example/ja/JaWeatherScreen.kt
 4c372cc4e675a7cd12e6f47742690bd0f54cb7afa34fc0dbe297674d161a607f  app/src/main/java/com/example/ja/MainActivity.kt
 dfc9dfb647eec6670d608d27951abb36331cb97a4d627e6b0d6d69d1fe24a603  app/src/main/java/com/example/ja/Models.kt
 1b2e98badedea3504db8f9d36e880539974fec3a22adb7ca271d7df7cf8c88e5  app/src/main/java/com/example/ja/Playback.kt

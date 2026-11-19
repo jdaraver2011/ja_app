@@ -46,7 +46,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 internal data class JaWeatherFrame(val time: String, val file: File)
-internal data class JaWeatherLoop(val satellite: Boolean, val frames: List<JaWeatherFrame>, val base: File?, val legend: File?, val markerX: Float, val markerY: Float)
+internal data class JaWeatherLoop(val frames: List<JaWeatherFrame>, val base: File?, val legend: File?, val markerX: Float, val markerY: Float)
 internal class JaWeatherImageryRepository(context: Context) {
     private val directory = File(context.cacheDir, "weather-imagery").apply { mkdirs() }
     private val client = OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS)
@@ -54,7 +54,7 @@ internal class JaWeatherImageryRepository(context: Context) {
     private val permits = Semaphore(3)
     private fun bytes(url: String): ByteArray {
         require(java.net.URI(url).host in listOf("nowcoast.noaa.gov","basemap.nationalmap.gov"))
-        client.newCall(Request.Builder().url(url).header("User-Agent","JA/2.3.4 (https://github.com/jdaraver2011/ja_app)").build()).execute().use { r ->
+        client.newCall(Request.Builder().url(url).header("User-Agent","JA/2.3.5 (https://github.com/jdaraver2011/ja_app)").build()).execute().use { r ->
             check(r.isSuccessful) { "Imagery service unavailable" }
             val b = r.body?.bytes() ?: error("Empty imagery response")
             check(b.size <= 3 * 1024 * 1024) { "Imagery response too large" }
@@ -74,15 +74,13 @@ internal class JaWeatherImageryRepository(context: Context) {
         file.setLastModified(System.currentTimeMillis())
         return file
     }
-    suspend fun load(data: JaWeatherData, satellite: Boolean): JaWeatherLoop = withContext(Dispatchers.IO) {
+    suspend fun load(data: JaWeatherData): JaWeatherLoop = withContext(Dispatchers.IO) {
         require(data.latitude.isFinite() && data.longitude.isFinite())
         val files = directory.listFiles().orEmpty().sortedByDescending { it.lastModified() }
         var size = 0L
         files.forEach { size += it.length(); if (size > 128L*1024*1024 || it.lastModified() < System.currentTimeMillis()-86400000) it.delete() }
-        val service = if (satellite) "satellite" else "weather_radar"
-        val layer = if (satellite) { if (data.longitude > 0) "global_longwave_imagery_mosaic" else "goes_longwave_imagery" }
-            else JaWeatherMediaRules.radarLayer(data.latitude,data.longitude)
-        val endpoint = "https://nowcoast.noaa.gov/geoserver/observations/$service/ows"
+        val layer = JaWeatherMediaRules.radarLayer(data.latitude,data.longitude)
+        val endpoint = "https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows"
         val xml = String(bytes("$endpoint?service=WMS&request=GetCapabilities&version=1.1.1"), Charsets.UTF_8)
             .replace(Regex("<!DOCTYPE[^>]*>"), "")
         val parser = Xml.newPullParser()
@@ -98,8 +96,8 @@ internal class JaWeatherImageryRepository(context: Context) {
         }
         val times = JaWeatherMediaRules.frames(csv,System.currentTimeMillis())
         check(times.size >= 2) { "Animation history unavailable" }
-        val bounds = JaWeatherMediaRules.bounds(data.latitude,data.longitude,satellite)
-        val base = if (satellite) null else runCatching {
+        val bounds = JaWeatherMediaRules.bounds(data.latitude,data.longitude,false)
+        val base = runCatching {
             image("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/export".toHttpUrl().newBuilder()
                 .addQueryParameter("bbox",bounds).addQueryParameter("bboxSR","4326").addQueryParameter("imageSR","4326")
                 .addQueryParameter("size","640,400").addQueryParameter("format","png32").addQueryParameter("f","image").build().toString())
@@ -122,7 +120,7 @@ internal class JaWeatherImageryRepository(context: Context) {
             .addQueryParameter("version","1.1.1").addQueryParameter("request","GetLegendGraphic")
             .addQueryParameter("layer",layer).addQueryParameter("format","image/png").build().toString()) }.getOrNull()
         val edges = bounds.split(",").map { it.toDouble() }
-        JaWeatherLoop(satellite,frames,base,legend,((data.longitude-edges[0])/(edges[2]-edges[0])).toFloat(),
+        JaWeatherLoop(frames,base,legend,((data.longitude-edges[0])/(edges[2]-edges[0])).toFloat(),
             ((edges[3]-data.latitude)/(edges[3]-edges[1])).toFloat())
     }
 }
@@ -143,62 +141,89 @@ private fun frameTime(time: String) = runCatching {
 }.getOrDefault("Unavailable")
 
 @Composable
-internal fun JaWeatherAnimationWindows(data: JaWeatherData, revision: Int) {
+internal fun JaWeatherRadarWindow(data: JaWeatherData, revision: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val repository = remember { JaWeatherImageryRepository(context) }
     val resumed = rememberWeatherResumed()
     var radar by remember(data.zip) { mutableStateOf<JaWeatherLoop?>(null) }
-    var satellite by remember(data.zip) { mutableStateOf<JaWeatherLoop?>(null) }
     var radarError by remember(data.zip) { mutableStateOf(false) }
-    var satelliteError by remember(data.zip) { mutableStateOf(false) }
-    var enlarged by remember { mutableStateOf<JaWeatherLoop?>(null) }
+    var enlarged by remember(data.zip) { mutableStateOf(false) }
+    var focus by remember { mutableStateOf(false) }
     LaunchedEffect(data.zip,data.fetchedAt,revision,resumed) {
-        if (!resumed) return@LaunchedEffect
-        supervisorScope {
-            launch { try { radar = repository.load(data,false); radarError = false }
-                catch (e: CancellationException) { throw e } catch (_: Exception) { radarError = true } }
-            launch { try { satellite = repository.load(data,true); satelliteError = false }
-                catch (e: CancellationException) { throw e } catch (_: Exception) { satelliteError = true } }
-        }
+        if(!resumed) return@LaunchedEffect
+        try { radar=repository.load(data);radarError=false }
+        catch(e:CancellationException){throw e} catch(_:Exception){radarError=true}
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (isSatellite in listOf(false,true)) {
-            val loop = if (isSatellite) satellite else radar
-            val error = if (isSatellite) satelliteError else radarError
-            var focus by remember(isSatellite) { mutableStateOf(false) }
-            Column(Modifier.weight(1f).onFocusChanged { focus = it.isFocused }
-                .border(if(focus) 2.dp else 1.dp,if(focus)Color.White else Color.Gray,RoundedCornerShape(5.dp))
-                .clickable(enabled = loop != null) { enlarged = loop }.padding(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (isSatellite) "Satellite · infrared" else "Radar", color=Color.White,fontSize=11.sp,lineHeight=13.sp)
-                if (loop == null) Box(Modifier.fillMaxWidth().height(88.dp),contentAlignment=Alignment.Center) {
-                    Text(if(error) "Imagery unavailable" else "Loading 6h history…",color=Color.LightGray,fontSize=10.sp)
-                } else {
-                    WeatherLoopImage(loop,Modifier.fillMaxWidth().height(88.dp),resumed && enlarged == null)
-                    Text(if(error) "Saved frames · tap to expand" else "6h requested · tap to expand",color=Color.LightGray,fontSize=9.sp,lineHeight=11.sp)
+    Column(modifier.onFocusChanged{focus=it.isFocused}
+        .border(if(focus)2.dp else 1.dp,if(focus)Color.White else Color.Gray,RoundedCornerShape(5.dp))
+        .clickable(enabled=radar!=null){enlarged=true}.padding(4.dp),
+        horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(3.dp)) {
+        val loop=radar
+        if(loop==null) Text("Radar",color=Color.White,fontSize=13.sp,lineHeight=16.sp)
+        if(loop==null) Box(Modifier.fillMaxWidth().weight(1f),contentAlignment=Alignment.Center) {
+            Text(if(radarError)"Radar unavailable" else "Loading six-hour history…",color=Color.LightGray,fontSize=12.sp)
+        } else RadarLoopPanel(loop,Modifier.fillMaxWidth().weight(1f),resumed && !enlarged,preview=true)
+        Text(if(radarError)"Saved radar · Select to expand" else "Six-hour history · Select to expand",color=Color.LightGray,fontSize=10.sp,lineHeight=12.sp)
+    }
+    val loop=radar
+    if(enlarged && loop!=null) Dialog(onDismissRequest={enlarged=false},properties=DialogProperties(usePlatformDefaultWidth=false)) {
+        BackHandler{enlarged=false}
+        var playing by remember{mutableStateOf(true)}
+        var step by remember{mutableIntStateOf(0)}
+        var zoom by remember{mutableFloatStateOf(1f)}
+        val firstFocus=remember{FocusRequester()}
+        LaunchedEffect(Unit){firstFocus.requestFocus()}
+        Column(Modifier.fillMaxSize().background(Color(0xFF111725)).padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            Text("Radar · ${data.place}",color=Color.White,fontSize=20.sp,lineHeight=24.sp)
+            Text("${frameTime(loop.frames.first().time)} → ${frameTime(loop.frames.last().time)} · Six-hour window",color=Color.LightGray,fontSize=11.sp,lineHeight=14.sp)
+            RadarLoopPanel(loop,Modifier.fillMaxWidth().weight(1f),resumed && playing,step,zoom)
+            Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
+                Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                    TvFocusButton(onClick={playing=!playing},modifier=Modifier.focusRequester(firstFocus)){Text(if(playing)"Pause" else "Play")}
+                    TvFocusButton(onClick={playing=false;step--}){Text("Previous")}
+                    TvFocusButton(onClick={playing=false;step++}){Text("Next")}
+                    TvFocusButton(onClick={zoom=(zoom+0.5f).coerceAtMost(3f)}){Text("Zoom +")}
+                    TvFocusButton(onClick={zoom=(zoom-0.5f).coerceAtLeast(1f)}){Text("Zoom −")}
+                    TvFocusButton(onClick={enlarged=false}){Text("Close")}
                 }
             }
         }
     }
-    enlarged?.let { loop ->
-        val shown = (if(loop.satellite) satellite else radar) ?: loop
-        Dialog(onDismissRequest={enlarged=null},properties=DialogProperties(usePlatformDefaultWidth=false)) {
-            BackHandler { enlarged=null }
-            var playing by remember { mutableStateOf(true) }
-            var step by remember { mutableIntStateOf(0) }
-            var zoom by remember { mutableFloatStateOf(1f) }
-            val firstFocus=remember { FocusRequester() }
-            LaunchedEffect(Unit) { firstFocus.requestFocus() }
-            Column(Modifier.fillMaxSize().background(Color(0xFF111725)).padding(12.dp)) {
-                Text("${if(loop.satellite) "Satellite · infrared" else "Radar"} · ${data.place}",color=Color.White,fontSize=20.sp)
-                Text("${frameTime(shown.frames.first().time)} → ${frameTime(shown.frames.last().time)} · Six-hour window",color=Color.LightGray,fontSize=11.sp)
-                WeatherLoopImage(shown,Modifier.fillMaxWidth().weight(1f),resumed && playing,step,zoom)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    TvFocusButton(onClick={playing=!playing},modifier=Modifier.focusRequester(firstFocus)) { Text(if(playing) "Pause" else "Play") }
-                    TvFocusButton(onClick={playing=false;step--}) { Text("Previous") }
-                    TvFocusButton(onClick={playing=false;step++}) { Text("Next") }
-                    TvFocusButton(onClick={zoom=(zoom+0.5f).coerceAtMost(3f)}) { Text("Zoom +") }
-                    TvFocusButton(onClick={zoom=(zoom-0.5f).coerceAtLeast(1f)}) { Text("Zoom −") }
-                    TvFocusButton(onClick={enlarged=null}) { Text("Close") }
+}
+
+/** Metadata has its own header, leaving the map unobstructed at every size. */
+@Composable
+private fun RadarLoopPanel(loop:JaWeatherLoop,modifier:Modifier,running:Boolean,step:Int=0,zoom:Float=1f,preview:Boolean=false) {
+    var index by remember(loop){mutableIntStateOf(0)}
+    LaunchedEffect(loop,running){while(running && isActive){delay(if(index==loop.frames.lastIndex)1200 else 400);index=(index+1)%loop.frames.size}}
+    var previousStep by remember(loop){mutableIntStateOf(step)}
+    LaunchedEffect(loop,step){val delta=step-previousStep;previousStep=step;index=Math.floorMod(index+delta,loop.frames.size)}
+    val frame=loop.frames[index.coerceIn(0,loop.frames.lastIndex)]
+    Column(modifier,verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        if(preview) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.Top) {
+            Text("Radar · ${frameTime(frame.time)} · ${loop.frames.size} frames",color=Color.White,fontSize=11.sp,lineHeight=14.sp,
+                modifier=Modifier.weight(1f),maxLines=2)
+            Text("NOAA · USGS map",color=Color.LightGray,fontSize=10.sp,lineHeight=14.sp,maxLines=1)
+        } else BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val wide=maxWidth>=600.dp
+            if(wide) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.Top) {
+                Text("${frameTime(frame.time)} · Frame ${index+1}/${loop.frames.size}${if(zoom>1f)" · ${zoom}×" else ""}",
+                    color=Color.White,fontSize=13.sp,lineHeight=17.sp,modifier=Modifier.weight(1f),maxLines=2)
+                RadarLegend(loop,Modifier.width(minOf(320.dp,maxWidth*0.45f)))
+            } else Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                Text("${frameTime(frame.time)} · Frame ${index+1}/${loop.frames.size}",color=Color.White,fontSize=12.sp,lineHeight=16.sp)
+                RadarLegend(loop,Modifier.fillMaxWidth())
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds().background(Color(0xFF172230)),contentAlignment=Alignment.Center) {
+            // The small wide preview crops equally above/below; fullscreen fits the complete map.
+            val mapWidth=if(preview)maxOf(maxWidth,maxHeight*1.6f) else minOf(maxWidth,maxHeight*1.6f)
+            Box(Modifier.requiredSize(mapWidth,mapWidth/1.6f).graphicsLayer(scaleX=zoom,scaleY=zoom)) {
+                loop.base?.let{AsyncImage(it,null,Modifier.fillMaxSize(),contentScale=ContentScale.FillBounds)}
+                AsyncImage(frame.file,null,Modifier.fillMaxSize(),contentScale=ContentScale.FillBounds)
+                Canvas(Modifier.fillMaxSize()) {
+                    val position=Offset(size.width*loop.markerX,size.height*loop.markerY)
+                    drawCircle(Color.White,6.dp.toPx(),position);drawCircle(Color.Magenta,3.dp.toPx(),position)
                 }
             }
         }
@@ -206,28 +231,12 @@ internal fun JaWeatherAnimationWindows(data: JaWeatherData, revision: Int) {
 }
 
 @Composable
-private fun WeatherLoopImage(loop: JaWeatherLoop, modifier: Modifier, running: Boolean, step: Int=0, zoom: Float=1f) {
-    var index by remember(loop) { mutableIntStateOf(0) }
-    LaunchedEffect(loop,running) {
-        while(running && isActive) { delay(if(index==loop.frames.lastIndex) 1200 else 400);index=(index+1)%loop.frames.size }
-    }
-    var previousStep by remember(loop) { mutableIntStateOf(0) }
-    LaunchedEffect(step) { val delta=step-previousStep;previousStep=step;index=Math.floorMod(index+delta,loop.frames.size) }
-    val frame=loop.frames[index.coerceIn(0,loop.frames.lastIndex)]
-    BoxWithConstraints(modifier.clipToBounds().background(Color(0xFF172230)),contentAlignment=Alignment.Center) {
-        val mapWidth = minOf(maxWidth,maxHeight*1.6f)
-        Box(Modifier.width(mapWidth).aspectRatio(1.6f).graphicsLayer(scaleX=zoom,scaleY=zoom)) {
-            loop.base?.let { AsyncImage(it,null,Modifier.fillMaxSize(),contentScale=ContentScale.FillBounds) }
-            AsyncImage(frame.file,null,Modifier.fillMaxSize(),contentScale=ContentScale.FillBounds)
-            Canvas(Modifier.fillMaxSize()) {
-                val position=Offset(size.width*loop.markerX,size.height*loop.markerY)
-                drawCircle(Color.White,6.dp.toPx(),position)
-                drawCircle(Color.Magenta,3.dp.toPx(),position)
-            }
-        }
-        if(maxHeight > 150.dp) loop.legend?.let { AsyncImage(it,"Image scale",Modifier.align(Alignment.CenterEnd).width(78.dp).heightIn(max=200.dp),contentScale=ContentScale.Fit) }
-        Text("${frameTime(frame.time)} · ${loop.frames.size} frames",Modifier.align(Alignment.BottomStart).background(Color(0xCC000000)).padding(2.dp),color=Color.White,fontSize=10.sp)
-        Text("NOAA · ${if(loop.satellite) "GOES IR" else "USGS map"}",Modifier.align(Alignment.TopEnd).background(Color(0xCC000000)).padding(2.dp),color=Color.White,fontSize=9.sp)
-        if (zoom > 1f) Text("${zoom}×",Modifier.align(Alignment.TopStart),color=Color.White,fontSize=12.sp)
+private fun RadarLegend(loop:JaWeatherLoop,modifier:Modifier) {
+    Column(modifier,horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(2.dp)) {
+        Text("NOAA · USGS map",color=Color.LightGray,fontSize=10.sp,lineHeight=13.sp)
+        Text("Radar reflectivity",color=Color.White,fontSize=11.sp,lineHeight=14.sp)
+        if(loop.legend!=null) AsyncImage(loop.legend,"Radar reflectivity color scale",
+            Modifier.fillMaxWidth().aspectRatio(272f/21f).background(Color(0xFF333C48)),contentScale=ContentScale.Fit)
+        else Text("Color scale unavailable",color=Color.LightGray,fontSize=11.sp)
     }
 }

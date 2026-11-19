@@ -1,6 +1,7 @@
 package com.example.ja
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -19,6 +20,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -219,7 +225,21 @@ internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSetting
                     modifier = Modifier.size(36.dp).focusRequester(firstFocus).onFocusChanged { focused=it.isFocused }
                         .border(if(focused)2.dp else 0.dp, if(focused)Color.White else Color.Transparent, RoundedCornerShape(18.dp))
                         .semantics { contentDescription = "Refresh weather" }) {
-                    Text("↻",fontSize=24.sp)
+                    val symbolColor=LocalContentColor.current
+                    Canvas(Modifier.size(22.dp)) {
+                        val radius=size.minDimension*0.34f
+                        val middle=center
+                        drawArc(symbolColor,30f,285f,false,Offset(middle.x-radius,middle.y-radius),Size(radius*2,radius*2),
+                            style=Stroke(width=2.dp.toPx(),cap=StrokeCap.Round))
+                        val tip=Offset(middle.x+radius*0.7071f,middle.y-radius*0.7071f)
+                        val back=3.dp.toPx();val side=2.dp.toPx()
+                        val arrow=Path().apply {
+                            moveTo(tip.x,tip.y)
+                            lineTo(tip.x-0.7071f*(back+side),tip.y-0.7071f*(back-side))
+                            lineTo(tip.x-0.7071f*(back-side),tip.y-0.7071f*(back+side));close()
+                        }
+                        drawPath(arrow,symbolColor)
+                    }
                 }
                 Column(Modifier.weight(1f)) {
                     Text("Current Conditions", color=weatherGold,fontSize=20.sp,lineHeight=24.sp)
@@ -237,7 +257,7 @@ internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSetting
                 val alert=data.alerts.getOrNull(alertIndex)
                 if(wide) Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     WeatherAlertList(data,alertIndex,Modifier.weight(0.22f).fillMaxHeight().verticalScroll(rememberScrollState())) { alertIndex=it }
-                    WeatherConditions(data,state.revision,Modifier.weight(0.56f).fillMaxHeight().verticalScroll(rememberScrollState()))
+                    WeatherConditions(data,state.revision,Modifier.weight(0.56f).fillMaxHeight())
                     WeatherAffectedArea(alert,Modifier.weight(0.22f).fillMaxHeight().verticalScroll(rememberScrollState()).focusable())
                 } else {
                     WeatherConditions(data,state.revision,Modifier.fillMaxWidth())
@@ -265,20 +285,32 @@ internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSetting
 }
 
 @Composable
-private fun WeatherConditions(data: JaWeatherData, revision: Int, modifier: Modifier) {
-    Column(modifier.background(weatherBlue,RoundedCornerShape(6.dp)).padding(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-            Text(data.temperature,color=Color.White,fontSize=26.sp,lineHeight=30.sp)
-            Spacer(Modifier.width(8.dp))
-            Text(data.conditions,color=Color.White,fontSize=13.sp,lineHeight=16.sp,modifier=Modifier.weight(1f),maxLines=2)
-            data.icon?.let { AsyncImage(it,null,Modifier.size(36.dp)) }
+private fun WeatherConditions(data:JaWeatherData,revision:Int,modifier:Modifier) {
+    BoxWithConstraints(modifier.background(weatherBlue,RoundedCornerShape(6.dp))) {
+        val bounded=constraints.hasBoundedHeight
+        val roomy=bounded && maxHeight>=260.dp
+        val body=when {
+            roomy->Modifier.fillMaxSize()
+            bounded->Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+            else->Modifier.fillMaxWidth()
         }
-        val fields=listOf("Wind" to data.wind,"Humidity" to data.humidity,"Dewpoint" to data.dewpoint,
-            "Ceiling" to data.ceiling,"Visibility" to data.visibility,"Pressure" to data.pressure,"Wind chill" to data.windChill)
-        for(pair in fields.chunked(2)) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            pair.forEach { (label,value)-> Text("$label: $value",color=Color.White,fontSize=11.sp,lineHeight=14.sp,modifier=Modifier.weight(1f),maxLines=1) }
+        Column(body.padding(10.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text(data.temperature,color=Color.White,fontSize=28.sp,lineHeight=32.sp)
+                Spacer(Modifier.width(10.dp))
+                Text(data.conditions,color=Color.White,fontSize=14.sp,lineHeight=18.sp,modifier=Modifier.weight(1f),maxLines=2)
+                data.icon?.let{AsyncImage(it,null,Modifier.size(40.dp))}
+            }
+            val fields=listOf("Wind" to data.wind,"Humidity" to data.humidity,"Dewpoint" to data.dewpoint,
+                "Ceiling" to data.ceiling,"Visibility" to data.visibility,"Pressure" to data.pressure,"Wind chill" to data.windChill)
+            Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                for(pair in fields.chunked(2)) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    pair.forEach{(label,value)->Text("$label: $value",color=Color.White,fontSize=12.sp,lineHeight=16.sp,
+                        modifier=Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis)}
+                }
+            }
+            JaWeatherRadarWindow(data,revision,if(roomy)Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().height(200.dp))
         }
-        JaWeatherAnimationWindows(data,revision)
     }
 }
 
