@@ -34,7 +34,7 @@ d50336b6d98e4b0392fa7ba1d819e033d8e2b035afd521b5017b268e74855acf  app/src/main/j
 13438b96888b7301825b5498eccfd3c4fc0c23721374141ac70439670f195c83  app/src/main/java/com/example/ja/JaUpdateRules.java
 b26319ca55606349a8838fbf6cef4766468ce1e7486840ed99c24075bcaf8712  app/src/main/java/com/example/ja/JaUpdateSettings.kt
 20cb2320ba75bcedbc13878b912102968fe55571f8d44329fb4d5aef0b9c5a02  app/src/main/java/com/example/ja/JaWeatherHeader.kt
-75963465eeddd060e22f9f8771552b00a0635871c51140efa6af45a5de5207f1  app/src/main/java/com/example/ja/JaWeatherImagery.kt
+7512955c225fa5751a26861acca21fb74953897c7915d80806f7c330fa02eacc  app/src/main/java/com/example/ja/JaWeatherImagery.kt
 fd5ea683999d54e9c1e26002682b82daf64d42000730b97f0b6d786375862ea3  app/src/main/java/com/example/ja/JaWeatherMediaRules.java
 42e69bc823dfd9fe34a1941c62acc7f4aceb96eca8441d3b56c6d3ccac9c40fc  app/src/main/java/com/example/ja/JaWeatherRepository.kt
 65d462bd1c4f0337b2a63d37c433a62c2a1ca2292b9e944067f8e6a963d19e22  app/src/main/java/com/example/ja/JaWeatherRules.java

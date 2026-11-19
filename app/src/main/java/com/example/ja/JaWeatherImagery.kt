@@ -206,10 +206,11 @@ private fun RadarLoopPanel(loop:JaWeatherLoop,modifier:Modifier,running:Boolean,
             Text("NOAA · USGS map",color=Color.LightGray,fontSize=10.sp,lineHeight=14.sp,maxLines=1)
         } else BoxWithConstraints(Modifier.fillMaxWidth()) {
             val wide=maxWidth>=600.dp
+            val legendWidth=minOf(320.dp,maxWidth*0.45f)
             if(wide) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.Top) {
                 Text("${frameTime(frame.time)} · Frame ${index+1}/${loop.frames.size}${if(zoom>1f)" · ${zoom}×" else ""}",
                     color=Color.White,fontSize=13.sp,lineHeight=17.sp,modifier=Modifier.weight(1f),maxLines=2)
-                RadarLegend(loop,Modifier.width(minOf(320.dp,maxWidth*0.45f)))
+                RadarLegend(loop,Modifier.width(legendWidth))
             } else Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 Text("${frameTime(frame.time)} · Frame ${index+1}/${loop.frames.size}",color=Color.White,fontSize=12.sp,lineHeight=16.sp)
                 RadarLegend(loop,Modifier.fillMaxWidth())
