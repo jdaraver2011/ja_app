@@ -114,7 +114,7 @@ internal class JaLiveTvRepository(private val context:Context) {
     private fun parseGuide(file:File,channels:List<JaLiveChannel>,now:Long,checkActive:()->Unit):List<JaLiveProgram> {
         val ids=channels.associateBy{it.id}
         val bases=channels.groupBy{JaLiveTvRules.baseId(it.id)}
-        val names=channels.groupBy{JaLiveTvRules.guideName(it.name)}
+        val names=channels.flatMap{channel -> JaLiveTvRules.guideKeys(channel.id,channel.name).map{it to channel}}.groupBy({it.first},{it.second})
         val aliases=mutableMapOf<String,String>();val guideNames=mutableMapOf<String,MutableSet<String>>()
         val candidates=mutableMapOf<String,MutableSet<String>>()
         val programs=mutableListOf<JaLiveProgram>()

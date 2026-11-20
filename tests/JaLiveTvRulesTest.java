@@ -10,6 +10,9 @@ public final class JaLiveTvRulesTest {
         check(!JaLiveTvRules.guideName("ABC New Orleans").equals(JaLiveTvRules.guideName("ABC Los Angeles")));
         check(JaLiveTvRules.xmlTime("20261119120000 -0600")==JaLiveTvRules.xmlTime("20261119180000 +0000"));
         check(JaLiveTvRules.xmlTime("bad")==-1);
+        check(JaLiveTvRules.guideKeys("NBC.us@WDSU","NBC WDSU").contains("wdsudt"));
+        check(!JaLiveTvRules.guideKeys("NBC.us@WDSU","NBC WDSU").contains("wdsudt2"));
+        check(!JaLiveTvRules.guideKeys("CBSNewsMiami.us@SD","CBS News Miami").contains("wfordt"));
         check(JaLiveTvRules.distance(30,-90,30,-90)<0.001);
         check(JaLiveTvRules.distance(30,-90,30.5,-91)<JaLiveTvRules.distance(30,-90,40,-74));
         check(Double.isInfinite(JaLiveTvRules.distance(Double.NaN,0,0,0)));

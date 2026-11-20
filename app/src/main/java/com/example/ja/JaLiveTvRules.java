@@ -27,6 +27,16 @@ public final class JaLiveTvRules {
             .replaceAll("\\b(?:hd|sd|uhd)\\b", "")
             .replaceAll("[^a-z0-9]", "");
     }
+    public static Set<String> guideKeys(String id,String name) {
+        Set<String> keys=new LinkedHashSet<>();keys.add(guideName(name));
+        String[] parts=id.split("@",2);
+        String station=parts.length>1?parts[1]:"";
+        if(!station.matches("[WK][A-Z0-9]{2,5}"))station=parts[0].replaceFirst("\\.us$", "");
+        if(station.matches("[WK][A-Z0-9]{2,5}")) {
+            keys.add(guideName(station));keys.add(guideName(station+"-DT"));
+        }
+        return keys;
+    }
     public static String baseId(String id) {return id.split("@",2)[0];}
     public static long xmlTime(String value) {
         try {return OffsetDateTime.parse(value.trim(),DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT)).toInstant().toEpochMilli();}
