@@ -53,6 +53,11 @@ private val weatherRed = Color(0xFF631F28)
 
 @Stable
 internal class JaWeatherState(val repository: JaWeatherRepository) {
+    var weatherStar by mutableStateOf(repository.weatherStar())
+    var sound by mutableStateOf(repository.sound()); private set
+    var volume by mutableFloatStateOf(repository.volume()); private set
+    fun changeSound(value:Boolean){sound=value;repository.saveSound(value)}
+    fun changeVolume(value:Float){volume=value.coerceIn(0f,1f);repository.saveVolume(volume)}
     var zip by mutableStateOf(repository.savedZip())
     var data by mutableStateOf<JaWeatherData?>(null)
     var loading by mutableStateOf(false)
@@ -118,6 +123,11 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
     var entry by rememberSaveable { mutableStateOf(state.zip) }
     var message by remember { mutableStateOf<String?>(null) }
     Text("Weather", style = MaterialTheme.typography.titleLarge, color = Color.White)
+    Row(verticalAlignment=Alignment.CenterVertically) {
+        Checkbox(checked=state.weatherStar,onCheckedChange={state.weatherStar=it;state.repository.saveWeatherStar(it)})
+        Text("Use WeatherStar 4000+ card and dashboard",color=Color.White)
+    }
+    Text("Off: current NWS dashboard. On: bundled WeatherStar widescreen presentation. Both use NOAA/NWS weather and your saved ZIP code.",color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
     JaEntryField(value = entry, onValueChange = { value ->
         entry = value.filter { it in '0'..'9' }.take(5); message = null
     }, label = { Text("Preferred ZIP code") }, singleLine = true,
@@ -163,7 +173,7 @@ internal fun JaWeatherCard(state: JaWeatherState, modifier: Modifier = Modifier,
         }
         Column(Modifier.fillMaxSize().padding(inset), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy((if (compact) 1f else 4f * scale).dp, Alignment.CenterVertically)) {
-            Text(data?.place ?: "Local weather", color = weatherGold, fontSize = (if (compact) 11f else 13f * scale).sp,
+            Text(if(state.weatherStar) "WeatherStar · ${data?.place ?: state.zip}" else data?.place ?: "Local weather", color = weatherGold, fontSize = (if (compact) 11f else 13f * scale).sp,
                 lineHeight = (if (compact) 12f else 16f * scale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             if (data != null) {
@@ -207,7 +217,8 @@ private fun weatherTime(value: String): String = runCatching {
 }.getOrDefault("Unavailable")
 
 @Composable
-internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSettings: () -> Unit) {
+internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSettings: () -> Unit, onWeatherChannel: () -> Unit = {}) {
+    if(state.weatherStar){JaWeatherStarPage(state,onClose,onWeatherChannel);return}
     BackHandler(onBack = onClose)
     val data = state.data
     var alertIndex by remember(data?.zip, data?.fetchedAt) { mutableIntStateOf(0) }
@@ -241,6 +252,7 @@ internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSetting
                         drawPath(arrow,symbolColor)
                     }
                 }
+                TvFocusButton(onClick=onWeatherChannel){Text("Channel 1",fontSize=12.sp)}
                 Column(Modifier.weight(1f)) {
                     Text("Current Conditions", color=weatherGold,fontSize=20.sp,lineHeight=24.sp)
                     Text(data?.let { "${it.place} · ${it.zip}" } ?: "Local weather",color=Color.White,fontSize=12.sp,lineHeight=15.sp)
