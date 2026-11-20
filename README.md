@@ -1,6 +1,6 @@
 # JA — current project
 
-Current release: **2.4.6 (20406)**, based on the stable v2.4.5 baseline. The separate Music Lab experiment is not included.
+Current release: **2.4.7 (20407)**, based on v2.4.6. The separate Music Lab experiment is not included.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,13 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.4.6-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.4.7-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.4.7 adds the confirmed IPTV arrangement: a collapsible group sidebar on the left, preview above the guide on the right, and Left/Right navigation between groups, guide and the main IPTV tab. The preview resumes the last successfully playing channel; OK/tap on a channel opens fullscreen. Back returns to the guide. Preview and fullscreen share one player; leaving IPTV stops it.
+- Hold remote OK on a channel name to pick it up, Up/Down to move, OK to save and Back to cancel. Touch supports long-press and drag. Every IPTV group retains its own order; filtered edits preserve hidden entries and temporary outages preserve stored IDs. Visible movement arrows are removed. Native Search, ZIP and IPTV Search require OK/tap to activate editing; navigating onto a box does not open the keyboard.
+- Full regressions, signed APK compilation, strict lint and the IPTV catalog publication gate passed in [run 44772694211](https://github.com/jdaraver2011/ja_app/actions/runs/44772694211). [v2.4.7](https://github.com/jdaraver2011/ja_app/releases/tag/v2.4.7) is the latest public device update. Public package/version/size/SHA-256 metadata matches the release APK. Real-device layout, focus, remote-hold, touch-drag and preview transition verification remain required. See [release details](docs/RELEASE-2.4.7.md).
 
 - v2.4.6 moves IPTV into the main navigation immediately after TV, with a white IPTV heading and channel search on the same row. The feed-check wording is removed. Favorite stars appear before channel names; Favorites > Reorder provides up/down controls and Done. Ordering persists across refreshes, restarts and temporarily missing channels.
 - IPTV retains its loaded catalog, indexed guide, group/time/list positions and return-channel focus through playback. Cached schedules appear while concurrent national/Pluto refreshes publish partial results. XML matching/date parsing and visible-range guide composition reduce repeated work. History reconciliation runs off Main, and immutable poster models enable Compose skipping. First-time EPG speed still depends on providers; device performance and layout verification remain required.
