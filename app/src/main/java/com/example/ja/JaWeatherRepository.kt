@@ -40,7 +40,7 @@ internal class JaWeatherRepository(context: Context) {
     }
     fun weatherStar()=prefs.getBoolean("weatherstar",false)
     fun saveWeatherStar(value:Boolean){prefs.edit().putBoolean("weatherstar",value).apply()}
-    fun sound()=prefs.getBoolean("weatherstar-sound",false)
+    fun sound()=prefs.getBoolean("weatherstar-sound",true)
     fun saveSound(value:Boolean){prefs.edit().putBoolean("weatherstar-sound",value).apply()}
     fun volume()=prefs.getFloat("weatherstar-volume",0.5f)
     fun saveVolume(value:Float){prefs.edit().putFloat("weatherstar-volume",value).apply()}
