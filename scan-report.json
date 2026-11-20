@@ -1,36 +1,229 @@
 {
-  "generatedAt": "2026-11-20T01:53:32.119589+00:00",
+  "generatedAt": "2026-11-20T03:36:35.411549+00:00",
   "candidateStreams": 3202,
-  "verifiedChannels": 1764,
-  "verifiedStreams": 2618,
+  "verifiedChannels": 1747,
+  "verifiedStreams": 2608,
   "excluded": {
     "frozen": 25,
-    "error": 543,
+    "error": 553,
     "ended": 9,
     "unsupported": 7
   },
-  "seconds": 228,
+  "seconds": 233,
   "sources": {
     "iptv-org": {
       "candidateStreams": 3190,
-      "verified": 2613,
+      "verified": 2604,
       "frozen": 25,
-      "error": 538,
+      "error": 547,
       "ended": 7,
       "unsupported": 7,
-      "verifiedChannels": 1761
+      "verifiedChannels": 1745
+    },
+    "category:movies": {
+      "candidateStreams": 195,
+      "verified": 164,
+      "frozen": 2,
+      "error": 28,
+      "unsupported": 1,
+      "verifiedChannels": 164,
+      "usEntries": 195,
+      "duplicateStreamEntries": 195,
+      "additionalCandidates": 0
+    },
+    "category:kids": {
+      "candidateStreams": 121,
+      "verified": 100,
+      "error": 20,
+      "unsupported": 1,
+      "verifiedChannels": 100,
+      "usEntries": 121,
+      "duplicateStreamEntries": 121,
+      "additionalCandidates": 0
+    },
+    "category:animation": {
+      "candidateStreams": 70,
+      "verified": 61,
+      "error": 9,
+      "verifiedChannels": 61,
+      "usEntries": 70,
+      "duplicateStreamEntries": 70,
+      "additionalCandidates": 0
+    },
+    "category:music": {
+      "candidateStreams": 77,
+      "verified": 54,
+      "error": 21,
+      "frozen": 2,
+      "verifiedChannels": 54,
+      "usEntries": 77,
+      "duplicateStreamEntries": 77,
+      "additionalCandidates": 0
+    },
+    "category:series": {
+      "candidateStreams": 256,
+      "verified": 232,
+      "error": 23,
+      "frozen": 1,
+      "verifiedChannels": 232,
+      "usEntries": 256,
+      "duplicateStreamEntries": 256,
+      "additionalCandidates": 0
+    },
+    "category:news": {
+      "candidateStreams": 111,
+      "verified": 67,
+      "frozen": 2,
+      "error": 41,
+      "ended": 1,
+      "verifiedChannels": 67,
+      "usEntries": 111,
+      "duplicateStreamEntries": 111,
+      "additionalCandidates": 0
+    },
+    "category:entertainment": {
+      "candidateStreams": 182,
+      "verified": 157,
+      "error": 23,
+      "ended": 1,
+      "frozen": 1,
+      "verifiedChannels": 157,
+      "usEntries": 182,
+      "duplicateStreamEntries": 182,
+      "additionalCandidates": 0
+    },
+    "category:sports": {
+      "candidateStreams": 103,
+      "verified": 80,
+      "error": 23,
+      "verifiedChannels": 80,
+      "usEntries": 103,
+      "duplicateStreamEntries": 103,
+      "additionalCandidates": 0
+    },
+    "category:business": {
+      "candidateStreams": 19,
+      "verified": 18,
+      "error": 1,
+      "verifiedChannels": 18,
+      "usEntries": 19,
+      "duplicateStreamEntries": 19,
+      "additionalCandidates": 0
+    },
+    "category:documentary": {
+      "candidateStreams": 67,
+      "frozen": 1,
+      "error": 12,
+      "verified": 54,
+      "verifiedChannels": 54,
+      "usEntries": 67,
+      "duplicateStreamEntries": 67,
+      "additionalCandidates": 0
+    },
+    "category:comedy": {
+      "candidateStreams": 75,
+      "verified": 67,
+      "error": 8,
+      "verifiedChannels": 67,
+      "usEntries": 75,
+      "duplicateStreamEntries": 75,
+      "additionalCandidates": 0
+    },
+    "category:auto": {
+      "candidateStreams": 13,
+      "verified": 13,
+      "verifiedChannels": 13,
+      "usEntries": 13,
+      "duplicateStreamEntries": 13,
+      "additionalCandidates": 0
     },
     "free-tv": {
       "candidateStreams": 28,
-      "error": 6,
-      "verified": 20,
+      "error": 7,
+      "verified": 19,
       "ended": 2,
-      "verifiedChannels": 20,
+      "verifiedChannels": 19,
       "usEntries": 28,
       "duplicateStreamEntries": 16,
       "additionalCandidates": 12,
-      "additionalVerifiedStreams": 5,
-      "additionalVerifiedChannels": 3
+      "additionalVerifiedStreams": 4,
+      "additionalVerifiedChannels": 2
+    },
+    "category:weather": {
+      "candidateStreams": 10,
+      "verified": 8,
+      "error": 2,
+      "verifiedChannels": 8,
+      "usEntries": 10,
+      "duplicateStreamEntries": 10,
+      "additionalCandidates": 0
+    },
+    "category:cooking": {
+      "candidateStreams": 19,
+      "verified": 16,
+      "error": 3,
+      "verifiedChannels": 16,
+      "usEntries": 19,
+      "duplicateStreamEntries": 19,
+      "additionalCandidates": 0
+    },
+    "category:classic": {
+      "candidateStreams": 48,
+      "verified": 47,
+      "error": 1,
+      "verifiedChannels": 47,
+      "usEntries": 48,
+      "duplicateStreamEntries": 48,
+      "additionalCandidates": 0
+    },
+    "category:education": {
+      "candidateStreams": 63,
+      "verified": 35,
+      "error": 25,
+      "frozen": 1,
+      "unsupported": 2,
+      "verifiedChannels": 35,
+      "usEntries": 63,
+      "duplicateStreamEntries": 63,
+      "additionalCandidates": 0
+    },
+    "category:travel": {
+      "candidateStreams": 14,
+      "verified": 13,
+      "error": 1,
+      "verifiedChannels": 13,
+      "usEntries": 14,
+      "duplicateStreamEntries": 14,
+      "additionalCandidates": 0
+    },
+    "category:science": {
+      "candidateStreams": 5,
+      "error": 1,
+      "verified": 4,
+      "verifiedChannels": 4,
+      "usEntries": 5,
+      "duplicateStreamEntries": 5,
+      "additionalCandidates": 0
     }
+  },
+  "categories": {
+    "news": 79,
+    "sports": 87,
+    "movies": 172,
+    "series": 244,
+    "entertainment": 161,
+    "documentary": 56,
+    "kids": 105,
+    "animation": 63,
+    "comedy": 70,
+    "music": 63,
+    "cooking": 18,
+    "travel": 13,
+    "science": 4,
+    "education": 35,
+    "business": 20,
+    "weather": 9,
+    "classic": 48,
+    "auto": 13
   }
 }
