@@ -11,7 +11,8 @@ public final class JaLiveTvRulesTest {
         check(JaLiveTvRules.xmlTime("20261119120000 -0600")==JaLiveTvRules.xmlTime("20261119180000 +0000"));
         check(JaLiveTvRules.xmlTime("bad")==-1);
         check(JaLiveTvRules.views().get(0).equals("Favorites"));
-        check(JaLiveTvRules.views().get(1).equals("United States"));
+        check(JaLiveTvRules.views().get(1).equals("With EPG"));
+        check(JaLiveTvRules.views().get(2).equals("United States"));
         check(JaLiveTvRules.views().size()==21);
         check(JaLiveTvRules.category("Documentaries").equals("documentary"));
         check(JaLiveTvRules.category("Auto and Motoring").equals("auto"));
