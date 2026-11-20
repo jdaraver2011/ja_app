@@ -14,7 +14,13 @@ with tempfile.TemporaryDirectory() as tmp:
     for f in music.glob('*.mp3'):f.unlink()
     urllib.request.urlretrieve(f'https://media.githubusercontent.com/media/jacaudi/ws4kp/{PIN}/web/server/music/default/{track}',music/track)
     assert hashlib.sha256((music/track).read_bytes()).hexdigest()==expected,'Music LFS digest mismatch'
-    subprocess.run(['npm','ci','--no-audit','--no-fund'],cwd=web,check=True)
+    scaling=web/'server/scripts/modules/utils/scaling.mjs'
+    raw=scaling.read_text()
+    assert 'const resize = (force = false) => {' in raw
+    raw="import fitJaKiosk from './ja-kiosk.mjs';\n"+raw.replace('const resize = (force = false) => {','const resize = (force = false) => {\n\tif (fitJaKiosk()) return;')
+    scaling.write_text(raw)
+    shutil.copy(root/'scripts/weatherstar/ja-kiosk.mjs',scaling.parent/'ja-kiosk.mjs')
+    subprocess.run(['npm','ci' ,'--no-audit','--no-fund'],cwd=web,check=True)
     subprocess.run(['npm','run','build'],cwd=web,check=True)
     if out.exists():shutil.rmtree(out)
     shutil.copytree(web/'dist',out)
