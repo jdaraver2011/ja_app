@@ -41,7 +41,17 @@ jobs:
           gradle-version: '9.6.0'
       - uses: actions/setup-node@v7.1.0
         with:
-          node-version: '22'
+          node-version: '24'
+      - name: Build bundled WeatherStar client
+        run: python3 scripts/build-weatherstar.py
+      - name: Smoke test bundled weather presentation
+        run: |
+          python3 -m pip install --user playwright==1.56.0
+          python3 tests/weatherstar-smoke.py
+      - name: Check navigation levels
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-navigation-tests" app/src/main/java/com/example/ja/JaNavigationRules.java tests/JaNavigationRulesTest.java
+          java -cp "$RUNNER_TEMP/ja-navigation-tests" com.example.ja.JaNavigationRulesTest
       - name: Check player scripts
         run: |
           while IFS= read -r -d '' script; do
@@ -212,7 +222,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.4.8-debug
+          name: JA-2.4.9-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
