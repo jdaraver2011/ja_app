@@ -7,6 +7,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -19,84 +21,63 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
-internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>)
-internal data class JaLivePlaylist(val code:String,val name:String,val distanceKm:Double=0.0) {
-    val url:String get()=if(code=="us")"https://iptv-org.github.io/iptv/countries/us.m3u" else "https://iptv-org.github.io/iptv/cities/$code.m3u"
-}
+internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>,
+    val headers:Map<String,Map<String,String>> = emptyMap())
 internal data class JaLiveProgram(val channel:String,val start:Long,val end:Long,val title:String)
-internal data class JaLiveChannels(val channels:List<JaLiveChannel>,val saved:Boolean)
+internal data class JaLiveChannels(val channels:List<JaLiveChannel>,val saved:Boolean,val verifiedAt:String)
 internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Long,val saved:Boolean)
 
 internal class JaLiveTvRepository(private val context:Context) {
+    private companion object { val catalogLock=Mutex() }
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
     private val client=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS)
         .callTimeout(120,TimeUnit.SECONDS).build()
-    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.2 (https://github.com/jdaraver2011/ja_app)").build()
+    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.3 (https://github.com/jdaraver2011/ja_app)").build()
     private fun text(url:String,limit:Long,timeoutSeconds:Long=120):String = client.newCall(request(url)).also{it.timeout().timeout(timeoutSeconds,TimeUnit.SECONDS)}.execute().use { r ->
         if(!r.isSuccessful)throw IOException("HTTP ${r.code}")
         val body=r.body?:throw IOException("Empty response")
         LimitedInput(body.byteStream(),limit).bufferedReader().use{it.readText()}
     }
-    suspend fun nearest(zip:String):List<JaLivePlaylist> = withContext(Dispatchers.IO) {
-        if(!JaWeatherRules.validZip(zip))return@withContext emptyList()
-        val file=File(root,"zip-$zip.json")
-        val location=if(file.exists())JSONObject(file.readText()) else JSONObject(text("https://api.zippopotam.us/us/$zip",64_000)).also{write(file,it.toString())}
-        val p=location.getJSONArray("places").getJSONObject(0)
-        val lat=p.getString("latitude").toDouble();val lon=p.getString("longitude").toDouble()
-        val data=JSONArray(context.assets.open("live-tv/cities.json").bufferedReader().use{it.readText()})
-        (0 until data.length()).map{data.getJSONObject(it)}.map{
-            JaLivePlaylist(it.getString("code"),"${it.getString("name")}, ${it.getString("state")}",
-                JaLiveTvRules.distance(lat,lon,it.getDouble("lat"),it.getDouble("lon")))
-        }.filter{it.distanceKm.isFinite()}.sortedWith(compareBy<JaLivePlaylist>{it.distanceKm}.thenBy{it.code}).take(3)
-    }
-    suspend fun channels(playlist:JaLivePlaylist,force:Boolean=false):JaLiveChannels = withContext(Dispatchers.IO) {
-        require(playlist.code=="us"||Regex("us[a-z0-9]+").matches(playlist.code))
-        val file=File(root,"${playlist.code}.m3u")
-        if(!force&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),86_400_000))return@withContext JaLiveChannels(parsePlaylist(file.readText()),false)
+    suspend fun channels(force:Boolean=false):JaLiveChannels = withContext(Dispatchers.IO) { catalogLock.withLock {
+        val file=File(root,"verified-us.json")
+        val cached=runCatching{parseCatalog(file.readText(),false)}.getOrNull()
+        if(!force&&cached!=null&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),86_400_000))
+            return@withContext cached
         try {
-            val raw=text(playlist.url,4_000_000)
-            val parsed=parsePlaylist(raw)
-            if(parsed.isEmpty())throw IOException("No channels in playlist")
-            write(file,raw);JaLiveChannels(parsed,false)
-        }catch(e:Exception){if(file.exists())JaLiveChannels(parsePlaylist(file.readText()),true) else throw e}
-    }
-    private fun parsePlaylist(raw:String):List<JaLiveChannel> {
-        require(raw.trimStart().startsWith("#EXTM3U"))
-        val channels=linkedMapOf<String,JaLiveChannel>();var info:String?=null
-        raw.lineSequence().map{it.trim()}.forEach{line ->
-            if(line.startsWith("#EXTINF:"))info=line
-            else if(line.isNotBlank()&&!line.startsWith("#")) {
-                val item=info;info=null
-                if(item!=null&&webUrl(line)) {
-                    val name=JaLiveTvRules.name(item)
-                    val id=JaLiveTvRules.attribute(item,"tvg-id").ifBlank{line}
-                    if(name.isNotBlank()) {
-                        val old=channels[id]
-                        channels[id]=old?.copy(urls=(old.urls+line).distinct())?:JaLiveChannel(id,name,
-                            JaLiveTvRules.attribute(item,"tvg-logo").takeIf{webUrl(it)}?:"",listOf(line))
-                    }
-                }
-            }
+            val raw=text("https://raw.githubusercontent.com/jdaraver2011/ja_app/live-tv-data/catalog.json",8_000_000,25)
+            val parsed=parseCatalog(raw,false)
+            write(file,raw);parsed
+        }catch(e:CancellationException){throw e}catch(e:Exception){
+            cached?.copy(saved=true)?:throw e
         }
-        return channels.values.sortedBy{it.name.lowercase()}
+    }}
+    private fun parseCatalog(raw:String,saved:Boolean):JaLiveChannels {
+        val doc=JSONObject(raw)
+        require(doc.getInt("schema")==1)
+        val verified=doc.getString("generatedAt")
+        val stamp=java.time.Instant.parse(verified).toEpochMilli()
+        require(stamp>0&&stamp<=System.currentTimeMillis()+300_000)
+        val entries=doc.getJSONArray("channels")
+        require(entries.length() in 1..10000)
+        val channels=(0 until entries.length()).map{entries.getJSONObject(it)}.mapNotNull{c ->
+            val streams=c.getJSONArray("streams")
+            val headers=mutableMapOf<String,Map<String,String>>()
+            val urls=(0 until streams.length()).map{streams.getJSONObject(it)}.mapNotNull{stream ->
+                val url=stream.optString("url")
+                if(!webUrl(url))null else {
+                    val h=mutableMapOf<String,String>()
+                    stream.optString("userAgent").takeIf{it.isNotBlank()&&!it.contains('\n')&&!it.contains('\r')}?.let{h["User-Agent"]=it}
+                    stream.optString("referrer").takeIf{webUrl(it)}?.let{h["Referer"]=it}
+                    headers[url]=h;url
+                }
+            }.distinct()
+            if(urls.isEmpty())null else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers)
+        }.distinctBy{it.id}.sortedBy{it.name.lowercase()}
+        require(channels.isNotEmpty())
+        return JaLiveChannels(channels,saved,verified)
     }
-    /** Generated city/country lists can lag the stream API. Supplement only the exact selected channel/feed. */
-    suspend fun playbackChannel(channel:JaLiveChannel,force:Boolean=false):JaLiveChannel = withContext(Dispatchers.IO) {
-        val file=File(root,"streams.json")
-        val raw=try {
-            if(!force&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),3_600_000))file.readText()
-            else text("https://iptv-org.github.io/api/streams.json",16_000_000,8).also{JSONArray(it);write(file,it)}
-        }catch(e:CancellationException){throw e}catch(_:Exception){if(file.exists())file.readText() else return@withContext channel}
-        val data=JSONArray(raw)
-        val base=JaLiveTvRules.baseId(channel.id)
-        val feed=channel.id.substringAfter('@',"")
-        val extra=(0 until data.length()).map{data.getJSONObject(it)}.filter{
-            it.optString("channel")==base&&(feed.isBlank()||it.optString("feed")==feed)
-                &&it.optString("user_agent").let{v->v.isBlank()||v=="null"}
-                &&it.optString("referrer").let{v->v.isBlank()||v=="null"}
-        }.map{it.optString("url")}.filter{webUrl(it)}
-        channel.copy(urls=(channel.urls+extra).distinct())
-    }
+    suspend fun playbackChannel(channel:JaLiveChannel,force:Boolean=false):JaLiveChannel =
+        channels(force).channels.firstOrNull{it.id==channel.id}?:throw IOException("Channel no longer verified live")
 
     // One compressed download per six hours; keep only matching channel schedules for 48 hours.
     suspend fun guide(channels:List<JaLiveChannel>,force:Boolean=false):JaLiveGuide = withContext(Dispatchers.IO) {

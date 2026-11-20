@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i("JA_STARTUP", "APP_BUILD versionName=${BuildConfig.VERSION_NAME} versionCode=${BuildConfig.VERSION_CODE}")
+        JaLiveTvUpdates.schedule(applicationContext)
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()
         if (intent.getBooleanExtra(JaMusicService.OPEN_MUSIC, false)) musicOpenRequest++
         setContent { MaterialTheme(colorScheme = darkColorScheme(primary = accent, background = bg, surface = Color(0xFF202832), onBackground = Color.White, onSurface = Color.White, onSurfaceVariant = Color.LightGray)) { StreamingApp(db.dao(), musicOpenRequest) } }
@@ -303,7 +304,7 @@ class MainActivity : ComponentActivity() {
     var selectedPerson by remember { mutableStateOf<TmdbPersonCredit?>(null) }
     val detailsBackStack = remember { mutableStateListOf<DetailReturnPoint>() }
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
-    val liveTv = remember { JaLiveTvState(JaLiveTvRepository(appContext)) }
+    val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext)) }
     var liveChannel by remember { mutableStateOf<JaLiveChannel?>(null) }
     val weather = rememberJaWeather(active = playback == null && liveChannel == null && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -1372,7 +1373,7 @@ class MainActivity : ComponentActivity() {
                 }
                 Spacer(Modifier.height(10.dp))
                 if (!isMovieTab && activeView == "Live TV") {
-                    JaLiveTvScreen(liveTv, weather.zip, onPlay = { liveChannel = it },
+                    JaLiveTvScreen(liveTv, onPlay = { liveChannel = it },
                         modifier = Modifier.fillMaxWidth().weight(1f))
                 } else if (!isMovieTab && activeView == "Networks") {
                     JaNetworksScreen(

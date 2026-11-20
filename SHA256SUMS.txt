@@ -1,9 +1,9 @@
-65e03767e05e01b9f0659a12d4b3cc31ae2a93d55412ff42de7aa2f0b1ea5790  .github/workflows/build-apk.yml
-39d2f934ebb2bb6023fba214abd97c19b00c9914055cf5c815b1b0dfef1ac562  .github/workflows/build-v2.4.2.yml
-014bf8c8a65c0f69bcbea9a3d2d8643126d04fcf57f3b898e73131870250b7c0  README.md
+872a916f96750e07b4e72e9d57d309ece9275c74b78022a63aee9defa89f068d  .github/workflows/build-apk.yml
+21910893350b50a22b2a74dae42dc060562b5ab66bfb5dc9f880ac06407023de  .github/workflows/build-v2.4.3.yml
+a969b43fa66874a5bf63cb370af85408a68722e0293eb6682038c56389628662  README.md
 f9662b2810af35c765e4ab1de5fcd640487ea8a9f15fef3460053d449c8141cd  UPDATE-SETUP.md
-bd72f1f16633773d3ee516be8c42505d2bf98e389372abfdb50bf515744426b0  app/build.gradle.kts
-3fa750378ec87de6f6d74044345683e326f6c387dbac46f6380724b8bb612266  app/src/main/AndroidManifest.xml
+c479c8a8cf754f4f804a96f66bf8441e0fd8392d550839c72897f44e67a981a9  app/build.gradle.kts
+567b4b7ab3662a4ed232aa1aa1807e813f57a5a7dc256b37b50f21e8605aed93  app/src/main/AndroidManifest.xml
 be213e358a38b1ef1818c51c527fc6a94ec322af5a94ef65c7d053b4602087f6  app/src/main/assets/ja_autoplay/manifest.json
 baafa6f29ade6728b8d6903073b33cfd58d9966aec55045515255ca3193e7eb8  app/src/main/assets/ja_autoplay/movy-landing.js
 32aaa47ea6f677ac787b6f7554bc32dde4fcf666c78dec956b59c0ac660d94da  app/src/main/assets/ja_overlay_guard/7movies-watch.css
@@ -15,8 +15,6 @@ fd61a586a1bc61f992c7fcd8f8709b2663360c3253cce5c84c9e4a0b087ff803  app/src/main/a
 50155371c88f35c01b61d8577a2f549f8a22b4989a6b6cfe683e63d31d65c51e  app/src/main/assets/ja_tv_remote/quality-menu-mask.js
 681bf8474e97f692ecce7e3fd0f861eb2372f139389c16ec851dafb36bfad208  app/src/main/assets/ja_tv_remote/remote.js
 2dea93d272697ec135da8dbe91e3f051590a2a76bb9e54fb31f12106153c2168  app/src/main/assets/ja_vidfast_api/manifest.json
-829e41d1304708b2699967af186d4b251da6412f1c3e8bcc5f75645a65c1c598  app/src/main/assets/live-tv/README.md
-87eeff29392a3055b95bb074b5580e0750831a28c32983bf3ac9c79293daa0b4  app/src/main/assets/live-tv/cities.json
 aef13f55b9381828e9e9fc5b1b39b262948d5093df7f78c632c9eb9b84f22c97  app/src/main/java/com/example/ja/JaAdditionalTmdbUrls.java
 83276303802b682cc30e4e8f70fef4223ad9b9e6cc289dee47d42544086256e9  app/src/main/java/com/example/ja/JaAppUpdates.kt
 0f01267bb10dbde2f50c6d7a5a4aa373ca42662427b5a35e11081d4c8158227c  app/src/main/java/com/example/ja/JaContentSizing.kt
@@ -24,9 +22,10 @@ aef13f55b9381828e9e9fc5b1b39b262948d5093df7f78c632c9eb9b84f22c97  app/src/main/j
 8c1f643d3808054b0c343b9f03338497822d1f643d4656f6ea9865d7c0693ae4  app/src/main/java/com/example/ja/JaEpisodeReleaseRules.java
 457292ee156cc6849170400a82f84d40e09080c5535716e0f0cefeb468c2e510  app/src/main/java/com/example/ja/JaGenreRows.kt
 501eb14f1ba0a8c29892f7eae50e9753ec8ccb3d38ab28d81c49371f08480b4f  app/src/main/java/com/example/ja/JaLiveTvRecovery.java
-99fea0786cfb257b909a2e8a41b04e09ad36b90e904bcf6db4a2f8237335820d  app/src/main/java/com/example/ja/JaLiveTvRepository.kt
+ebd51c4020ff414018cdaaf1a180609f709a7a867a0a87862eb8f25cb949a2b8  app/src/main/java/com/example/ja/JaLiveTvRepository.kt
 eb514319c91e8c584f469378576ed79a23bde027146f0a094a4939a771b1e7ea  app/src/main/java/com/example/ja/JaLiveTvRules.java
-33535f559e9483fa5fa2a9cdcfce4e8a60b9766110c642ef1327a660b4d3fd0d  app/src/main/java/com/example/ja/JaLiveTvScreen.kt
+51443ca400259f90d08b255d8ec833c64edc68987128c4200edba954afa80cfc  app/src/main/java/com/example/ja/JaLiveTvScreen.kt
+5e7166c86a8922dc458b6edf038763edd8ed96232c0088cfdb5be032e30a00c8  app/src/main/java/com/example/ja/JaLiveTvUpdates.kt
 76062b2b3ac52171b0b9b8e9b8fa72f3f9fa605610d91ccb8efc7c0391e5cb41  app/src/main/java/com/example/ja/JaMusicDiagnosticsSettings.kt
 c151f72934ca0055773c270929ec4eb2f59ca2b7428596ffe310cc9b5819ef07  app/src/main/java/com/example/ja/JaMusicRules.java
 524f9f06f61377335e7dfef2311f29a2e09e4e395290632a1386da8a49a497ea  app/src/main/java/com/example/ja/JaMusicScreen.kt
@@ -44,8 +43,8 @@ b26319ca55606349a8838fbf6cef4766468ce1e7486840ed99c24075bcaf8712  app/src/main/j
 fd5ea683999d54e9c1e26002682b82daf64d42000730b97f0b6d786375862ea3  app/src/main/java/com/example/ja/JaWeatherMediaRules.java
 42e69bc823dfd9fe34a1941c62acc7f4aceb96eca8441d3b56c6d3ccac9c40fc  app/src/main/java/com/example/ja/JaWeatherRepository.kt
 65d462bd1c4f0337b2a63d37c433a62c2a1ca2292b9e944067f8e6a963d19e22  app/src/main/java/com/example/ja/JaWeatherRules.java
-0543c6cfe679c24373588930f73f25e5c963d7e2cf00df5fcbe719e3efe218f8  app/src/main/java/com/example/ja/JaWeatherScreen.kt
-e96a33e0bc29dc5aa28c54556624bebb6d6363ce779bbc8117219786d8590328  app/src/main/java/com/example/ja/MainActivity.kt
+e48b7546636de11e16f405aaf4fa7847f5381a06c1cfc24a47b95b28775d43d4  app/src/main/java/com/example/ja/JaWeatherScreen.kt
+2e459cc4a5cb7dae0b903d81597532bd909b20e60e3d562788893f504542f648  app/src/main/java/com/example/ja/MainActivity.kt
 dfc9dfb647eec6670d608d27951abb36331cb97a4d627e6b0d6d69d1fe24a603  app/src/main/java/com/example/ja/Models.kt
 1b2e98badedea3504db8f9d36e880539974fec3a22adb7ca271d7df7cf8c88e5  app/src/main/java/com/example/ja/Playback.kt
 beb481b0b671f93727d9a180411bd8303e868af5a08b406345a6b5cd3f7f86e6  app/src/main/java/com/example/ja/PreferredSourceReset.kt

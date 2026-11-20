@@ -135,7 +135,7 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
         TvFocusButton(onClick = { entry = ""; state.saveZip(""); message = "Preferred ZIP code cleared." }) { Text("Clear") }
     }
     message?.let { Text(it, color = Color.LightGray) }
-    Text("Used for Weather and nearby Live TV playlists. Saved on this device. U.S. weather: National Weather Service. ZIP lookup: Zippopotam.us. No location permission required.",
+    Text("Saved on this device. U.S. weather: National Weather Service. ZIP lookup: Zippopotam.us. No location permission required.",
         color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
 }

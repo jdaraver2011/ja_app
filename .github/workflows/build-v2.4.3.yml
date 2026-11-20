@@ -1,7 +1,7 @@
-name: Test JA 2.4.2
+name: Test JA 2.4.3
 on:
   push:
-    branches: [v2.4.2]
+    branches: [v2.4.3]
     paths: ['app/**', 'tests/**', '.github/workflows/**']
 permissions:
   contents: write
