@@ -304,14 +304,14 @@ class MainActivity : ComponentActivity() {
     var selectedPerson by remember { mutableStateOf<TmdbPersonCredit?>(null) }
     val detailsBackStack = remember { mutableStateListOf<DetailReturnPoint>() }
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
-    val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext)) }
+    val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext), scope) }
     var liveChannel by remember { mutableStateOf<JaLiveChannel?>(null) }
     val weather = rememberJaWeather(active = playback == null && liveChannel == null && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
     SideEffect {
         weather.returnToNavigation = {
             scope.launch {
-                navigationRowState.scrollToItem(if (showMusicTab) 6 else 5)
+                navigationRowState.scrollToItem(if (showMusicTab) 7 else 6)
                 withFrameNanos { }; withFrameNanos { }
                 weather.navigationFocus.requestFocus()
             }
@@ -389,14 +389,22 @@ class MainActivity : ComponentActivity() {
     }
     var error by remember { mutableStateOf<String?>(null) }
     var playbackLoading by remember { mutableStateOf(false) }
+    val historyRefreshJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    val historyRefreshPending = remember { booleanArrayOf(false) }
     fun refreshHistory() {
-        scope.launch {
-            val current = dao.all()
-            // Reconcile after each save/delete. Playback updates cannot
-            // reorder existing favorites; newly favorited IDs append last.
-            movieFavoriteIds = favoritesOrder.reconcile("movie", current)
-            tvFavoriteIds = favoritesOrder.reconcile("tv", current)
+        historyRefreshPending[0] = true
+        if (historyRefreshJob[0]?.isActive == true) return
+        historyRefreshJob[0] = scope.launch {
+            do {
+            historyRefreshPending[0] = false
+            val (current, order) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val current = dao.all()
+                current to (favoritesOrder.reconcile("movie", current) to favoritesOrder.reconcile("tv", current))
+            }
+            movieFavoriteIds = order.first
+            tvFavoriteIds = order.second
             history = current
+            } while (historyRefreshPending[0])
         }
     }
     fun runSearch(text: String, desiredMode: JaSearchMode) {
@@ -649,7 +657,7 @@ class MainActivity : ComponentActivity() {
     // Popular switching keeps the previously fetched pages and individual grid scroll positions.
     LaunchedEffect(tab, if (tab == "Movies") moviesView else tvView, catalogueDate, catalogueGeneration, catalogueVisible, sourceDataVersion) {
         if (!catalogueVisible) return@LaunchedEffect
-        refreshHistory()
+        if (tab != "IPTV") refreshHistory()
         when (tab) {
             "Movies", "TV" -> {
                 val activeView = if (tab == "Movies") moviesView else tvView
@@ -1034,7 +1042,7 @@ class MainActivity : ComponentActivity() {
         LazyRow(state = navigationRowState, modifier = Modifier.fillMaxWidth()
             .onGloballyPositioned { weatherHeader.navigation = it.boundsInRoot() },
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            items(listOf("Movies", "TV") + (if (showMusicTab) listOf("Music") else emptyList()) +
+            items(listOf("Movies", "TV", "IPTV") + (if (showMusicTab) listOf("Music") else emptyList()) +
                 listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
                 TvFocusButton(
                     modifier = if (t == "Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings = it.boundsInRoot() } else Modifier,
@@ -1357,12 +1365,15 @@ class MainActivity : ComponentActivity() {
                     restorePosition = pendingSearchRestore,
                     onPositionRestored = { pendingSearchRestore = null }
                 )
+            } else if (tab == "IPTV") {
+                JaLiveTvScreen(liveTv, onPlay = { liveChannel = it },
+                    modifier = Modifier.fillMaxWidth().weight(1f))
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"
                 val activeView = if (isMovieTab) moviesView else tvView
                 JaUnscaledTopBar {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks", "IPTV")).forEach { view ->
+                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks")).forEach { view ->
                             TvSecondaryButton(
                                 text = view,
                                 selected = activeView == view,
@@ -1372,10 +1383,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                if (!isMovieTab && activeView == "IPTV") {
-                    JaLiveTvScreen(liveTv, onPlay = { liveChannel = it },
-                        modifier = Modifier.fillMaxWidth().weight(1f))
-                } else if (!isMovieTab && activeView == "Networks") {
+                if (!isMovieTab && activeView == "Networks") {
                     JaNetworksScreen(
                         repo = networksRepo, state = networksState, returnFocus = titleReturnFocus,
                         marked = { marked(it) }, onOpen = { open(it) },
