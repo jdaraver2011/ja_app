@@ -58,9 +58,10 @@ class JaMusicService : Service() {
         } }
         fun setVideoActive(active: Boolean) {
             videoActive = active
+            JaMusicLabService.setVideoActive(active)
             if (active) instance?.pause()
         }
-        fun keepsProcessAlive(): Boolean = instance != null
+        fun keepsProcessAlive(): Boolean = instance != null || JaMusicLabService.keepsProcessAlive()
         fun resetLogin() {
             val service = instance ?: return
             service.closePages()
