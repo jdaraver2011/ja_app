@@ -59,11 +59,11 @@ internal fun JaWeatherStarView(state:JaWeatherState,modifier:Modifier=Modifier,o
             .appendQueryParameter("jaRevision",state.revision.toString()).build().toString()
     }
     val audio=remember{context.getSystemService(Context.AUDIO_SERVICE) as AudioManager}
-    DisposableEffect(state.sound,resumed){
+    DisposableEffect(state.sound,resumed,state.zip){
         val request=AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build())
             .setOnAudioFocusChangeListener{if(it<=AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)state.changeSound(false)}.build()
-        if(state.sound&&resumed&&audio.requestAudioFocus(request)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED)state.changeSound(false)
+        if(state.sound&&resumed&&JaWeatherRules.validZip(state.zip)&&audio.requestAudioFocus(request)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED)state.changeSound(false)
         onDispose{audio.abandonAudioFocusRequest(request)}
     }
     DisposableEffect(owner){
@@ -94,7 +94,7 @@ internal fun JaWeatherStarView(state:JaWeatherState,modifier:Modifier=Modifier,o
     }
     Box(modifier.background(Color.Black)){
         AndroidView(factory={ctx->WebView(ctx).apply{
-            setBackgroundColor(android.graphics.Color.BLACK)
+            setBackgroundColor(android.graphics.Color.BLACK);keepScreenOn=true
             settings.javaScriptEnabled=true;settings.domStorageEnabled=true
             settings.userAgentString=settings.userAgentString+" JA/2.4.9 (+https://github.com/jdaraver2011/ja_app)"
             settings.mediaPlaybackRequiresUserGesture=false
@@ -121,7 +121,7 @@ internal fun JaWeatherStarView(state:JaWeatherState,modifier:Modifier=Modifier,o
         }},modifier=Modifier.fillMaxSize(),update={v->
             if(v.tag!=url){v.tag=url;if(v.url!=url)v.loadUrl(url)}
             v.evaluateJavascript("window.jaWeatherSound?.(${state.sound&&resumed},${state.volume})",null)
-        })
+        },onRelease={v->if(view===v){view=null;v.keepScreenOn=false;v.stopLoading();v.destroy()}})
         if(failed)Text("Weather presentation unavailable. Use Refresh to retry.",Modifier.padding(12.dp),color=Color.White)
     }
 }
