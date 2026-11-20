@@ -1,0 +1,3 @@
+# JA verified U.S. live channel catalog
+
+Source: https://github.com/iptv-org/api and https://github.com/iptv-org/iptv (CC0 metadata). This branch stores only links/metadata, not video. A daily workflow samples each U.S. adaptive stream twice and includes channels with advancing HLS or dynamic DASH manifests; completed and frozen playlists are excluded. Short rolling live windows are allowed. This is an availability observation, not a guarantee of future playback or broadcast market coverage. App clients download catalog.json with a 24-hour cache and manual refresh. Failed/abnormally empty scans preserve the previous catalog.
