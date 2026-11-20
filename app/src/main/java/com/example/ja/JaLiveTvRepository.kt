@@ -84,7 +84,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         val cancellation=currentCoroutineContext()
         val now=System.currentTimeMillis()
         val wanted=channels.map{it.id}.toSet()
-        val signature=java.security.MessageDigest.getInstance("SHA-256").digest(wanted.sorted().joinToString("\n").toByteArray()).joinToString(""){"%02x".format(it)}
+        val signature=java.security.MessageDigest.getInstance("SHA-256").digest((wanted.sorted().joinToString("\n")+"\npluto-v1").toByteArray()).joinToString(""){"%02x".format(it)}
         val file=File(root,"guide-$signature.json")
         val cached=runCatching{JSONObject(file.readText())}.getOrNull()
         fun saved(obj:JSONObject,stale:Boolean):JaLiveGuide {
@@ -105,17 +105,38 @@ internal class JaLiveTvRepository(private val context:Context) {
                     }finally{temp.delete()}
                 }
             }
-            val result=parseGuide(compressed,channels,now){cancellation.ensureActive()}
+            val primary=parseGuide(compressed,channels,now,emptyMap()){cancellation.ensureActive()}
+            val pluto=try {
+                val exact=channels.flatMap{channel -> channel.urls.map{JaLiveTvRules.plutoId(it)}.filter{it.isNotBlank()}.distinct().map{it to channel.id}}
+                    .groupBy({it.first},{it.second}).mapNotNull{(id,targets)->targets.distinct().singleOrNull()?.let{id to it}}.toMap()
+                if(exact.isEmpty())emptyList() else {
+                    val plutoFile=File(root,"pluto-us.xml.gz")
+                    if(force||!JaLiveTvRules.fresh(plutoFile.lastModified(),now,21_600_000)) {
+                        client.newCall(request("https://i.mjh.nz/PlutoTV/us.xml.gz")).execute().use{r ->
+                            if(!r.isSuccessful)throw IOException("Pluto guide HTTP ${r.code}")
+                            val body=r.body?:throw IOException("Empty Pluto guide")
+                            val temp=File(root,"pluto-guide-download.tmp")
+                            try{LimitedInput(body.byteStream(),12_000_000){cancellation.ensureActive()}.use{input->temp.outputStream().use{input.copyTo(it)}}
+                                GZIPInputStream(temp.inputStream()).use{it.read()}
+                                if(!temp.renameTo(plutoFile))throw IOException("Pluto guide cache write failed")
+                            }finally{temp.delete()}
+                        }
+                    }
+                    parseGuide(plutoFile,channels,now,exact){cancellation.ensureActive()}
+                }
+            }catch(e:CancellationException){throw e}catch(_:Exception){emptyList()}
+            val providerChannels=pluto.map{it.channel}.toSet()
+            val result=primary.filterNot{it.channel in providerChannels}+pluto
             val a=JSONArray();result.forEach{a.put(JSONArray().put(it.channel).put(it.start).put(it.end).put(it.title))}
             val obj=JSONObject().put("signature",signature).put("fetched",compressed.lastModified()).put("programs",a)
             write(file,obj.toString());saved(obj,false)
         }catch(e:CancellationException){throw e}catch(e:Exception){if(cached?.optString("signature")==signature)saved(cached,true) else throw e}
     }
-    private fun parseGuide(file:File,channels:List<JaLiveChannel>,now:Long,checkActive:()->Unit):List<JaLiveProgram> {
+    private fun parseGuide(file:File,channels:List<JaLiveChannel>,now:Long,providerAliases:Map<String,String>,checkActive:()->Unit):List<JaLiveProgram> {
         val ids=channels.associateBy{it.id}
         val bases=channels.groupBy{JaLiveTvRules.baseId(it.id)}
-        val names=channels.flatMap{channel -> JaLiveTvRules.guideKeys(channel.id,channel.name).map{it to channel}}.groupBy({it.first},{it.second})
-        val aliases=mutableMapOf<String,String>();val guideNames=mutableMapOf<String,MutableSet<String>>()
+        val names=if(providerAliases.isNotEmpty())emptyMap() else channels.flatMap{channel -> JaLiveTvRules.guideKeys(channel.id,channel.name).map{it to channel}}.groupBy({it.first},{it.second})
+        val aliases=providerAliases.toMutableMap();val guideNames=mutableMapOf<String,MutableSet<String>>()
         val candidates=mutableMapOf<String,MutableSet<String>>()
         val programs=mutableListOf<JaLiveProgram>()
         GZIPInputStream(file.inputStream()).use{gzip -> LimitedInput(gzip,256_000_000).use{input ->

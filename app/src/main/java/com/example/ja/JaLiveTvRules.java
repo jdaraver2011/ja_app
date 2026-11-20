@@ -37,6 +37,18 @@ public final class JaLiveTvRules {
         }
         return keys;
     }
+    public static String plutoId(String value) {
+        try {
+            java.net.URI uri=new java.net.URI(value);String host=uri.getHost();String path=uri.getPath();
+            if(host==null||path==null)return "";
+            String regex;
+            if(host.equals("jmp2.uk"))regex="^/plu-([0-9a-f]{24})\\.m3u8$";
+            else if(host.equals("i.mjh.nz"))regex="^/PlutoTV/([0-9a-f]{24})\\.m3u8$";
+            else if(host.equals("pluto.tv")||host.endsWith(".pluto.tv"))regex="/channel/([0-9a-f]{24})(?:/|$)";
+            else return "";
+            Matcher m=Pattern.compile(regex).matcher(path);return m.find()?m.group(1):"";
+        }catch(Exception e){return "";}
+    }
     public static String baseId(String id) {return id.split("@",2)[0];}
     public static long xmlTime(String value) {
         try {return OffsetDateTime.parse(value.trim(),DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT)).toInstant().toEpochMilli();}
