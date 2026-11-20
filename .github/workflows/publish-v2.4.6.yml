@@ -12,3 +12,5 @@ jobs:
     with:
       publish_update: true
     secrets: inherit
+
+# Rebuild after guide viewport scope correction.
