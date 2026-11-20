@@ -88,6 +88,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-live-order-tests" app/src/main/java/com/example/ja/JaLiveTvOrder.java tests/JaLiveTvOrderTest.java
           java -cp "$RUNNER_TEMP/ja-live-order-tests" com.example.ja.JaLiveTvOrderTest
+      - name: Test IPTV channel move transactions
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-live-move-tests" app/src/main/java/com/example/ja/JaLiveTvOrder.java app/src/main/java/com/example/ja/JaLiveTvMoveSession.java tests/JaLiveTvMoveSessionTest.java
+          java -cp "$RUNNER_TEMP/ja-live-move-tests" com.example.ja.JaLiveTvMoveSessionTest
       - name: Test six-hour weather imagery rules
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-imagery-tests" app/src/main/java/com/example/ja/JaWeatherMediaRules.java tests/JaWeatherMediaRulesTest.java
@@ -204,7 +208,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.4.6-debug
+          name: JA-2.4.7-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
