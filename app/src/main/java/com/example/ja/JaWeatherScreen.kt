@@ -123,9 +123,14 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
     var entry by rememberSaveable { mutableStateOf(state.zip) }
     var message by remember { mutableStateOf<String?>(null) }
     Text("Weather", style = MaterialTheme.typography.titleLarge, color = Color.White)
-    Row(verticalAlignment=Alignment.CenterVertically) {
-        Checkbox(checked=state.weatherStar,onCheckedChange={state.weatherStar=it;state.repository.saveWeatherStar(it)})
-        Text("Use WeatherStar 4000+ card and dashboard",color=Color.White)
+    TvSettingsToggle("Use WeatherStar 4000+ card and dashboard",state.weatherStar){
+        state.weatherStar=it;state.repository.saveWeatherStar(it)
+    }
+    TvSettingsToggle("WeatherStar sound",state.sound){state.changeSound(it)}
+    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        Text("WeatherStar volume: ${(state.volume*100).toInt()}%",color=Color.White)
+        TvFocusButton(onClick={state.changeVolume((state.volume-0.1f).coerceAtLeast(0f))}){Text("−")}
+        TvFocusButton(onClick={state.changeVolume((state.volume+0.1f).coerceAtMost(1f))}){Text("+")}
     }
     Text("Off: current NWS dashboard. On: bundled WeatherStar widescreen presentation. Both use NOAA/NWS weather and your saved ZIP code.",color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
     JaEntryField(value = entry, onValueChange = { value ->
@@ -147,6 +152,7 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
     message?.let { Text(it, color = Color.LightGray) }
     Text("Saved on this device. U.S. weather: National Weather Service. ZIP lookup: Zippopotam.us. No location permission required.",
         color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+    Text("WeatherStar 4000+ (MIT). Music: Sunny Afternoon — netbymatt, Latest Observations, CC BY 4.0.",color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
 }
 
@@ -218,7 +224,7 @@ private fun weatherTime(value: String): String = runCatching {
 
 @Composable
 internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSettings: () -> Unit, onWeatherChannel: () -> Unit = {}) {
-    if(state.weatherStar){JaWeatherStarPage(state,onClose,onWeatherChannel);return}
+    if(state.weatherStar){JaWeatherStarPage(state,onClose);return}
     BackHandler(onBack = onClose)
     val data = state.data
     var alertIndex by remember(data?.zip, data?.fetchedAt) { mutableIntStateOf(0) }
