@@ -1,0 +1,14 @@
+name: Build and publish JA 2.4.7
+on:
+  push:
+    branches: [v2.4.7]
+    paths: ['.github/workflows/publish-v2.4.7.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: true
+    secrets: inherit
