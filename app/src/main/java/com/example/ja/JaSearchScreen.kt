@@ -37,6 +37,7 @@ private val searchMuted = Color(0xFFB5BEC6)
 @Composable
 fun JaSearchScreen(
     returnFocus: JaTitleReturnFocus? = null,
+    subRowFocus: FocusRequester? = null,
     query: String,
     gridState: LazyGridState,
     onQueryChange: (String) -> Unit,
@@ -89,7 +90,7 @@ fun JaSearchScreen(
         item(span = { GridItemSpan(maxLineSpan) }, key = "search-heading") {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("Search", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Find movies, TV shows, actors, directors and genres", color = searchMuted, fontSize = 13.sp)
+                Text("Movies, TV Shows, Actors, Directors and Genres", color = searchMuted, fontSize = 13.sp)
             }
         }
         // Search filters remain a compact horizontal strip. Only result cards scroll vertically.
@@ -99,6 +100,7 @@ fun JaSearchScreen(
                     rowItems(JaSearchMode.entries) { candidate ->
                         JaSearchButton(
                             text = candidate.label,
+                            modifier = if(candidate==mode && subRowFocus!=null) Modifier.focusRequester(subRowFocus) else Modifier,
                             highlighted = candidate == mode,
                             onClick = { onModeChange(candidate) },
                             compact = true
@@ -112,7 +114,7 @@ fun JaSearchScreen(
                 JaEntryField(
                     value = query, onValueChange = onQueryChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(if (mode == JaSearchMode.GENRES) "Filter genres (e.g. Horror)" else "Title, actor or director") },
+                    label = { Text(if (mode == JaSearchMode.GENRES) "Filter genres (e.g. Horror)" else "Title, Cast, Director or Genre") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onSearch() }),
@@ -260,10 +262,6 @@ fun JaSearchScreen(
                     )
                 }
             }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }, key = "search-attribution") {
-            Text("This product uses the TMDB API but is not endorsed or certified by TMDB.",
-                color = searchMuted, fontSize = 10.sp)
         }
     }
 }
