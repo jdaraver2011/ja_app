@@ -56,6 +56,7 @@ internal class JaRowJumpState(private val screen: String) {
     }
     fun complete(request: JaJumpRequest) { if (pending == request) pending = null }
     fun cancelPending() { pending = null }
+    fun closeToNavigation() { showing=false; pending=null }
 }
 
 /** Apply only to the first actual title (or the empty-row heading). */
@@ -133,7 +134,7 @@ internal fun JaRowJumpHeading(label: String, requester: FocusRequester, empty: B
 }
 
 @Composable
-internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networks: Boolean) {
+internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networks: Boolean, onBackToNavigation: () -> Unit = {}) {
     if (!state.showing || rows.isEmpty()) return
     val origin = state.originId ?: rows.first().id
     val scope = rememberCoroutineScope()
@@ -165,7 +166,7 @@ internal fun JaRowJumpPanel(state: JaRowJumpState, rows: List<JaJumpRow>, networ
         textMeasurer.measure(if (networks) "Jump to Network" else "Jump to Genre", style = titleStyle,
             maxLines = 1).size.width.toDp()
     }
-    Dialog(onDismissRequest = { state.dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = { state.closeToNavigation(); onBackToNavigation() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         LaunchedEffect(Unit) {
             withFrameNanos { }; withFrameNanos { }
             if (networks) letterRequesters[initialLetter]?.requestFocus()
