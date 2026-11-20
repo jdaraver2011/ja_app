@@ -21,6 +21,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.focusRequester
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -305,10 +308,18 @@ class MainActivity : ComponentActivity() {
     val detailsBackStack = remember { mutableStateListOf<DetailReturnPoint>() }
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
     val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext), scope) }
-    val liveActive = tab == "IPTV" && liveTv.playerAttached
+    val liveActive = tab == "IPTV" && (liveTv.playerAttached || liveTv.previewChannel?.id==JA_WEATHER_CHANNEL)
     LaunchedEffect(tab){if(tab != "IPTV"){liveTv.fullscreen=false;liveTv.finishMove(false)}}
     val weather = rememberJaWeather(active = playback == null && !liveTv.fullscreen && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val mainRequesters = remember { listOf("Movies","TV","IPTV","Music","Search","Favorites","Continue","Settings").associateWith { FocusRequester() } }
+    val subRequester = remember { FocusRequester() }
+    var navigationLevel by remember { mutableIntStateOf(0) }
+    fun focusMain() { exitGate.reset(); scope.launch {
+        val index = (listOf("Movies","TV","IPTV") + (if(showMusicTab) listOf("Music") else emptyList()) + listOf("Search","Favorites","Continue","Settings")).indexOf(tab)
+        navigationRowState.animateScrollToItem(index.coerceAtLeast(0)); withFrameNanos { }
+        runCatching { mainRequesters[tab]?.requestFocus() }
+    } }
     SideEffect {
         weather.returnToNavigation = {
             scope.launch {
@@ -344,6 +355,10 @@ class MainActivity : ComponentActivity() {
     var search by remember { mutableStateOf("") }
     var searchMode by remember { mutableStateOf(JaSearchMode.ALL) }
     val searchGridState = rememberLazyGridState() // Keep search position while viewing title/person details.
+    fun focusSub() { exitGate.reset(); scope.launch {
+        if(tab=="Search")searchGridState.scrollToItem(0)
+        withFrameNanos { };withFrameNanos { };runCatching { subRequester.requestFocus() }
+    } }
     var searchReturnBookmark by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var pendingSearchRestore by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var genreDirectoryBookmark by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -629,9 +644,9 @@ class MainActivity : ComponentActivity() {
             } finally { tvPopularLoading = false }
         }
     }
-    LaunchedEffect(playback,playbackLoading,liveActive) {
+    LaunchedEffect(playback,playbackLoading,liveActive,weatherOpen,weather.sound) {
         JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading || liveActive)
-        JaMusicService.setVideoActive(playback != null || playbackLoading || liveActive)
+        JaMusicService.setVideoActive(playback != null || playbackLoading || liveActive || (weatherOpen&&weather.weatherStar&&weather.sound))
     }
     val catalogueVisible = !liveTv.fullscreen && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.
@@ -920,6 +935,9 @@ class MainActivity : ComponentActivity() {
             selected != null || selectedPerson != null -> backFromDetails()
             tab == "Music" && JaMusicService.back() -> exitGate.reset()
             tab == "Search" && searchGenre != null -> exitGenre()
+            (tab == "Movies" || tab == "TV") && navigationLevel > 0 -> {
+                if (JaNavigationRules.backTarget(navigationLevel) == 1) focusSub() else focusMain()
+            }
             else -> {
                 if (exitGate.press(android.os.SystemClock.elapsedRealtime())) {
                     exiting = true
@@ -940,7 +958,8 @@ class MainActivity : ComponentActivity() {
     }
     if (weatherOpen) {
         JaWeatherPage(weather, onClose = { weatherOpen = false; weatherReturnFocus = true },
-            onSettings = { weatherOpen = false; tab = "Settings"; selected = null; selectedPerson = null; detailsBackStack.clear() })
+            onSettings = { weatherOpen = false; tab = "Settings"; selected = null; selectedPerson = null; detailsBackStack.clear() },
+            onWeatherChannel = { weatherOpen=false;tab="IPTV";selected=null;selectedPerson=null;detailsBackStack.clear();liveTv.tune(jaWeatherChannel(),true) })
         return
     }
     blockerTools?.let { pages ->
@@ -1042,7 +1061,14 @@ class MainActivity : ComponentActivity() {
             items(listOf("Movies", "TV", "IPTV") + (if (showMusicTab) listOf("Music") else emptyList()) +
                 listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
                 TvFocusButton(
-                    modifier = if (t == "IPTV") Modifier.focusRequester(liveTv.mainFocus) else if (t == "Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings = it.boundsInRoot() } else Modifier,
+                    modifier = Modifier.focusRequester(mainRequesters.getValue(t))
+                        .then(if(t=="IPTV") Modifier.focusRequester(liveTv.mainFocus) else if(t=="Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings=it.boundsInRoot() } else Modifier)
+                        .onFocusChanged { if(it.isFocused) navigationLevel=0 }
+                        .onPreviewKeyEvent { event ->
+                            if(event.key==Key.DirectionDown && selected==null && selectedPerson==null && (tab in listOf("Movies","TV","IPTV","Search","Favorites","Continue"))) {
+                                if(event.type==KeyEventType.KeyDown) { if(tab=="IPTV") liveTv.focusPreview() else focusSub() }; true
+                            } else false
+                        },
                     onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null },
                     colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)
                 ) { Text(t, color = Color.Black) }
@@ -1070,6 +1096,7 @@ class MainActivity : ComponentActivity() {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 JaUpdateSettings()
                 JaWeatherSettings(weather)
+                Text("This product uses the TMDB API but is not endorsed or certified by TMDB.", color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
                 Text("Music", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 TvSettingsToggle("Show Music tab", showMusicTab) {
                     showMusicTab = it; settings.showMusicTab = it
@@ -1335,6 +1362,7 @@ class MainActivity : ComponentActivity() {
         } else {
             if (tab == "Search") {
                 JaSearchScreen(
+                    subRowFocus = subRequester,
                     returnFocus = titleReturnFocus,
                     query = search, onQueryChange = { search = it },
                     gridState = searchGridState,
@@ -1363,7 +1391,7 @@ class MainActivity : ComponentActivity() {
                     onPositionRestored = { pendingSearchRestore = null }
                 )
             } else if (tab == "IPTV") {
-                JaLiveTvScreen(liveTv,
+                JaLiveTvScreen(liveTv, weather, onMainMenu = { focusMain() },
                     modifier = Modifier.fillMaxWidth().weight(1f))
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"
@@ -1373,6 +1401,8 @@ class MainActivity : ComponentActivity() {
                         (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks")).forEach { view ->
                             TvSecondaryButton(
                                 text = view,
+                                modifier = Modifier.then(if(activeView==view) Modifier.focusRequester(subRequester) else Modifier)
+                                    .onFocusChanged { if(it.isFocused) navigationLevel=1 },
                                 selected = activeView == view,
                                 onClick = { if (isMovieTab) moviesView = view else tvView = view }
                             )
@@ -1384,7 +1414,8 @@ class MainActivity : ComponentActivity() {
                     JaNetworksScreen(
                         repo = networksRepo, state = networksState, returnFocus = titleReturnFocus,
                         marked = { marked(it) }, onOpen = { open(it) },
-                        modifier = Modifier.fillMaxWidth().weight(1f)
+                        onBackToNavigation = { focusSub() },
+                        modifier = Modifier.fillMaxWidth().weight(1f).onFocusChanged { if(it.hasFocus) navigationLevel=2 }.focusGroup()
                     )
                 } else if (activeView == "Popular" || activeView == "Other") {
                     val isOther = isMovieTab && activeView == "Other"
@@ -1405,11 +1436,7 @@ class MainActivity : ComponentActivity() {
                                 Text(if (isOther) "Upcoming & CAM Movies" else if (isMovieTab) "Popular Movies" else "Popular TV Shows",
                                     style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 Text("${titles.size} titles loaded", color = Color.LightGray)
-                                if (isMovieTab) Text(
-                                    if (isOther) "Upcoming releases and movies labelled CAM by VidSrc."
-                                    else "Released by yesterday, listed on VidSrc, with confirmed CAM titles excluded.",
-                                    color = Color.LightGray
-                                )
+
                                 if (isOther && titles.isEmpty() && !loading && loadedPage > 0 && pageError == null) {
                                     Text(if (loadedPage < totalPages) "No upcoming matches on this page. Load More to keep browsing."
                                         else "No upcoming or confirmed CAM movies found.", color = Color.LightGray)
@@ -1419,7 +1446,7 @@ class MainActivity : ComponentActivity() {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 152.dp),
                         state = gridState,
-                        modifier = Modifier.fillMaxSize().jaWeatherContentStart(),
+                        modifier = Modifier.fillMaxSize().jaWeatherContentStart().onFocusChanged { if(it.hasFocus) navigationLevel=2 }.focusGroup(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
@@ -1460,6 +1487,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 } else {
+                    Text(if(isMovieTab) "Movie Genres" else "TV Genres", modifier=Modifier.jaWeatherIntroWidth(), style=MaterialTheme.typography.titleLarge, color=Color.White)
                     JaGenreRows(
                         tab = tab, rows = genreRows, loading = genresLoading,
                         sectionState = sectionScrollStates.getOrPut(tab) { LazyListState() },
@@ -1469,7 +1497,8 @@ class MainActivity : ComponentActivity() {
                         visibleTitles = { outsideOther(it) }, marked = { marked(it) },
                         onOpen = { open(it) },
                         onLoadMore = { row -> loadMoreGenreRow(if (isMovieTab) "movie" else "tv", row) },
-                        modifier = Modifier.fillMaxWidth().weight(1f)
+                        onBackToNavigation = { focusSub() },
+                        modifier = Modifier.fillMaxWidth().weight(1f).onFocusChanged { if(it.hasFocus) navigationLevel=2 }.focusGroup()
                     )
                 }
             } else if (tab == "Favorites") {
@@ -1482,6 +1511,7 @@ class MainActivity : ComponentActivity() {
                             TvSecondaryButton(
                                 text = view,
                                 selected = favoritesView == view,
+                                modifier = if(favoritesView==view) Modifier.focusRequester(subRequester) else Modifier,
                                 onClick = { favoritesView = view }
                             )
                         }
@@ -1527,6 +1557,7 @@ class MainActivity : ComponentActivity() {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("Movies", "TV").forEach { view ->
                             TvSecondaryButton(text = view, selected = continueView == view,
+                                modifier = if(continueView==view) Modifier.focusRequester(subRequester) else Modifier,
                                 onClick = { continueView = view })
                         }
                     }
@@ -1583,12 +1614,13 @@ class MainActivity : ComponentActivity() {
 private fun TvSecondaryButton(
     text: String,
     selected: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
     Button(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .height(26.dp)
             .onFocusChanged { focused = it.isFocused },
         border = jaButtonFocusBorder(focused),
