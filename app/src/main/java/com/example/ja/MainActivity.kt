@@ -310,7 +310,7 @@ class MainActivity : ComponentActivity() {
     val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext), scope) }
     val liveActive = tab == "IPTV" && (liveTv.playerAttached || liveTv.previewChannel?.id==JA_WEATHER_CHANNEL)
     LaunchedEffect(tab){if(tab != "IPTV"){liveTv.fullscreen=false;liveTv.finishMove(false)}}
-    val weather = rememberJaWeather(active = playback == null && !liveTv.fullscreen && !exiting)
+    val weather = rememberJaWeather(active = playback == null && (!liveTv.fullscreen || liveTv.previewChannel?.id==JA_WEATHER_CHANNEL) && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
     val mainRequesters = remember { listOf("Movies","TV","IPTV","Music","Search","Favorites","Continue","Settings").associateWith { FocusRequester() } }
     val subRequester = remember { FocusRequester() }
