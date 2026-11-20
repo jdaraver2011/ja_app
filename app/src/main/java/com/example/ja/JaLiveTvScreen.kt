@@ -172,6 +172,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
     val firstMinute by remember(scroll,minutePixels){derivedStateOf{((scroll.value/minutePixels)/15).toInt()*15}}
     BoxWithConstraints(modifier){
         val channelWidth=(if(maxWidth>=600.dp)180.dp else 140.dp)+(if(state.view=="Favorites"&&state.reordering)64.dp else 0.dp)
+        val viewportMinutes=((maxWidth-channelWidth).value/2).toInt()
         Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(6.dp)){
             Row(Modifier.horizontalScroll(state.groups),horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 JaLiveTvRules.views().forEach{label->
@@ -210,7 +211,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
             LazyColumn(Modifier.fillMaxWidth().weight(1f),state=state.list,verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(bottom=12.dp)){
                 items(visible,key={it.id}){channel ->
                     val visibleStart=start+(firstMinute-30).coerceAtLeast(0)*60_000L
-                    val visibleEnd=(start+(firstMinute+((maxWidth-channelWidth).value/2).toInt()+30)*60_000L).coerceAtMost(finish)
+                    val visibleEnd=(start+(firstMinute+viewportMinutes+30)*60_000L).coerceAtMost(finish)
                     val channelPrograms=programs[channel.id].orEmpty()
                     val allEntries=remember(channelPrograms,start,finish){channelPrograms.filter{it.end>start&&it.start<finish}}
                     val entries=remember(allEntries,visibleStart,visibleEnd){
