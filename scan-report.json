@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-11-20T00:34:15.876001+00:00",
+  "generatedAt": "2026-11-20T00:42:03.745781+00:00",
   "candidateStreams": 3190,
-  "verifiedChannels": 1757,
-  "verifiedStreams": 2607,
+  "verifiedChannels": 1754,
+  "verifiedStreams": 2603,
   "excluded": {
-    "frozen": 31,
-    "error": 539,
+    "error": 542,
+    "frozen": 32,
     "ended": 6,
     "unsupported": 7
   },
-  "seconds": 209
+  "seconds": 238
 }
