@@ -370,12 +370,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
                         if(channel==null)Text("Select a channel",Modifier.align(Alignment.Center),color=Color.LightGray,fontSize=12.sp)
                         else if(channel.id==JA_WEATHER_CHANNEL){
                             JaLivePresentation(state.fullscreen,{state.fullscreen=false;state.returnChannel=channel.id}){
-                                if(state.fullscreen)JaWeatherStarPanel(weather,Modifier.fillMaxSize(),onFullscreen={state.fullscreen=false},
-                                    showChannels=true,onChannel={direction->
-                                        val choices=state.channels;val index=choices.indexOfFirst{it.id==channel.id}.coerceAtLeast(0)
-                                        choices.getOrNull((index+direction+choices.size)%choices.size)?.let{state.tune(it,true)}
-                                    },onReady={state.playbackStarted(channel)})
-                                else JaWeatherStarView(weather,Modifier.fillMaxSize(),onReady={state.playbackStarted(channel)})
+                                JaWeatherStarView(weather,Modifier.fillMaxSize(),onReady={state.playbackStarted(channel)})
                             }
                         }
                         else key(channel.id){JaLiveTvPlayback(channel,state.repository,state.fullscreen,
@@ -569,7 +564,7 @@ private fun JaLiveTvPlayback(channel:JaLiveChannel,repository:JaLiveTvRepository
 }
 
 @Composable
-private fun JaLivePresentation(fullscreen:Boolean,onClose:()->Unit,content:@Composable ()->Unit){
+internal fun JaLivePresentation(fullscreen:Boolean,onClose:()->Unit,content:@Composable ()->Unit){
     if(fullscreen)Dialog(onDismissRequest=onClose,properties=DialogProperties(usePlatformDefaultWidth=false,decorFitsSystemWindows=false)){
         val view=LocalView.current
         DisposableEffect(view){
@@ -607,7 +602,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
     val player=remember(channel,source,generation){
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
-            .setUserAgent(headers["User-Agent"]?:"JA/2.4.8").setDefaultRequestProperties(headers)
+            .setUserAgent(headers["User-Agent"]?:"JA/2.5.0").setDefaultRequestProperties(headers)
         ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http))).build().apply{
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)
