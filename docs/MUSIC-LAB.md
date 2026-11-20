@@ -4,7 +4,7 @@ Unpublished experiment based on v2.4.5. Enable Show Music tab in Settings, then 
 
 This is an account/source feasibility build, not a completed full-track Deezer integration. Enter an ARL locally and press Connect, then test a Deezer track ID/link. No email/password collection or automated ARL extraction is implemented. Session validation uses Deezer's undocumented web gateway and may stop working.
 
-The source probe requests FULL / MP3_128 / NONE from the signed-in account's licensed media endpoint. Rejected/unsupported responses are surfaced. There are no forged-CDN URLs, embedded decryption keys, encrypted-audio decoding, or preview substitutions. Full-track playback has NOT been verified. Encrypted-only delivery remains a blocker.
+The source probe requests FULL / MP3_128 / NONE from the signed-in account's licensed media endpoint. If clear audio is unavailable, a second FULL / MP3_128 / BF_CBC_STRIPE metadata probe distinguishes a returned encrypted source from access rejection. Encrypted sources are never played. Rejected/unsupported responses are surfaced. There are no forged-CDN URLs, embedded decryption keys, encrypted-audio decoding, or preview substitutions. Full-track playback has NOT been verified. Encrypted-only delivery remains a blocker.
 
 A foreground native ExoPlayer service handles returned playable sources, a 64 MiB evicting streaming cache, pause/seek, notification controls, noisy-output/audio focus and video handoff. Cache persists until eviction or sign-out. Session is AES-GCM encrypted with an Android Keystore key; neither ARLs nor audio URLs enter logs or Intents. Account/track titles are visible in the UI and notification. Sign out to remove session/cache.
 
