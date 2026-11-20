@@ -18,6 +18,20 @@ import org.mozilla.geckoview.GeckoView
 
 @Composable
 internal fun JaMusicScreen(modifier: Modifier = Modifier) {
+    var nativeLab by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    Column(modifier) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { JaMusicService.stop(context); nativeLab = true }) { Text("Music Lab") }
+            Button(onClick = { JaMusicLabService.stop(context); nativeLab = false }) { Text("Deezer website") }
+        }
+        if (nativeLab) JaMusicLabScreen(Modifier.fillMaxWidth().weight(1f))
+        else JaMusicBrowserScreen(Modifier.fillMaxWidth().weight(1f))
+    }
+}
+
+@Composable
+private fun JaMusicBrowserScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val state by JaMusicService.state.collectAsState()
     var confirmReset by remember { mutableStateOf(false) }
