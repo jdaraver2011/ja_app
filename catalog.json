@@ -1,97 +1,97 @@
 {
   "schema": 1,
-  "generatedAt": "2026-11-20T03:36:35.411549+00:00",
+  "generatedAt": "2026-11-20T11:51:31.139302+00:00",
   "source": "iptv-org/api + 18 category playlists + Free-TV/IPTV",
   "verification": "Two distinct advancing adaptive-live playlist snapshots; no finite clips. Availability can change.",
   "counts": {
     "candidateStreams": 3202,
-    "verifiedChannels": 1747,
-    "verifiedStreams": 2608,
+    "verifiedChannels": 1785,
+    "verifiedStreams": 2644,
     "excluded": {
       "frozen": 25,
-      "error": 553,
-      "ended": 9,
+      "error": 518,
+      "ended": 8,
       "unsupported": 7
     },
-    "seconds": 233,
+    "seconds": 206,
     "sources": {
       "iptv-org": {
         "candidateStreams": 3190,
-        "verified": 2604,
+        "verified": 2639,
         "frozen": 25,
-        "error": 547,
-        "ended": 7,
+        "error": 513,
+        "ended": 6,
         "unsupported": 7,
-        "verifiedChannels": 1745
+        "verifiedChannels": 1782
       },
       "category:movies": {
         "candidateStreams": 195,
-        "verified": 164,
+        "verified": 167,
         "frozen": 2,
-        "error": 28,
+        "error": 25,
         "unsupported": 1,
-        "verifiedChannels": 164,
+        "verifiedChannels": 167,
         "usEntries": 195,
         "duplicateStreamEntries": 195,
         "additionalCandidates": 0
       },
       "category:kids": {
         "candidateStreams": 121,
-        "verified": 100,
-        "error": 20,
+        "verified": 98,
+        "error": 22,
         "unsupported": 1,
-        "verifiedChannels": 100,
+        "verifiedChannels": 98,
         "usEntries": 121,
         "duplicateStreamEntries": 121,
         "additionalCandidates": 0
       },
       "category:animation": {
         "candidateStreams": 70,
-        "verified": 61,
-        "error": 9,
-        "verifiedChannels": 61,
+        "verified": 59,
+        "error": 11,
+        "verifiedChannels": 59,
         "usEntries": 70,
         "duplicateStreamEntries": 70,
         "additionalCandidates": 0
       },
       "category:music": {
         "candidateStreams": 77,
-        "verified": 54,
-        "error": 21,
+        "verified": 55,
+        "error": 20,
         "frozen": 2,
-        "verifiedChannels": 54,
+        "verifiedChannels": 55,
         "usEntries": 77,
         "duplicateStreamEntries": 77,
         "additionalCandidates": 0
       },
       "category:series": {
         "candidateStreams": 256,
-        "verified": 232,
-        "error": 23,
+        "verified": 234,
+        "error": 21,
         "frozen": 1,
-        "verifiedChannels": 232,
+        "verifiedChannels": 234,
         "usEntries": 256,
         "duplicateStreamEntries": 256,
         "additionalCandidates": 0
       },
       "category:news": {
         "candidateStreams": 111,
-        "verified": 67,
+        "verified": 66,
         "frozen": 2,
-        "error": 41,
+        "error": 42,
         "ended": 1,
-        "verifiedChannels": 67,
+        "verifiedChannels": 66,
         "usEntries": 111,
         "duplicateStreamEntries": 111,
         "additionalCandidates": 0
       },
       "category:entertainment": {
         "candidateStreams": 182,
-        "verified": 157,
-        "error": 23,
+        "verified": 155,
+        "error": 25,
         "ended": 1,
         "frozen": 1,
-        "verifiedChannels": 157,
+        "verifiedChannels": 155,
         "usEntries": 182,
         "duplicateStreamEntries": 182,
         "additionalCandidates": 0
@@ -117,9 +117,9 @@
       "category:documentary": {
         "candidateStreams": 67,
         "frozen": 1,
-        "error": 12,
-        "verified": 54,
-        "verifiedChannels": 54,
+        "verified": 53,
+        "error": 13,
+        "verifiedChannels": 53,
         "usEntries": 67,
         "duplicateStreamEntries": 67,
         "additionalCandidates": 0
@@ -135,23 +135,24 @@
       },
       "category:auto": {
         "candidateStreams": 13,
-        "verified": 13,
-        "verifiedChannels": 13,
+        "verified": 12,
+        "error": 1,
+        "verifiedChannels": 12,
         "usEntries": 13,
         "duplicateStreamEntries": 13,
         "additionalCandidates": 0
       },
       "free-tv": {
         "candidateStreams": 28,
-        "error": 7,
-        "verified": 19,
+        "error": 6,
+        "verified": 20,
         "ended": 2,
-        "verifiedChannels": 19,
+        "verifiedChannels": 20,
         "usEntries": 28,
         "duplicateStreamEntries": 16,
         "additionalCandidates": 12,
-        "additionalVerifiedStreams": 4,
-        "additionalVerifiedChannels": 2
+        "additionalVerifiedStreams": 5,
+        "additionalVerifiedChannels": 3
       },
       "category:weather": {
         "candidateStreams": 10,
@@ -164,9 +165,9 @@
       },
       "category:cooking": {
         "candidateStreams": 19,
-        "verified": 16,
-        "error": 3,
-        "verifiedChannels": 16,
+        "verified": 18,
+        "error": 1,
+        "verifiedChannels": 18,
         "usEntries": 19,
         "duplicateStreamEntries": 19,
         "additionalCandidates": 0
@@ -182,20 +183,19 @@
       },
       "category:education": {
         "candidateStreams": 63,
-        "verified": 35,
-        "error": 25,
-        "frozen": 1,
+        "verified": 39,
+        "frozen": 2,
+        "error": 20,
         "unsupported": 2,
-        "verifiedChannels": 35,
+        "verifiedChannels": 39,
         "usEntries": 63,
         "duplicateStreamEntries": 63,
         "additionalCandidates": 0
       },
       "category:travel": {
         "candidateStreams": 14,
-        "verified": 13,
-        "error": 1,
-        "verifiedChannels": 13,
+        "verified": 14,
+        "verifiedChannels": 14,
         "usEntries": 14,
         "duplicateStreamEntries": 14,
         "additionalCandidates": 0
@@ -211,24 +211,24 @@
       }
     },
     "categories": {
-      "news": 79,
-      "sports": 87,
-      "movies": 172,
-      "series": 244,
-      "entertainment": 161,
-      "documentary": 56,
-      "kids": 105,
-      "animation": 63,
+      "news": 78,
+      "sports": 86,
+      "movies": 175,
+      "series": 246,
+      "entertainment": 159,
+      "documentary": 55,
+      "kids": 102,
+      "animation": 61,
       "comedy": 70,
-      "music": 63,
-      "cooking": 18,
-      "travel": 13,
+      "music": 64,
+      "cooking": 19,
+      "travel": 14,
       "science": 4,
-      "education": 35,
+      "education": 39,
       "business": 20,
       "weather": 9,
       "classic": 48,
-      "auto": 13
+      "auto": 12
     }
   },
   "channels": [
@@ -736,21 +736,6 @@
       ]
     },
     {
-      "id": "AE.us@East",
-      "name": "A&E (East)",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/A%26E_Network_logo.svg/960px-A%26E_Network_logo.svg.png",
-      "streams": [
-        {
-          "url": "https://cache0.wonvt.st/live/0c4r73315dt0we0fitn3j/master.m3u8",
-          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36 Edge/12.246",
-          "referrer": "https://tvnow.st"
-        }
-      ],
-      "categories": [
-        "entertainment"
-      ]
-    },
-    {
       "id": "AELatinAmerica.us@Panregional",
       "name": "A&E Latin America (Panregional)",
       "logo": "",
@@ -794,19 +779,6 @@
           "url": "https://streamer1.connectto.com/AABC_WEB_1201/index.m3u8",
           "userAgent": "",
           "referrer": ""
-        }
-      ],
-      "categories": []
-    },
-    {
-      "id": "ABC.us@East",
-      "name": "ABC (East)",
-      "logo": "https://i.imgur.com/pvXZ8DX.png",
-      "streams": [
-        {
-          "url": "https://cache0.wonvt.st/live/01qdodh1lghijw0ls22qa/master.m3u8",
-          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36 Edge/12.246",
-          "referrer": "https://tvnow.st"
         }
       ],
       "categories": []
@@ -1311,6 +1283,32 @@
       ]
     },
     {
+      "id": "Access19.us@SD",
+      "name": "Access 19",
+      "logo": "https://i.imgur.com/7F4LJMT.png",
+      "streams": [
+        {
+          "url": "https://reflect-montgomerycommunitymedia.cablecast.tv/live-8/live/stream-3/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "Access4PAC.us@SD",
+      "name": "Access 4 PAC",
+      "logo": "https://i.imgur.com/DQu3gES.png",
+      "streams": [
+        {
+          "url": "https://reflect-channel18vod-springfield-il-us.cablecast.tv/live-16/live/stream-4/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "AMP1.us@SD",
       "name": "Access Media Productions Channel",
       "logo": "https://i.imgur.com/3ZhrthD.png",
@@ -1382,6 +1380,19 @@
       "streams": [
         {
           "url": "https://livestream.telvue.com/nashuanh1/f7b44cfafd5c52223d5498196c8a2e7b.sdp/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "AccessTuolumne.us@SD",
+      "name": "Access Tuolumne (Tuolumne County CA)",
+      "logo": "https://i.imgur.com/sYtDaQ1.png",
+      "streams": [
+        {
+          "url": "https://reflect-tuolumne.cablecast.tv/live-3/live/stream-1/live.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -2047,6 +2058,19 @@
       ]
     },
     {
+      "id": "free-tv:AmericaTeVe.us",
+      "name": "America TeVe",
+      "logo": "https://pbs.twimg.com/profile_images/2067373416173260801/9cUCY5wX_200x200.jpg",
+      "streams": [
+        {
+          "url": "https://live.gideo.video/americateve2/master.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "AmericasNextTopModel.us@SD",
       "name": "America's Next Top Model",
       "logo": "https://images.pluto.tv/channels/68679fc6bb46d0bdd38ac9a4/colorLogoPNG_1756466390265.png",
@@ -2144,6 +2168,21 @@
       ],
       "categories": [
         "news"
+      ]
+    },
+    {
+      "id": "AmericanHeroesChannel.us@SD",
+      "name": "American Heroes Channel",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/American_Heroes_Channel_logo.svg/960px-American_Heroes_Channel_logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_AMERICAN_HEROES/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "documentary"
       ]
     },
     {
@@ -2366,6 +2405,21 @@
       "categories": [
         "comedy",
         "series"
+      ]
+    },
+    {
+      "id": "AnimalPlanet.us@East",
+      "name": "Animal Planet (East)",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/2018_Animal_Planet_logo.svg/960px-2018_Animal_Planet_logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_ANIMAL_PLANET/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "documentary"
       ]
     },
     {
@@ -2609,19 +2663,6 @@
       "categories": [
         "series"
       ]
-    },
-    {
-      "id": "ATL26.us@SD",
-      "name": "ATL 26",
-      "logo": "https://i.imgur.com/s4fqNMt.png",
-      "streams": [
-        {
-          "url": "https://securestream11.champds.com/LIVE/AtlantaGALIVE/AtlantaGALIVE.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": []
     },
     {
       "id": "AtlantaChannel.us@SD",
@@ -3804,6 +3845,45 @@
       ]
     },
     {
+      "id": "BIGCivicChannel.us@SD",
+      "name": "BIG Civic Channel",
+      "logo": "https://i.imgur.com/6HDMVBB.png",
+      "streams": [
+        {
+          "url": "https://reflect-brookline-interactive-group.cablecast.tv/live-5/live/stream-2/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "BIGCommunityChannel.us@SD",
+      "name": "BIG Community Channel",
+      "logo": "https://i.imgur.com/6HDMVBB.png",
+      "streams": [
+        {
+          "url": "https://reflect-brookline-interactive-group.cablecast.tv/live-4/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "BigTenNetwork.us@SD",
+      "name": "Big Ten Network",
+      "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/3/39/Big_Ten_Network_Logo.svg/960px-Big_Ten_Network_Logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_BTN/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "BilliardTV.us@SD",
       "name": "Billiard TV",
       "logo": "https://i.imgur.com/BZijfKh.png",
@@ -4359,7 +4439,7 @@
       "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Boomerang_2014_logo.svg/960px-Boomerang_2014_logo.svg.png",
       "streams": [
         {
-          "url": "http://212.5.144.156:8080/boomerang/index.m3u8",
+          "url": "http://23.237.104.106:8080/USA_BOOMERANG/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -4398,6 +4478,19 @@
         "animation",
         "entertainment"
       ]
+    },
+    {
+      "id": "Bounce.us@SD",
+      "name": "Bounce",
+      "logo": "https://m.media-amazon.com/images/I/718bHckb8eL.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_BOUNCE/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "BounceXL.us@SD",
@@ -4521,6 +4614,19 @@
       ]
     },
     {
+      "id": "BPTV.us@SD",
+      "name": "Buena Park Television",
+      "logo": "https://i.imgur.com/ObNBL7L.png",
+      "streams": [
+        {
+          "url": "https://buenapark.cablecast.tv/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "BusinessRockstars.us@SD",
       "name": "Business Rockstars",
       "logo": "https://i.imgur.com/vfAMWLJ.png",
@@ -4579,6 +4685,73 @@
       "categories": [
         "entertainment"
       ]
+    },
+    {
+      "id": "BXArts.us@SD",
+      "name": "BX Arts",
+      "logo": "https://i.imgur.com/PF71rdZ.png",
+      "streams": [
+        {
+          "url": "https://reflect-stream-bronxnet.cablecast.tv/live-19/live/stream-2/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "BXCulture.us@SD",
+      "name": "BX Culture",
+      "logo": "https://i.imgur.com/PF71rdZ.png",
+      "streams": [
+        {
+          "url": "https://reflect-stream-bronxnet.cablecast.tv/live-7/live/stream-3/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "BXInform.us@SD",
+      "name": "BX Inform",
+      "logo": "https://i.imgur.com/PF71rdZ.png",
+      "streams": [
+        {
+          "url": "https://reflect-stream-bronxnet.cablecast.tv/live-8/live/stream-4/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "news"
+      ]
+    },
+    {
+      "id": "BXInspire.us@SD",
+      "name": "BX Inspire",
+      "logo": "https://i.imgur.com/PF71rdZ.png",
+      "streams": [
+        {
+          "url": "https://reflect-stream-bronxnet.cablecast.tv/live-18/live/stream-7/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "BXOmni.us@SD",
+      "name": "BX Omni",
+      "logo": "https://i.imgur.com/PF71rdZ.png",
+      "streams": [
+        {
+          "url": "https://reflect-stream-bronxnet.cablecast.tv/live-16/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "BYUTV.us@SD",
@@ -4808,22 +4981,6 @@
       "streams": [
         {
           "url": "http://158.172.217.18:8000/play/a03a/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "animation",
-        "kids"
-      ]
-    },
-    {
-      "id": "CartoonNetwork.us@West",
-      "name": "Cartoon Network West",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Cartoon_Network_2010_logo.svg/960px-Cartoon_Network_2010_logo.svg.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/cartoon/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -5495,6 +5652,19 @@
       ]
     },
     {
+      "id": "CCX1.us@SD",
+      "name": "CCX1",
+      "logo": "https://i.imgur.com/1hHW3IK.png",
+      "streams": [
+        {
+          "url": "http://reflect-ccx.cablecast.tv/live-9/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "CelebrityNameGame.us@SD",
       "name": "Celebrity Name Game",
       "logo": "https://provider-static.plex.tv/epg/cms/production/773232e1-5c36-490b-922e-e5be8ec12eb2/celebrityd5796a3e14bf45513f7b3071b90d030.png",
@@ -5562,6 +5732,19 @@
       "categories": []
     },
     {
+      "id": "CGTV.us@SD",
+      "name": "Champaign Government Television (CGTV) (Champaign IL)",
+      "logo": "https://champaignil.gov/wp-content/uploads/2011/06/cgtv-page-logo.jpg",
+      "streams": [
+        {
+          "url": "https://champaign-cablecast.cablecast.tv/live/stream-2/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "Channel10.us@SD",
       "name": "Channel 10",
       "logo": "https://spcity.org/ImageRepository/Document?documentID=4246",
@@ -5581,6 +5764,19 @@
       "streams": [
         {
           "url": "https://cdn3.wowza.com/5/RXJNMFI3VlVkOEFP/scottsdale/G0040_007/chunklist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "Channel18GAC.us@SD",
+      "name": "Channel 18 GAC",
+      "logo": "https://i.imgur.com/au07aLr.png",
+      "streams": [
+        {
+          "url": "https://reflect-channel18vod-springfield-il-us.cablecast.tv/live-13/live/stream-1/live.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -5950,6 +6146,21 @@
       ]
     },
     {
+      "id": "CinemaxClassics.us@East",
+      "name": "Cinemax Classics (East)",
+      "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/6/66/Cinemax_Classics_Logo.png/960px-Cinemax_Classics_Logo.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_5STARMAX/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "movies"
+      ]
+    },
+    {
       "id": "CinemaxHits.us@East",
       "name": "Cinemax Hits (East)",
       "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/f/fb/Cinemax_Hits_Logo.png/960px-Cinemax_Hits_Logo.png",
@@ -6036,6 +6247,32 @@
       "categories": [
         "classic"
       ]
+    },
+    {
+      "id": "CityofMonroeGovernmentChannel.us@SD",
+      "name": "City of Monroe Government Channel",
+      "logo": "https://i.imgur.com/U5fZkCN.jpeg",
+      "streams": [
+        {
+          "url": "https://reflect-monroe-mi-ci.cablecast.tv/live-1/live/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "CapitalCityConnectionMontgomery.us@SD",
+      "name": "City TV Capital City Connection",
+      "logo": "https://image.roku.com/developer_channels/prod/a2cb55884ff88035ebbbb32ef9c60a228314d0a2ac4c86722aff5ea1cb9abcd8.png",
+      "streams": [
+        {
+          "url": "https://capitalcityconnection.cablecast.tv/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "CityTVSanDiego.us@SD",
@@ -6275,6 +6512,21 @@
       ]
     },
     {
+      "id": "CMT.us@East",
+      "name": "CMT (East)",
+      "logo": "https://i.imgur.com/S7DOpdY.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_CMT/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "music"
+      ]
+    },
+    {
       "id": "CMTEqualPlay.us@SD",
       "name": "CMT Equal Play",
       "logo": "https://i.imgur.com/9ysjkkL.png",
@@ -6321,21 +6573,6 @@
         },
         {
           "url": "https://streaming.onnethn.com/CNN_ESPANOL/playlist.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "news"
-      ]
-    },
-    {
-      "id": "CNN.us@HD",
-      "name": "CNN HD",
-      "logo": "https://jiotvimages.cdn.jio.com/dare_images/images/CNN.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/cnn/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -6680,6 +6917,34 @@
       ]
     },
     {
+      "id": "ConcordTV.us@SD",
+      "name": "Concord TV (Concord CA)",
+      "logo": "https://i.imgur.com/1vh2a3H.png",
+      "streams": [
+        {
+          "url": "https://concordca.cablecast.tv/live/stream-2/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "CookingChannel.us@SD",
+      "name": "Cooking Channel",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/Cooking_Channel.svg/960px-Cooking_Channel.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_COOKING/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "cooking"
+      ]
+    },
+    {
       "id": "CookingPanda.us@SD",
       "name": "Cooking Panda",
       "logo": "https://i.imgur.com/bhY0Zcs.png",
@@ -6772,6 +7037,19 @@
       "streams": [
         {
           "url": "https://cdn3.wowza.com/5/UWpORHhLSEs5SkJs/costamesa/G0075_002/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "COStv.us@SD",
+      "name": "COStv",
+      "logo": "https://i.imgur.com/IVqjCRE.png",
+      "streams": [
+        {
+          "url": "https://irctv.cablecast.tv/live/stream-1/live.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -7512,6 +7790,21 @@
       ]
     },
     {
+      "id": "DestinationAmerica.us@SD",
+      "name": "Destination America",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Destination_America_logo.svg/960px-Destination_America_logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_DESTINATION_AMERICA/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "travel"
+      ]
+    },
+    {
       "id": "DetectiveConan.us@Spain",
       "name": "Detective Conan (Spain)",
       "logo": "",
@@ -7559,6 +7852,60 @@
       ]
     },
     {
+      "id": "DetroitChannel10.us@SD",
+      "name": "Detroit Channel 10",
+      "logo": "https://i.imgur.com/zAdcg9m.png",
+      "streams": [
+        {
+          "url": "https://reflect-detroit-vod.cablecast.tv/live-2/live/stream-6/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "DetroitChannel21.us@SD",
+      "name": "Detroit Channel 21",
+      "logo": "https://i.imgur.com/yXXEGKg.png",
+      "streams": [
+        {
+          "url": "https://reflect-detroit-vod.cablecast.tv/live-9/live/stream-4/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "DetroitChannel22.us@SD",
+      "name": "Detroit Channel 22",
+      "logo": "https://i.imgur.com/zAdcg9m.png",
+      "streams": [
+        {
+          "url": "https://reflect-detroit-vod.cablecast.tv/live-3/live/stream-3/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "education"
+      ]
+    },
+    {
+      "id": "DetroitChannel68.us@SD",
+      "name": "Detroit Channel 68",
+      "logo": "https://i.imgur.com/zAdcg9m.png",
+      "streams": [
+        {
+          "url": "https://reflect-detroit-vod.cablecast.tv/live-10/live/stream-5/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "DHE.us@SD",
       "name": "DHE",
       "logo": "",
@@ -7601,21 +7948,6 @@
       ],
       "categories": [
         "series"
-      ]
-    },
-    {
-      "id": "DiscoveryChannel.us@East",
-      "name": "Discovery Channel (East)",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/2019_Discovery_logo.svg/960px-2019_Discovery_logo.svg.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/discovery/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "entertainment"
       ]
     },
     {
@@ -7851,11 +8183,6 @@
       "streams": [
         {
           "url": "https://directv-iptv-player.vercel.app/api/stream?url=http://212.5.144.156:8080/disneyjr/tracks-v1a1/mono.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        },
-        {
-          "url": "http://212.5.144.156/disneyjr/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -8688,21 +9015,6 @@
       "categories": []
     },
     {
-      "id": "ESPN.us@SD",
-      "name": "ESPN",
-      "logo": "https://imgx.fubo.tv/station_logos/espn-hd_c.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/espn/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "sports"
-      ]
-    },
-    {
       "id": "ESPN2.us@HD",
       "name": "ESPN 2 HD",
       "logo": "https://i.imgur.com/00tsvjE.png",
@@ -9371,6 +9683,19 @@
       ]
     },
     {
+      "id": "FCPublicMedia.us@SD",
+      "name": "FC Public Media (Fort Collins CO)",
+      "logo": "https://i.imgur.com/naLbZuo.png",
+      "streams": [
+        {
+          "url": "https://reflect-fcpublicmedia.cablecast.tv/live-5/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "FearFactor.us@US",
       "name": "Fear Factor (US)",
       "logo": "https://i.imgur.com/CIYnLWz.png",
@@ -9413,34 +9738,6 @@
       ],
       "categories": [
         "series"
-      ]
-    },
-    {
-      "id": "FGTV.us@SD",
-      "name": "FGTV",
-      "logo": "https://i.imgur.com/RXFmzVY.png",
-      "streams": [
-        {
-          "url": "https://securestream11.champds.com/LIVE/FultonCoGALIVE/FultonCoGALIVE.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": []
-    },
-    {
-      "id": "FierroaFondoTV.us@SD",
-      "name": "Fierro a Fondo TV",
-      "logo": "https://pbs.twimg.com/profile_images/1903618079696773120/maQJpd9__400x400.jpg",
-      "streams": [
-        {
-          "url": "http://45.70.201.81:8000/play/a00x/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "auto"
       ]
     },
     {
@@ -9615,7 +9912,7 @@
       "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Food_Network_New_Logo.png/960px-Food_Network_New_Logo.png",
       "streams": [
         {
-          "url": "http://212.5.144.156:8080/foodnetwork/index.m3u8",
+          "url": "http://23.237.104.106:8080/USA_FOOD_NETWORK/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -9708,6 +10005,19 @@
       "categories": [
         "kids"
       ]
+    },
+    {
+      "id": "FCTV.us@SD",
+      "name": "Fort Collins Cable TV (FCTV) (Fort Collins CO)",
+      "logo": "https://i.imgur.com/N5Canf3.png",
+      "streams": [
+        {
+          "url": "https://reflect-vod-fcgov.cablecast.tv/live-9/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "CityofFortPierce.us@SD",
@@ -10196,6 +10506,32 @@
       ]
     },
     {
+      "id": "CMAC1.us@SD",
+      "name": "Fresno CMAC 1 Public Channel",
+      "logo": "https://i.imgur.com/PYhdQy9.png",
+      "streams": [
+        {
+          "url": "https://reflect-vod-cmac.cablecast.tv/live-11/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "CMAC3.us@SD",
+      "name": "Fresno CMAC 3 Government Channel",
+      "logo": "https://i.imgur.com/ToZzguz.png",
+      "streams": [
+        {
+          "url": "https://reflect-vod-cmac.cablecast.tv/live-11/live/stream-3/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "FrightFlix.us@SD",
       "name": "FrightFlix",
       "logo": "https://i.imgur.com/rgNQYAl.png",
@@ -10626,47 +10962,6 @@
       "categories": [
         "kids"
       ]
-    },
-    {
-      "id": "GillettePublicAccessTelevisionChannel189.us@SD",
-      "name": "Gillette Public Access Television Channel 189",
-      "logo": "https://yt3.googleusercontent.com/ytc/AGIKgqMoPQ32FU8R2lR71LXhYrC3tCHfjJEXcm6E9PEO=s176-c-k-c0x00ffffff-no-rj",
-      "streams": [
-        {
-          "url": "https://securestream11.champds.com/LIVE/GilletteWYLIVE3/GilletteWYLIVE3.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "education"
-      ]
-    },
-    {
-      "id": "GillettePublicAccessTelevisionChannel190.us@SD",
-      "name": "Gillette Public Access Television Channel 190",
-      "logo": "https://yt3.googleusercontent.com/ytc/AGIKgqMoPQ32FU8R2lR71LXhYrC3tCHfjJEXcm6E9PEO=s176-c-k-c0x00ffffff-no-rj",
-      "streams": [
-        {
-          "url": "https://securestream11.champds.com/LIVE/GilletteWYLIVE/GilletteWYLIVE.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": []
-    },
-    {
-      "id": "GillettePublicAccessTelevisionChannel192.us@SD",
-      "name": "Gillette Public Access Television Channel 192",
-      "logo": "https://yt3.googleusercontent.com/ytc/AGIKgqMoPQ32FU8R2lR71LXhYrC3tCHfjJEXcm6E9PEO=s176-c-k-c0x00ffffff-no-rj",
-      "streams": [
-        {
-          "url": "https://securestream11.champds.com/LIVE/GilletteWYLIVE2/GilletteWYLIVE2.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": []
     },
     {
       "id": "CMAPChannel17.us@SD",
@@ -11281,6 +11576,47 @@
       "categories": []
     },
     {
+      "id": "HCTVEducationalAccessChannel.us@SD",
+      "name": "HCTV Educational Access Channel",
+      "logo": "https://i.imgur.com/bVbpgiD.png",
+      "streams": [
+        {
+          "url": "https://reflect-hudsonctv.cablecast.tv/live-26/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "education"
+      ]
+    },
+    {
+      "id": "HCTVGovernmentChannel.us@SD",
+      "name": "HCTV Government Channel",
+      "logo": "https://i.imgur.com/bVbpgiD.png",
+      "streams": [
+        {
+          "url": "https://reflect-hudsonctv.cablecast.tv/live-26/live/stream-2/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "HCTVPublicAccessChannel.us@SD",
+      "name": "HCTV Public Access Channel",
+      "logo": "https://i.imgur.com/bVbpgiD.png",
+      "streams": [
+        {
+          "url": "https://reflect-hudsonctv.cablecast.tv/live-26/live/stream-5/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "Heartland.us@Eastern",
       "name": "Heartland (Eastern)",
       "logo": "https://upload.wikimedia.org/wikipedia/en/b/ba/Heartland_TV_logo.png",
@@ -11545,21 +11881,6 @@
         }
       ],
       "categories": []
-    },
-    {
-      "id": "History.us@East",
-      "name": "History (East)",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/History_%282021%29.svg/500px-History_%282021%29.svg.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/history/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "documentary"
-      ]
     },
     {
       "id": "History2LatinAmerica.us@Panregional",
@@ -12031,6 +12352,19 @@
       ]
     },
     {
+      "id": "HBTV.us@SD",
+      "name": "Huntington Beach TV Channel 3",
+      "logo": "https://i.imgur.com/xADoSqE.png",
+      "streams": [
+        {
+          "url": "https://reflect-huntingtonbeach.cablecast.tv/live-4/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "Heleneetlesgarcons.us@France",
       "name": "Hélène et les garçons",
       "logo": "",
@@ -12130,6 +12464,21 @@
       ],
       "categories": [
         "series"
+      ]
+    },
+    {
+      "id": "IFC.us@East",
+      "name": "IFC (East)",
+      "logo": "https://i.imgur.com/bQdkyF9.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_IFC/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "movies"
       ]
     },
     {
@@ -12319,21 +12668,6 @@
       ]
     },
     {
-      "id": "InvestigationDiscovery.us@East",
-      "name": "Investigation Discovery (East)",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/InvestigationDiscoveryLogo2020.svg/960px-InvestigationDiscoveryLogo2020.svg.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/id/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "documentary"
-      ]
-    },
-    {
       "id": "InvestigationDiscoveryLatinAmerica.us@South",
       "name": "Investigation Discovery Latin America South",
       "logo": "",
@@ -12346,26 +12680,6 @@
       ],
       "categories": [
         "documentary"
-      ]
-    },
-    {
-      "id": "IONTV.us@East",
-      "name": "ION",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Ion_logo.svg/960px-Ion_logo.svg.png",
-      "streams": [
-        {
-          "url": "https://pb-xhb3ic8b61whm.akamaized.net/Ion_US.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        },
-        {
-          "url": "https://wurlewscripps.global.transmit.live/hls/68b9b0338cacd6fc468c222c/v1/scripps_ion_1/vizio_us/latest/main/hls/playlist.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "entertainment"
       ]
     },
     {
@@ -12398,6 +12712,31 @@
         },
         {
           "url": "https://6358c493.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fSW9uUGx1c19ITFM/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "entertainment"
+      ]
+    },
+    {
+      "id": "IONTV.us@East",
+      "name": "ION TV (East)",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Ion_logo.svg/960px-Ion_logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_ION/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
+        {
+          "url": "https://pb-xhb3ic8b61whm.akamaized.net/Ion_US.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
+        {
+          "url": "https://wurlewscripps.global.transmit.live/hls/68b9b0338cacd6fc468c222c/v1/scripps_ion_1/vizio_us/latest/main/hls/playlist.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -13017,6 +13356,19 @@
         },
         {
           "url": "https://amg00327-coxmediagroup-kirobreakingnews-vizious-vumic.amagi.tv/playlist/amg00327-coxmediagroup-kirobreakingnews-vizious/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "ABC.us@KITV",
+      "name": "KITV 4 Island News",
+      "logo": "https://i.imgur.com/pvXZ8DX.png",
+      "streams": [
+        {
+          "url": "https://fuel-streaming-prod01.fuelmedia.io/v1/sem/c4067ddc-0e67-4928-b7ec-624481f721a6.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -14092,6 +14444,21 @@
       ]
     },
     {
+      "id": "LA36.us@SD",
+      "name": "Los Angeles Local Television Channel 36",
+      "logo": "https://i.imgur.com/JxTzUEq.png",
+      "streams": [
+        {
+          "url": "https://reflect-channel36-la.cablecast.tv/live-3/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "education"
+      ]
+    },
+    {
       "id": "LosarchivosdelFBI.us@Spain",
       "name": "Los archivos del FBI (Spain)",
       "logo": "",
@@ -15117,6 +15484,34 @@
       "categories": []
     },
     {
+      "id": "MonroeCommunityMediaEducationChannel.us@SD",
+      "name": "Monroe Community Media Education Channel",
+      "logo": "https://i.imgur.com/gS4x0uX.png",
+      "streams": [
+        {
+          "url": "https://reflect-monroe-public-access.cablecast.tv/live-4/live/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "education"
+      ]
+    },
+    {
+      "id": "MonroeCommunityMediaPublicAccessChannel.us@SD",
+      "name": "Monroe Community Media Public Access Channel",
+      "logo": "https://i.imgur.com/gS4x0uX.png",
+      "streams": [
+        {
+          "url": "https://reflect-monroe-public-access.cablecast.tv/live-3/live/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "MonroeCountyTV.us@SD",
       "name": "Monroe County Television MCTV (Monroe County FL)",
       "logo": "https://i.imgur.com/YJfzdSu.png",
@@ -15173,6 +15568,19 @@
       "categories": [
         "sports"
       ]
+    },
+    {
+      "id": "MontgomeryChannel.us@SD",
+      "name": "Montgomery Channel",
+      "logo": "https://i.imgur.com/mU1Ixfj.png",
+      "streams": [
+        {
+          "url": "https://reflect-montgomerycommunitymedia.cablecast.tv/live-11/live/stream-4/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "MorePlutoTVComedy.us@CA",
@@ -15450,6 +15858,21 @@
         }
       ],
       "categories": []
+    },
+    {
+      "id": "MTV.us@East",
+      "name": "MTV (East)",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/MTV_2021_%28brand_version%29.svg/960px-MTV_2021_%28brand_version%29.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_MTV/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "entertainment"
+      ]
     },
     {
       "id": "MTVAreyoutheOne.us@BR",
@@ -16347,21 +16770,6 @@
       "categories": []
     },
     {
-      "id": "NationalGeographic.us@East",
-      "name": "National Geographic (East)",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Natgeologo.svg/960px-Natgeologo.svg.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/natgeo/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "documentary"
-      ]
-    },
-    {
       "id": "NationalGeographicLatinAmerica.us@Panregional",
       "name": "National Geographic Latin America (Panregional)",
       "logo": "",
@@ -16408,11 +16816,6 @@
       "streams": [
         {
           "url": "http://23.237.104.106:8080/USA_NBA/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        },
-        {
-          "url": "http://rezofoot.tv/NBATV/index.m3u8",
           "userAgent": "",
           "referrer": ""
         },
@@ -16835,21 +17238,6 @@
       ]
     },
     {
-      "id": "News12Brooklyn.us@SD",
-      "name": "News12 Brooklyn",
-      "logo": "https://i.imgur.com/fvcOzzK.png",
-      "streams": [
-        {
-          "url": "https://mdc.ott.alticeusa.net/live4.ott.optimum.net/live4-uploads/N12KH_A1/index_new.m3u8?omap=https",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "news"
-      ]
-    },
-    {
       "id": "News12PlusLongIsland.us@HD",
       "name": "News12+ Long Island",
       "logo": "https://i.ibb.co/p6FPNcCk/news12plus-LI.jpg",
@@ -17045,21 +17433,6 @@
       ]
     },
     {
-      "id": "NickJr.us@East",
-      "name": "Nick Jr. (East)",
-      "logo": "https://i.imgur.com/KT4tdQs.png",
-      "streams": [
-        {
-          "url": "http://212.5.144.156:8080/nickjr/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "kids"
-      ]
-    },
-    {
       "id": "NickJrClub.us@BR",
       "name": "Nick Jr. Club (BR)",
       "logo": "",
@@ -17128,21 +17501,6 @@
           "url": "https://jmp2.uk/plu-5ca6748a37b88b269472dad9.m3u8",
           "userAgent": "",
           "referrer": ""
-        }
-      ],
-      "categories": [
-        "kids"
-      ]
-    },
-    {
-      "id": "Nickelodeon.us@East",
-      "name": "Nickelodeon (East)",
-      "logo": "https://i.imgur.com/E84jnP8.png",
-      "streams": [
-        {
-          "url": "https://cache0.wonvt.st/live/1ewxgzu023dos60vlh62k/master.m3u8",
-          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
-          "referrer": "https://tvnow.st/"
         }
       ],
       "categories": [
@@ -18210,6 +18568,19 @@
       "categories": []
     },
     {
+      "id": "OutdoorChannel.us@HD",
+      "name": "Outdoor Channel HD",
+      "logo": "https://i.imgur.com/Kh4MWaY.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_OUTDOOR/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "OutdoorChannel.us@Vietnam",
       "name": "Outdoor Channel Vietnam",
       "logo": "https://i.imgur.com/Kh4MWaY.png",
@@ -18302,6 +18673,19 @@
       ]
     },
     {
+      "id": "OWN.us@East",
+      "name": "OWN (East)",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/OWN_2011_logo.svg/960px-OWN_2011_logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_OWN/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "PCTChannel27.us@SD",
       "name": "Pacific Coast TV HMB Coastside Channel 27",
       "logo": "https://i.imgur.com/b0ufMkd.png",
@@ -18381,6 +18765,22 @@
       ],
       "categories": [
         "movies"
+      ]
+    },
+    {
+      "id": "ParamountNetwork.us@East",
+      "name": "Paramount Network (East)",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Paramount_Network.svg/960px-Paramount_Network.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_PARAMOUNT_NETWORK/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "movies",
+        "series"
       ]
     },
     {
@@ -21637,11 +22037,6 @@
           "url": "https://livecdn.use1-0004.jwplive.com/live/sites/fGLyccP5/media/FoWynVnP/live.isml/.m3u8",
           "userAgent": "",
           "referrer": ""
-        },
-        {
-          "url": "http://trn03.bozztv.com/gin-positiv/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
         }
       ],
       "categories": []
@@ -22904,6 +23299,32 @@
       ]
     },
     {
+      "id": "SCVTV.us@SD",
+      "name": "SCVTV (Santa Clarita CA)",
+      "logo": "https://i.imgur.com/qEsZbZz.png",
+      "streams": [
+        {
+          "url": "https://reflect-scvtv.cablecast.tv/live-2/live/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "SECNetwork.us@SD",
+      "name": "SEC Network",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/SEC_Network_logo.svg/960px-SEC_Network_logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_SEC_NETWORK/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "SemillitasTV.us@SD",
       "name": "Semillitas TV",
       "logo": "https://i.imgur.com/u3yujUd.png",
@@ -23725,6 +24146,21 @@
       ]
     },
     {
+      "id": "StLuciePublicSchools.us@SD",
+      "name": "St Lucie Public Schools",
+      "logo": "https://i.imgur.com/wnB0fWG.png",
+      "streams": [
+        {
+          "url": "https://reflect-stlucie-ps-fl.cablecast.tv/live-1/live/stream-1/WIFI-1896k-720p.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "education"
+      ]
+    },
+    {
       "id": "SPTV.us@SD",
       "name": "St. Pete TV (SPTV) (St Petersburg FL)",
       "logo": "https://i.imgur.com/fl8I3cg.png",
@@ -24290,6 +24726,22 @@
       ]
     },
     {
+      "id": "SYFY.us@East",
+      "name": "SYFY (East)",
+      "logo": "https://i.imgur.com/4fMWhUE.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_SYFY/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": [
+        "movies",
+        "series"
+      ]
+    },
+    {
       "id": "TalkinLiveClassicsTV.us@SD",
       "name": "Talkin Live Classics TV",
       "logo": "https://play-lh.googleusercontent.com/qt4POaxei89y6DP7sRJlRNv-yo4jlG3HuVO2Jb54Rf6T7aJ-j7RLG2z4aY9YrU5d0Q=w240-h480-rw",
@@ -24410,17 +24862,12 @@
       ]
     },
     {
-      "id": "TBN.us@East",
-      "name": "TBN (East)",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/TBN_logo_2015.jpg/960px-TBN_logo_2015.jpg",
+      "id": "TBNArmenia.us@SD",
+      "name": "TBN Armenia",
+      "logo": "https://i.imgur.com/U5XsT3j.png",
       "streams": [
         {
-          "url": "http://212.5.144.156:8080/tbn/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        },
-        {
-          "url": "https://a-cdn.klowdtv.com/live3/tbn_720p/playlist.m3u8",
+          "url": "https://164475.gvideo.io/mpegts/164475_650646/master_mpegts.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -24447,6 +24894,19 @@
       "streams": [
         {
           "url": "https://5d23269b3ec0c.streamlock.net/WEB_Ukraine24/ngrp:Ukraine24.stream-adaptive/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
+      "id": "TBN.us@East",
+      "name": "TBN+",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/TBN_logo_2015.jpg/960px-TBN_logo_2015.jpg",
+      "streams": [
+        {
+          "url": "https://a-cdn.klowdtv.com/live3/tbn_720p/playlist.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -24750,6 +25210,19 @@
       ]
     },
     {
+      "id": "TemeculaTV.us@SD",
+      "name": "Temecula TV (Temecula CA)",
+      "logo": "https://i.imgur.com/El16S4C.png",
+      "streams": [
+        {
+          "url": "https://reflect-temecula.cablecast.tv/live-2/live/stream-1/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
+    },
+    {
       "id": "Tempe11.us@SD",
       "name": "Tempe Channel 11",
       "logo": "https://i.imgur.com/KMeHRV3.png",
@@ -24794,6 +25267,11 @@
         },
         {
           "url": "https://tennischannelintl-rakuten.amagi.tv/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
+        {
+          "url": "http://23.237.104.106:8080/USA_TENNIS/index.m3u8",
           "userAgent": "",
           "referrer": ""
         },
@@ -26053,11 +26531,6 @@
       "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/TNT_Logo_2016.svg/960px-TNT_Logo_2016.svg.png",
       "streams": [
         {
-          "url": "http://212.5.144.156/tnt/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        },
-        {
           "url": "https://turnerlive.warnermediacdn.com/hls/live/2023168/tnteast/slate/VIDEO_0_3564000.m3u8",
           "userAgent": "",
           "referrer": ""
@@ -26227,21 +26700,6 @@
       "streams": [
         {
           "url": "http://api.toonamiaftermath.com:3000/est/playlist.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "animation"
-      ]
-    },
-    {
-      "id": "ToonamiAftermath.us@West",
-      "name": "Toonami Aftermath West",
-      "logo": "https://i.imgur.com/aSjhZK7.png",
-      "streams": [
-        {
-          "url": "http://api.toonamiaftermath.com:3000/pst/playlist.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -26458,6 +26916,19 @@
       "categories": [
         "entertainment"
       ]
+    },
+    {
+      "id": "CommunityTVChannel189.us@SD",
+      "name": "Traverse Area Community Media CommunityTV Channel 189 (Traverse City MI)",
+      "logo": "https://i.imgur.com/jmkLR6L.png",
+      "streams": [
+        {
+          "url": "https://reflect-tacm.cablecast.tv/live-3/live/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "TribecaChannel.us@SD",
@@ -27044,6 +27515,19 @@
       "categories": [
         "classic"
       ]
+    },
+    {
+      "id": "TVSTelevisionNetwork.us@SD",
+      "name": "TVS Television Network",
+      "logo": "",
+      "streams": [
+        {
+          "url": "https://rpn.bozztv.com/gusa/gusa-tvstn/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "TVSTravelNetwork.us@SD",
@@ -27756,9 +28240,14 @@
     },
     {
       "id": "VICETV.us@SD",
-      "name": "Vice TV",
+      "name": "VICE TV",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Vice_TV_logo.svg/960px-Vice_TV_logo.svg.png",
       "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_VICETV/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
         {
           "url": "https://vicetv-vicefast1-firetv.amagi.tv/playlist.m3u8",
           "userAgent": "",
@@ -27935,21 +28424,6 @@
       ],
       "categories": [
         "series"
-      ]
-    },
-    {
-      "id": "WarnerChannel.us@Colombia",
-      "name": "Warner Channel Colombia",
-      "logo": "",
-      "streams": [
-        {
-          "url": "http://38.134.250.110:8000/play/a029/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "movies"
       ]
     },
     {
@@ -28539,6 +29013,19 @@
       "categories": [
         "series"
       ]
+    },
+    {
+      "id": "WillametteFallsMediaCenter.us@SD",
+      "name": "Willamette Falls Media Center",
+      "logo": "https://i.imgur.com/KwlFyem.png",
+      "streams": [
+        {
+          "url": "https://reflect-greater-clackamas-county-tv.cablecast.tv/live-7/live/stream-4/live.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "Willow.us@SD",
@@ -29237,21 +29724,6 @@
       "categories": []
     },
     {
-      "id": "WWONTVChannel48.us@SD",
-      "name": "WWON TV CH 48",
-      "logo": "https://i.imgur.com/l4qHAq6.png",
-      "streams": [
-        {
-          "url": "https://tv2.fastcast4u.com:3943/stream/play.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ],
-      "categories": [
-        "entertainment"
-      ]
-    },
-    {
       "id": "UniMas.us@WXTVDT",
       "name": "WXTV-DT1",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Logo_UniM%C3%A1s_2021.svg/960px-Logo_UniM%C3%A1s_2021.svg.png",
@@ -29431,6 +29903,19 @@
       "categories": [
         "business"
       ]
+    },
+    {
+      "id": "YesNetwork.us@SD",
+      "name": "Yes Network",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/YES_Network_logo.svg/960px-YES_Network_logo.svg.png",
+      "streams": [
+        {
+          "url": "http://23.237.104.106:8080/USA_YES_NETWORK/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ],
+      "categories": []
     },
     {
       "id": "YoMTV.us@SD",
