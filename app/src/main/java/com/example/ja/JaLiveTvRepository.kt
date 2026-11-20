@@ -3,6 +3,8 @@ package com.example.ja
 import android.content.Context
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -21,18 +23,27 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
+@androidx.compose.runtime.Immutable
 internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>,
     val headers:Map<String,Map<String,String>> = emptyMap(),val categories:Set<String> = emptySet())
+@androidx.compose.runtime.Immutable
 internal data class JaLiveProgram(val channel:String,val start:Long,val end:Long,val title:String)
+@androidx.compose.runtime.Immutable
 internal data class JaLiveChannels(val channels:List<JaLiveChannel>,val saved:Boolean,val verifiedAt:String,val categoriesAvailable:Boolean=false)
-internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Long,val saved:Boolean)
+internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Long,val saved:Boolean) {
+    // Constructed on Dispatchers.IO; re-entering the screen does not regroup the entire EPG on Main.
+    val byChannel:Map<String,List<JaLiveProgram>> = programs.groupBy{it.channel}
+}
 
 internal class JaLiveTvRepository(private val context:Context) {
     private companion object { val catalogLock=Mutex() }
+    private val guideLock=Mutex()
+    @Volatile private var memoryCatalog:Pair<JaLiveChannels,Long>?=null
+    @Volatile private var memoryGuide:Pair<String,JaLiveGuide>?=null
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
     private val client=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS)
         .callTimeout(120,TimeUnit.SECONDS).build()
-    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.5 (https://github.com/jdaraver2011/ja_app)").build()
+    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.6 (https://github.com/jdaraver2011/ja_app)").build()
     private fun text(url:String,limit:Long,timeoutSeconds:Long=120):String = client.newCall(request(url)).also{it.timeout().timeout(timeoutSeconds,TimeUnit.SECONDS)}.execute().use { r ->
         if(!r.isSuccessful)throw IOException("HTTP ${r.code}")
         val body=r.body?:throw IOException("Empty response")
@@ -40,16 +51,17 @@ internal class JaLiveTvRepository(private val context:Context) {
     }
     suspend fun channels(force:Boolean=false):JaLiveChannels = withContext(Dispatchers.IO) { catalogLock.withLock {
         val file=File(root,"verified-us.json")
+        memoryCatalog?.takeIf{!force&&JaLiveTvRules.fresh(it.second,System.currentTimeMillis(),86_400_000)}?.let{return@withContext it.first}
         val cached=runCatching{parseCatalog(file.readText(),false)}.getOrNull()
         if(!force&&cached!=null&&cached.categoriesAvailable&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),86_400_000))
-            return@withContext cached
+            return@withContext cached.also{memoryCatalog=it to file.lastModified()}
         try {
             val raw=text("https://raw.githubusercontent.com/jdaraver2011/ja_app/live-tv-data/catalog.json",8_000_000,25)
             val parsed=parseCatalog(raw,false)
             require(parsed.categoriesAvailable)
-            write(file,raw);parsed
+            write(file,raw);memoryCatalog=parsed to file.lastModified();parsed
         }catch(e:CancellationException){throw e}catch(e:Exception){
-            cached?.copy(saved=true)?:throw e
+            cached?.copy(saved=true)?.also{memoryCatalog=it to file.lastModified()}?:throw e
         }
     }}
     private fun parseCatalog(raw:String,saved:Boolean):JaLiveChannels {
@@ -80,67 +92,90 @@ internal class JaLiveTvRepository(private val context:Context) {
         return JaLiveChannels(channels,saved,verified,doc.optJSONObject("counts")?.has("categories")==true)
     }
     suspend fun playbackChannel(channel:JaLiveChannel,force:Boolean=false):JaLiveChannel =
-        channels(force).channels.firstOrNull{it.id==channel.id}?:throw IOException("Channel no longer verified live")
+        if(!force)memoryCatalog?.first?.channels?.firstOrNull{it.id==channel.id}
+            ?:channels(false).channels.firstOrNull{it.id==channel.id}?:throw IOException("Channel no longer verified live")
+        else channels(true).channels.firstOrNull{it.id==channel.id}?:throw IOException("Channel no longer verified live")
 
-    // One compressed download per six hours; keep only matching channel schedules for 48 hours.
-    suspend fun guide(channels:List<JaLiveChannel>,force:Boolean=false):JaLiveGuide = withContext(Dispatchers.IO) {
-        val cancellation=currentCoroutineContext()
-        val now=System.currentTimeMillis()
-        val wanted=channels.map{it.id}.toSet()
-        val signature=java.security.MessageDigest.getInstance("SHA-256").digest((wanted.sorted().joinToString("\n")+"\npluto-v1").toByteArray()).joinToString(""){"%02x".format(it)}
-        val file=File(root,"guide-$signature.json")
-        val cached=runCatching{JSONObject(file.readText())}.getOrNull()
-        fun saved(obj:JSONObject,stale:Boolean):JaLiveGuide {
-            val a=obj.getJSONArray("programs")
-            return JaLiveGuide((0 until a.length()).map{val p=a.getJSONArray(it);JaLiveProgram(p.getString(0),p.getLong(1),p.getLong(2),p.getString(3))},obj.getLong("fetched"),stale)
-        }
-        if(!force&&cached?.optString("signature")==signature&&JaLiveTvRules.fresh(cached.optLong("fetched"),now,21_600_000))return@withContext saved(cached,false)
-        try {
-            val compressed=File(root,"us-epg.xml.gz")
-            if(force||!JaLiveTvRules.fresh(compressed.lastModified(),now,21_600_000)) {
-                client.newCall(request("https://epg.pw/xmltv/epg_US.xml.gz")).execute().use{r ->
-                    if(!r.isSuccessful)throw IOException("Guide HTTP ${r.code}")
-                    val body=r.body?:throw IOException("Empty guide")
-                    val temp=File(root,"guide-download.tmp")
-                    try {LimitedInput(body.byteStream(),48_000_000){cancellation.ensureActive()}.use{input -> temp.outputStream().use{input.copyTo(it)}}
-                        GZIPInputStream(temp.inputStream()).use{it.read()}
-                        if(!temp.renameTo(compressed))throw IOException("Guide cache write failed")
-                    }finally{temp.delete()}
-                }
-            }
-            val primary=parseGuide(compressed,channels,now,emptyMap()){cancellation.ensureActive()}
-            val pluto=try {
-                val exact=channels.flatMap{channel -> channel.urls.map{JaLiveTvRules.plutoId(it)}.filter{it.isNotBlank()}.distinct().map{it to channel.id}}
-                    .groupBy({it.first},{it.second}).mapNotNull{(id,targets)->targets.distinct().singleOrNull()?.let{id to it}}.toMap()
-                if(exact.isEmpty())emptyList() else {
-                    val plutoFile=File(root,"pluto-us.xml.gz")
-                    if(force||!JaLiveTvRules.fresh(plutoFile.lastModified(),now,21_600_000)) {
-                        client.newCall(request("https://i.mjh.nz/PlutoTV/us.xml.gz")).execute().use{r ->
-                            if(!r.isSuccessful)throw IOException("Pluto guide HTTP ${r.code}")
-                            val body=r.body?:throw IOException("Empty Pluto guide")
-                            val temp=File(root,"pluto-guide-download.tmp")
-                            try{LimitedInput(body.byteStream(),12_000_000){cancellation.ensureActive()}.use{input->temp.outputStream().use{input.copyTo(it)}}
-                                GZIPInputStream(temp.inputStream()).use{it.read()}
-                                if(!temp.renameTo(plutoFile))throw IOException("Pluto guide cache write failed")
-                            }finally{temp.delete()}
-                        }
-                    }
-                    parseGuide(plutoFile,channels,now,exact){cancellation.ensureActive()}
-                }
-            }catch(e:CancellationException){throw e}catch(_:Exception){emptyList()}
-            val providerChannels=pluto.map{it.channel}.toSet()
-            val result=primary.filterNot{it.channel in providerChannels}+pluto
-            val a=JSONArray();result.forEach{a.put(JSONArray().put(it.channel).put(it.start).put(it.end).put(it.title))}
-            val obj=JSONObject().put("signature",signature).put("fetched",compressed.lastModified()).put("programs",a)
-            write(file,obj.toString());saved(obj,false)
-        }catch(e:CancellationException){throw e}catch(e:Exception){if(cached?.optString("signature")==signature)saved(cached,true) else throw e}
+    private fun signature(channels:List<JaLiveChannel>):String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest((channels.map{it.id}.sorted().joinToString("\n")+"\npluto-v1").toByteArray()).joinToString(""){"%02x".format(it)}
+    suspend fun cachedGuide(channels:List<JaLiveChannel>):JaLiveGuide? = withContext(Dispatchers.IO){
+        val key=signature(channels)
+        memoryGuide?.takeIf{it.first==key}?.let{return@withContext it.second}
+        val loaded=runCatching {
+            val obj=JSONObject(File(root,"guide-$key.json").readText())
+            require(obj.getString("signature")==key)
+            val now=System.currentTimeMillis();val a=obj.getJSONArray("programs")
+            val entries=(0 until a.length()).mapNotNull{index->val item=a.getJSONArray(index)
+                if(item.getLong(2)<=now)null else JaLiveProgram(item.getString(0),item.getLong(1),item.getLong(2),item.getString(3))}
+            JaLiveGuide(entries,obj.getLong("fetched"),obj.optBoolean("saved",false))
+        }.getOrNull()
+        loaded?.also{memoryGuide=key to it}
     }
+    private data class Feed(val programs:List<JaLiveProgram>,val fetched:Long,val stale:Boolean)
+    // StreamingApp retains this work across channel playback. Concurrent providers publish useful partial schedules.
+    suspend fun guide(channels:List<JaLiveChannel>,force:Boolean=false,onPartial:suspend(JaLiveGuide)->Unit={}):JaLiveGuide = withContext(Dispatchers.IO){guideLock.withLock{
+        val began=android.os.SystemClock.elapsedRealtime()
+        val now=System.currentTimeMillis();val key=signature(channels)
+        val cached=cachedGuide(channels)
+        if(!force&&cached!=null&&!cached.saved&&JaLiveTvRules.fresh(cached.fetched,now,21_600_000))return@withContext cached
+        val cancellation=currentCoroutineContext()
+        suspend fun loadFeed(url:String,name:String,limit:Long,aliases:Map<String,String>):Feed? {
+            val file=File(root,name);var stale=false
+            if(force||!JaLiveTvRules.fresh(file.lastModified(),now,21_600_000)) {
+                try {
+                    client.newCall(request(url)).execute().use{response->
+                        if(!response.isSuccessful)throw IOException("Guide HTTP ${response.code}")
+                        val body=response.body?:throw IOException("Empty guide")
+                        val temp=File(root,"$name.download")
+                        try{
+                            LimitedInput(body.byteStream(),limit){cancellation.ensureActive()}.use{input->temp.outputStream().use{input.copyTo(it)}}
+                            GZIPInputStream(temp.inputStream()).use{it.read()}
+                            if(!temp.renameTo(file))throw IOException("Guide cache write failed")
+                        }finally{temp.delete()}
+                    }
+                }catch(e:CancellationException){throw e}catch(_:Exception){stale=true;if(!file.exists())return null}
+            }
+            return try{Feed(parseGuide(file,channels,now,aliases){cancellation.ensureActive()},file.lastModified(),stale)}
+            catch(e:CancellationException){throw e}catch(_:Exception){null}
+        }
+        val exact=channels.flatMap{channel->channel.urls.map{JaLiveTvRules.plutoId(it)}.filter{it.isNotBlank()}.distinct().map{it to channel.id}}
+            .groupBy({it.first},{it.second}).mapNotNull{(id,targets)->targets.distinct().singleOrNull()?.let{id to it}}.toMap()
+        val parts=mutableMapOf<String,Feed>();val partialLock=Mutex()
+        suspend fun publish(provider:String,feed:Feed?) {
+            if(feed==null)return
+            partialLock.withLock {
+                parts[provider]=feed
+                val pluto=parts["pluto"]?.programs.orEmpty();val plutoIds=pluto.map{it.channel}.toSet()
+                val primary=parts["primary"]?.programs.orEmpty().filterNot{it.channel in plutoIds}
+                val updated=primary+pluto;val updatedIds=updated.map{it.channel}.toSet()
+                val partial=JaLiveGuide(updated+cached?.programs.orEmpty().filterNot{it.channel in updatedIds},now,true)
+                withContext(Dispatchers.Main){onPartial(partial)}
+            }
+        }
+        coroutineScope {
+            val primaryJob=async { loadFeed("https://epg.pw/xmltv/epg_US.xml.gz","us-epg.xml.gz",48_000_000,emptyMap()).also{publish("primary",it)} }
+            val plutoJob=async { if(exact.isEmpty())null else loadFeed("https://i.mjh.nz/PlutoTV/us.xml.gz","pluto-us.xml.gz",12_000_000,exact).also{publish("pluto",it)} }
+            primaryJob.await();plutoJob.await()
+        }
+        if(parts.isEmpty())return@withContext cached?.copy(saved=true)?:throw IOException("Guide unavailable")
+        val pluto=parts["pluto"]?.programs.orEmpty();val providerChannels=pluto.map{it.channel}.toSet()
+        val programs=parts["primary"]?.programs.orEmpty().filterNot{it.channel in providerChannels}+pluto
+        val degraded=parts["primary"]==null||(exact.isNotEmpty()&&parts["pluto"]==null)||parts.values.any{it.stale}
+        val fetched=parts.values.minOf{it.fetched}
+        val result=JaLiveGuide(programs,fetched,degraded)
+        val a=JSONArray();programs.forEach{a.put(JSONArray().put(it.channel).put(it.start).put(it.end).put(it.title))}
+        write(File(root,"guide-$key.json"),JSONObject().put("signature",key).put("fetched",fetched).put("saved",degraded).put("programs",a).toString())
+        memoryGuide=key to result
+        android.util.Log.i("JA_LIVE_TV","GUIDE_READY programs=${programs.size} channels=${result.byChannel.size} saved=$degraded elapsedMs=${android.os.SystemClock.elapsedRealtime()-began}")
+        result
+    }}
     private fun parseGuide(file:File,channels:List<JaLiveChannel>,now:Long,providerAliases:Map<String,String>,checkActive:()->Unit):List<JaLiveProgram> {
         val ids=channels.associateBy{it.id}
         val bases=channels.groupBy{JaLiveTvRules.baseId(it.id)}
         val names=if(providerAliases.isNotEmpty())emptyMap() else channels.flatMap{channel -> JaLiveTvRules.guideKeys(channel.id,channel.name).map{it to channel}}.groupBy({it.first},{it.second})
         val aliases=providerAliases.toMutableMap();val guideNames=mutableMapOf<String,MutableSet<String>>()
         val candidates=mutableMapOf<String,MutableSet<String>>()
+        val keysByGuide=mutableMapOf<String,MutableSet<String>>()
         val programs=mutableListOf<JaLiveProgram>()
         GZIPInputStream(file.inputStream()).use{gzip -> LimitedInput(gzip,256_000_000).use{input ->
             val parser=Xml.newPullParser()
@@ -159,18 +194,22 @@ internal class JaLiveTvRepository(private val context:Context) {
                     "display-name"->if(channelMode){
                         val key=JaLiveTvRules.guideName(parser.nextText())
                         guideNames.getOrPut(key){mutableSetOf()}.add(guideId)
+                        keysByGuide.getOrPut(guideId){mutableSetOf()}.add(key)
                         names[key]?.singleOrNull()?.let{candidates.getOrPut(guideId){mutableSetOf()}.add(it.id)}
                     }
                     "programme"->{
                         if(!schedule){
                             candidates.forEach{(id,targets)->if(id !in aliases&&targets.size==1){
-                                val keys=guideNames.filterValues{id in it}.keys
+                                val keys=keysByGuide[id].orEmpty()
                                 if(keys.any{guideNames[it]?.size==1})aliases[id]=targets.first()
                             }};schedule=true
                         }
                         programId=aliases[parser.getAttributeValue(null,"channel")]?:""
-                        start=JaLiveTvRules.xmlTime(parser.getAttributeValue(null,"start")?:"")
-                        end=JaLiveTvRules.xmlTime(parser.getAttributeValue(null,"stop")?:"");title=""
+                        if(programId.isNotEmpty()){
+                            start=JaLiveTvRules.xmlTime(parser.getAttributeValue(null,"start")?:"")
+                            end=JaLiveTvRules.xmlTime(parser.getAttributeValue(null,"stop")?:"")
+                        }
+                        title=""
                     }
                     "title"->if(programId.isNotEmpty()&&title.isEmpty())title=parser.nextText().take(300)
                 }
