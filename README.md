@@ -1,6 +1,6 @@
 # JA — current project
 
-Current testing version: **2.4.5 (20405)**, based on 2.1.8-music-test1 and the v2.1.6 catalog baseline.
+Current release: **2.4.6 (20406)**, based on the stable v2.4.5 baseline. The separate Music Lab experiment is not included.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,9 +8,13 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.4.5-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.4.6-debug**. Local build: configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
+
+- v2.4.6 moves IPTV into the main navigation immediately after TV, with a white IPTV heading and channel search on the same row. The feed-check wording is removed. Favorite stars appear before channel names; Favorites > Reorder provides up/down controls and Done. Ordering persists across refreshes, restarts and temporarily missing channels.
+- IPTV retains its loaded catalog, indexed guide, group/time/list positions and return-channel focus through playback. Cached schedules appear while concurrent national/Pluto refreshes publish partial results. XML matching/date parsing and visible-range guide composition reduce repeated work. History reconciliation runs off Main, and immutable poster models enable Compose skipping. First-time EPG speed still depends on providers; device performance and layout verification remain required.
+- Full regressions, signed APK compilation, strict lint and the IPTV catalog publication gate passed in [run 44758470800](https://github.com/jdaraver2011/ja_app/actions/runs/44758470800). [v2.4.6](https://github.com/jdaraver2011/ja_app/releases/tag/v2.4.6) is the latest public update. Package, versionCode, APK size and SHA-256 in the public update metadata were verified. See [release details and device checks](docs/RELEASE-2.4.6.md).
 
 - v2.4.5 renames the TV sub-button and heading to IPTV. Its source/category row starts Favorites, United States, then News, Sports, Movies, Series, Entertainment, Documentaries, Kids, Animation, Comedy, Music, Cooking, Travel, Science, Education, Business, Weather, Classic TV, Auto and Motoring; With EPG remains last. United States remains the initial view. The row scrolls horizontally, including remote focus navigation. Favorites retain their stored channel/feed IDs, and channels may appear in multiple categories without duplicate rows inside one list.
 - The permanent daily checker now downloads all eighteen requested iptv-org category playlists alongside the U.S. API/catalog and Free-TV inputs. Because those category lists are worldwide, channel metadata restricts imports to U.S. channels. Duplicate IDs/URLs merge; every passing channel carries category membership. Reports include per-category source results and verified category counts. The same advancing-live-manifest checks and finite/frozen exclusion remain. No new playback probes run on the device.
