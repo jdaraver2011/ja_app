@@ -32,7 +32,7 @@ internal class JaLiveTvRepository(private val context:Context) {
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
     private val client=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS)
         .callTimeout(120,TimeUnit.SECONDS).build()
-    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.3 (https://github.com/jdaraver2011/ja_app)").build()
+    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.4 (https://github.com/jdaraver2011/ja_app)").build()
     private fun text(url:String,limit:Long,timeoutSeconds:Long=120):String = client.newCall(request(url)).also{it.timeout().timeout(timeoutSeconds,TimeUnit.SECONDS)}.execute().use { r ->
         if(!r.isSuccessful)throw IOException("HTTP ${r.code}")
         val body=r.body?:throw IOException("Empty response")

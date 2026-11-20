@@ -1,0 +1,13 @@
+name: Test JA 2.4.4
+on:
+  push:
+    branches: [v2.4.4]
+    paths: ['app/**', 'tests/**', '.github/workflows/**']
+permissions:
+  contents: write
+jobs:
+  build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: false
+    secrets: inherit

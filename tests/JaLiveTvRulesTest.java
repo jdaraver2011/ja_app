@@ -10,6 +10,14 @@ public final class JaLiveTvRulesTest {
         check(!JaLiveTvRules.guideName("ABC New Orleans").equals(JaLiveTvRules.guideName("ABC Los Angeles")));
         check(JaLiveTvRules.xmlTime("20261119120000 -0600")==JaLiveTvRules.xmlTime("20261119180000 +0000"));
         check(JaLiveTvRules.xmlTime("bad")==-1);
+        check(JaLiveTvRules.hasGuide(100,200,"Current",150,1000));
+        check(JaLiveTvRules.hasGuide(300,400,"Upcoming",150,1000));
+        check(!JaLiveTvRules.hasGuide(100,150,"Expired",150,1000));
+        check(!JaLiveTvRules.hasGuide(100,200," ",150,1000));
+        check(!JaLiveTvRules.hasGuide(100,200,"TBA",150,1000));
+        check(!JaLiveTvRules.hasGuide(100,200,"No information available",150,1000));
+        check(!JaLiveTvRules.hasGuide(1000,1100,"Beyond grid",150,1000));
+        check(!JaLiveTvRules.hasGuide(200,100,"Malformed",150,1000));
         check(JaLiveTvRules.plutoId("https://jmp2.uk/plu-60fb299b79498900070b29e0.m3u8").equals("60fb299b79498900070b29e0"));
         check(JaLiveTvRules.plutoId("https://example.com/plu-60fb299b79498900070b29e0.m3u8").isEmpty());
         check(JaLiveTvRules.plutoId("https://jmp2.uk/x?plu-60fb299b79498900070b29e0.m3u8").isEmpty());

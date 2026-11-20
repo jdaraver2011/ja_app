@@ -49,6 +49,11 @@ public final class JaLiveTvRules {
             Matcher m=Pattern.compile(regex).matcher(path);return m.find()?m.group(1):"";
         }catch(Exception e){return "";}
     }
+    public static boolean hasGuide(long start,long end,String title,long now,long horizon) {
+        if(start<0||end<=start||end<=now||start>=horizon||title==null||title.trim().isEmpty())return false;
+        String label=title.trim().toLowerCase(Locale.ROOT);
+        return !Arrays.asList("tba","to be announced","no information","no information available","no program information","no programme information","no data","no data available","guide unavailable").contains(label);
+    }
     public static String baseId(String id) {return id.split("@",2)[0];}
     public static long xmlTime(String value) {
         try {return OffsetDateTime.parse(value.trim(),DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT)).toInstant().toEpochMilli();}

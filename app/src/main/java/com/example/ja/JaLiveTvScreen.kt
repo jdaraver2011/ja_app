@@ -59,7 +59,7 @@ import java.util.Locale
 internal class JaLiveTvState(context:android.content.Context,val repository:JaLiveTvRepository) {
     private val prefs=context.getSharedPreferences("ja_live_favorites",android.content.Context.MODE_PRIVATE)
     var favorites by mutableStateOf(prefs.getStringSet("ids",emptySet())?.toSet()?:emptySet())
-    var favoritesOnly by mutableStateOf(false)
+    var view by mutableStateOf("United States")
     var channels by mutableStateOf<List<JaLiveChannel>>(emptyList())
     var guide by mutableStateOf<JaLiveGuide?>(null)
     var loading by mutableStateOf(false)
@@ -112,30 +112,33 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
     var now by remember{mutableLongStateOf(System.currentTimeMillis())}
     LaunchedEffect(resumed){if(resumed)while(isActive){now=System.currentTimeMillis();delay(30_000)}}
     val programs=remember(state.guide){state.guide?.programs?.groupBy{it.channel}.orEmpty()}
-    val visible=remember(state.channels,state.query,state.favoritesOnly,state.favorites){state.channels.filter{
-        (!state.favoritesOnly||it.id in state.favorites)&&it.name.contains(state.query,true)}}
+    val start=now/1_800_000*1_800_000
+    val finish=start+86_400_000
+    val visible=remember(state.channels,state.query,state.view,state.favorites,programs,now){state.channels.filter{channel ->
+        (state.view!="Favorites"||channel.id in state.favorites)
+            &&(state.view!="With EPG"||programs[channel.id].orEmpty().any{JaLiveTvRules.hasGuide(it.start,it.end,it.title,now,finish)})
+            &&channel.name.contains(state.query,true)}}
+    LaunchedEffect(state.view){if(state.returnChannel==null)state.list.scrollToItem(0)}
     val returnFocus=remember{FocusRequester()}
     LaunchedEffect(state.returnChannel,visible){
         val id=state.returnChannel?:return@LaunchedEffect
         val index=visible.indexOfFirst{it.id==id}
         if(index>=0){state.list.scrollToItem(index);withFrameNanos{};withFrameNanos{};runCatching{returnFocus.requestFocus()};state.returnChannel=null}
     }
-    val start=remember(resumed){System.currentTimeMillis()/1_800_000*1_800_000}
-    val finish=start+86_400_000
     val scroll=rememberScrollState()
     val minuteWidth=2.dp
     val totalWidth=minuteWidth*1440
     BoxWithConstraints(modifier){
         val channelWidth=if(maxWidth>=600.dp)180.dp else 124.dp
         Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(6.dp)){
-            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                listOf(false to "United States",true to "Favorites").forEach{(favorite,label)->
-                    TvFocusButton(onClick={state.favoritesOnly=favorite},colors=ButtonDefaults.buttonColors(
-                        containerColor=if(state.favoritesOnly==favorite)ColorGold else Color.DarkGray,
-                        contentColor=if(state.favoritesOnly==favorite)Color.Black else Color.White)){Text(label,fontSize=12.sp)}
+            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                listOf("United States","Favorites","With EPG").forEach{label->
+                    TvFocusButton(onClick={state.view=label},colors=ButtonDefaults.buttonColors(
+                        containerColor=if(state.view==label)ColorGold else Color.DarkGray,
+                        contentColor=if(state.view==label)Color.Black else Color.White)){Text(label,fontSize=12.sp)}
                 }
             }
-            Text(if(state.favoritesOnly)"Live TV · Favorites" else "Live TV · United States",style=MaterialTheme.typography.titleLarge)
+            Text("Live TV · ${state.view}",style=MaterialTheme.typography.titleLarge)
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 OutlinedTextField(state.query,{state.query=it},modifier=Modifier.weight(1f).widthIn(max=420.dp),singleLine=true,label={Text("Find a channel")})
                 Text("${visible.size} channels",fontSize=12.sp)
@@ -146,7 +149,12 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
             if(state.verifiedAt.isNotBlank())Text("Live feeds checked: ${runCatching{DateTimeFormatter.ofPattern("MM-dd h:mm a",Locale.US).withZone(ZoneId.systemDefault()).format(Instant.parse(state.verifiedAt))}.getOrDefault(state.verifiedAt)}${if(state.saved)" · Saved catalog" else ""} · Daily automatic updates",fontSize=11.sp,color=Color.LightGray)
             if(state.guideLoading)Text("Updating program guide…",fontSize=11.sp)
             state.guideError?.let{Text(it,fontSize=11.sp)}
-            if(!state.loading&&visible.isEmpty())Text(if(state.favoritesOnly)"Use the star beside a channel to add it to Favorites." else "No matching live channels.")
+            if(!state.loading&&visible.isEmpty())Text(when {
+                state.view=="With EPG"&&state.guideLoading->"Loading channels with program schedules…"
+                state.view=="With EPG"->"No matching channels have current or upcoming guide data."
+                state.view=="Favorites"&&state.favorites.isEmpty()->"Use the star beside a channel to add it to Favorites."
+                else->"No matching live channels."
+            })
             Row(Modifier.fillMaxWidth().height(28.dp).background(Color(0xFF314254)),verticalAlignment=Alignment.CenterVertically){
                 Text("Channel",Modifier.width(channelWidth).padding(start=6.dp),fontSize=12.sp)
                 Row(Modifier.weight(1f).horizontalScroll(scroll)){
@@ -246,7 +254,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,onRetry:()->Unit,onClose:()->U
     val player=remember(channel,source,generation){
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
-            .setUserAgent(headers["User-Agent"]?:"JA/2.4.3").setDefaultRequestProperties(headers)
+            .setUserAgent(headers["User-Agent"]?:"JA/2.4.4").setDefaultRequestProperties(headers)
         ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http))).build().apply{
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)
