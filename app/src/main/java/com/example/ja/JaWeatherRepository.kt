@@ -38,6 +38,12 @@ internal class JaWeatherRepository(context: Context) {
             .connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS)
             .callTimeout(20, TimeUnit.SECONDS).build().also { sharedClient = it }
     }
+    fun weatherStar()=prefs.getBoolean("weatherstar",false)
+    fun saveWeatherStar(value:Boolean){prefs.edit().putBoolean("weatherstar",value).apply()}
+    fun sound()=prefs.getBoolean("weatherstar-sound",false)
+    fun saveSound(value:Boolean){prefs.edit().putBoolean("weatherstar-sound",value).apply()}
+    fun volume()=prefs.getFloat("weatherstar-volume",0.5f)
+    fun saveVolume(value:Float){prefs.edit().putFloat("weatherstar-volume",value).apply()}
     fun savedZip(): String = prefs.getString("zip", "") ?: ""
     fun saveZip(zip: String) { prefs.edit().putString("zip", zip).apply() }
     private fun get(url: String, force: Boolean = false): JSONObject {
