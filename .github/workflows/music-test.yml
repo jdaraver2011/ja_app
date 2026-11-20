@@ -1,0 +1,13 @@
+name: Build Music Test (unpublished)
+on:
+  push:
+    branches: [v2.4.5musictest]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: false
+    secrets: inherit
