@@ -76,6 +76,7 @@ internal fun JaWeatherStarView(state:JaWeatherState,modifier:Modifier=Modifier,o
     val soundScript="""
         (()=>{
           window.jaWeatherSound=(enabled,volume)=>{
+            enabled=enabled&&volume>0;
             window.jaWeatherAudio={enabled,volume};
             const b=document.getElementById('ToggleMedia');
             if(b&&((b.getAttribute('aria-pressed')==='true')!==enabled))b.click();
