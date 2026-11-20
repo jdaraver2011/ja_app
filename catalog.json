@@ -1,19 +1,42 @@
 {
   "schema": 1,
-  "generatedAt": "2026-11-20T00:42:03.745781+00:00",
-  "source": "iptv-org/api",
+  "generatedAt": "2026-11-20T01:53:32.119589+00:00",
+  "source": "iptv-org/api + Free-TV/IPTV",
   "verification": "Two distinct advancing adaptive-live playlist snapshots; no finite clips. Availability can change.",
   "counts": {
-    "candidateStreams": 3190,
-    "verifiedChannels": 1754,
-    "verifiedStreams": 2603,
+    "candidateStreams": 3202,
+    "verifiedChannels": 1764,
+    "verifiedStreams": 2618,
     "excluded": {
-      "error": 542,
-      "frozen": 32,
-      "ended": 6,
+      "frozen": 25,
+      "error": 543,
+      "ended": 9,
       "unsupported": 7
     },
-    "seconds": 238
+    "seconds": 228,
+    "sources": {
+      "iptv-org": {
+        "candidateStreams": 3190,
+        "verified": 2613,
+        "frozen": 25,
+        "error": 538,
+        "ended": 7,
+        "unsupported": 7,
+        "verifiedChannels": 1761
+      },
+      "free-tv": {
+        "candidateStreams": 28,
+        "error": 6,
+        "verified": 20,
+        "ended": 2,
+        "verifiedChannels": 20,
+        "usEntries": 28,
+        "duplicateStreamEntries": 16,
+        "additionalCandidates": 12,
+        "additionalVerifiedStreams": 5,
+        "additionalVerifiedChannels": 3
+      }
+    }
   },
   "channels": [
     {
@@ -358,6 +381,23 @@
         },
         {
           "url": "https://amg00353-amg00353c49-vizio-us-7989.playouts.now.amagi.tv/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "6WiseTv.us@SD",
+      "name": "6 Wise Tv",
+      "logo": "",
+      "streams": [
+        {
+          "url": "https://edge.enhdtv.com/8150/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
+        {
+          "url": "https://live.enhdtv.com:8081/8150/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -834,6 +874,66 @@
       ]
     },
     {
+      "id": "ABNAfghanistan.us@SD",
+      "name": "ABN Afghanistan",
+      "logo": "https://i.imgur.com/LI30mAt.png",
+      "streams": [
+        {
+          "url": "https://mediaserver.abnvideos.com/streams/abnafghanistan.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "ABNAfrica.us@SD",
+      "name": "ABN Africa",
+      "logo": "https://i.imgur.com/SLrX8Ef.png",
+      "streams": [
+        {
+          "url": "https://mediaserver.abnvideos.com/streams/abnafrica.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "ABNChina.us@SD",
+      "name": "ABN China",
+      "logo": "https://i.imgur.com/zagVLQH.png",
+      "streams": [
+        {
+          "url": "https://mediaserver.abnvideos.com/streams/abnchina.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "ABNTVIndia.us@SD",
+      "name": "ABN TV India",
+      "logo": "https://i.imgur.com/VcZn60X.png",
+      "streams": [
+        {
+          "url": "https://mediaserver.abnvideos.com/streams/abntvindia.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "ABNUrdu.us@SD",
+      "name": "ABN Urdu",
+      "logo": "https://i.imgur.com/Y9ScPIl.png",
+      "streams": [
+        {
+          "url": "https://mediaserver.abnvideos.com/streams/abnurdu.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
       "id": "AcapulcoShore.us@US",
       "name": "Acapulco Shore (US)",
       "logo": "https://images.pluto.tv/channels/61a52615cbef2500072876e2/colorLogoPNG_1756972226445.png",
@@ -1287,6 +1387,18 @@
       ]
     },
     {
+      "id": "AlientoVision.us@SD",
+      "name": "Aliento Vision",
+      "logo": "https://i.imgur.com/h5EWT2n.png",
+      "streams": [
+        {
+          "url": "https://627bb251f23c7.streamlock.net:444/Alientoenvivo/Alientoenvivo/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
       "id": "AlkarmaTVAustralia.us@SD",
       "name": "Alkarma TV Australia",
       "logo": "https://i.imgur.com/90ykspa.png",
@@ -1558,6 +1670,18 @@
       ]
     },
     {
+      "id": "free-tv:AmericaTeVe.us",
+      "name": "America TeVe",
+      "logo": "https://pbs.twimg.com/profile_images/2067373416173260801/9cUCY5wX_200x200.jpg",
+      "streams": [
+        {
+          "url": "https://live.gideo.video/americateve2/master.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
       "id": "AmericasNextTopModel.us@SD",
       "name": "America's Next Top Model",
       "logo": "https://images.pluto.tv/channels/68679fc6bb46d0bdd38ac9a4/colorLogoPNG_1756466390265.png",
@@ -1620,6 +1744,11 @@
       "streams": [
         {
           "url": "https://content.uplynk.com/channel/26bd482ffe364a1282bc3df28bd3c21f.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
+        {
+          "url": "https://d2jiqiw4g5lj5k.cloudfront.net/v1/master/3722c60a815c199d9c0ef36c5b73da68a62b09d1/AmericasVoiceChannel-prod/AVSamsung/AVSamsung.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -2569,6 +2698,30 @@
         },
         {
           "url": "https://baywatch-xumo.amagi.tv/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "free-tv:BBCFood.us",
+      "name": "BBC Food",
+      "logo": "https://i.imgur.com/N3xiz4m.png",
+      "streams": [
+        {
+          "url": "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5fb5844bf5514d0007945bda/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1&advertisingId=channel&embedPartner=rokuChannel&appName=rokuchannel&is_lat=1&bmodel=bm1&content=channel&platform=web&tags=ROKU_CONTENT_TAGS&coppa=false&content_type=livefeed&rdid=channel&genre=ROKU_ADS_CONTENT_GENRE&content_rating=ROKU_ADS_CONTENT_RATING&studio_id=viacom&channel_id=channel",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "free-tv:BBCHome.us",
+      "name": "BBC Home",
+      "logo": "https://i.imgur.com/Ii8DX1x.png",
+      "streams": [
+        {
+          "url": "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5fb5836fe745b600070fc743/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1&advertisingId=channel&embedPartner=rokuChannel&appName=rokuchannel&is_lat=1&bmodel=bm1&content=channel&platform=web&tags=ROKU_CONTENT_TAGS&coppa=false&content_type=livefeed&rdid=channel&genre=ROKU_ADS_CONTENT_GENRE&content_rating=ROKU_ADS_CONTENT_RATING&studio_id=viacom&channel_id=channel",
           "userAgent": "",
           "referrer": ""
         }
@@ -4931,6 +5084,11 @@
           "url": "http://15.204.246.24:8080/CinecanalHD/index.m3u8",
           "userAgent": "",
           "referrer": ""
+        },
+        {
+          "url": "http://190.61.47.54:8000/play/a02z/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
         }
       ]
     },
@@ -5232,18 +5390,6 @@
         },
         {
           "url": "https://cmc-kowdtv.amagi.tv/playlist.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
-      "id": "CMCUSACountryMusicChannel.us@SD",
-      "name": "CMC-USA Country Music Channel",
-      "logo": "https://i.imgur.com/QsANRSu.png",
-      "streams": [
-        {
-          "url": "https://hwlive.streamingmediahosting.com/14215-live/0_obd393sh/playlist.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -6366,54 +6512,6 @@
       ]
     },
     {
-      "id": "DetroitChannel10.us@SD",
-      "name": "Detroit Channel 10",
-      "logo": "https://i.imgur.com/zAdcg9m.png",
-      "streams": [
-        {
-          "url": "https://reflect-detroit-vod.cablecast.tv/live-2/live/stream-6/live.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
-      "id": "DetroitChannel21.us@SD",
-      "name": "Detroit Channel 21",
-      "logo": "https://i.imgur.com/yXXEGKg.png",
-      "streams": [
-        {
-          "url": "https://reflect-detroit-vod.cablecast.tv/live-9/live/stream-4/live.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
-      "id": "DetroitChannel22.us@SD",
-      "name": "Detroit Channel 22",
-      "logo": "https://i.imgur.com/zAdcg9m.png",
-      "streams": [
-        {
-          "url": "https://reflect-detroit-vod.cablecast.tv/live-3/live/stream-3/live.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
-      "id": "DetroitChannel68.us@SD",
-      "name": "Detroit Channel 68",
-      "logo": "https://i.imgur.com/zAdcg9m.png",
-      "streams": [
-        {
-          "url": "https://reflect-detroit-vod.cablecast.tv/live-10/live/stream-5/live.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
       "id": "DHE.us@SD",
       "name": "DHE",
       "logo": "",
@@ -6581,6 +6679,18 @@
         },
         {
           "url": "https://amg00136-wbd-amg00136c57-vizio-us-8927.playouts.now.amagi.tv/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "DiscoveryTurboLatinAmerica.us@Panregional",
+      "name": "Discovery Turbo Latin America (Panregional)",
+      "logo": "",
+      "streams": [
+        {
+          "url": "http://38.134.250.110:8000/play/a01y/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -7349,12 +7459,41 @@
       ]
     },
     {
+      "id": "ESPN2LatinAmerica.us@Colombia",
+      "name": "ESPN 2 Latin America Colombia",
+      "logo": "",
+      "streams": [
+        {
+          "url": "http://190.61.47.54:8000/play/a005/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
       "id": "ESPN.us@HD",
       "name": "ESPN HD",
       "logo": "https://imgx.fubo.tv/station_logos/espn-hd_c.png",
       "streams": [
         {
           "url": "http://85.237.89.160:9590/usa-s/ESPN-HD/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "ESPNLatinAmerica.us@Colombia",
+      "name": "ESPN Latin America Colombia",
+      "logo": "",
+      "streams": [
+        {
+          "url": "http://181.78.211.244:8005/play/a08q/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
+        {
+          "url": "http://190.61.47.54:8000/play/a004/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -7633,6 +7772,18 @@
       "streams": [
         {
           "url": "https://cdn3.wowza.com/1/TUI5dU5ucnUxdGFD/ZFlVeGRl/hls/live/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "ExtremaTV.us@SD",
+      "name": "Extrema TV",
+      "logo": "https://i.imgur.com/Z1QVkqu.png",
+      "streams": [
+        {
+          "url": "http://livestreamcdn.net:1935/ExtremaTV/ExtremaTV/playlist.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -9906,18 +10057,6 @@
       ]
     },
     {
-      "id": "HmongStarTV.us@SD",
-      "name": "Hmong Star TV",
-      "logo": "https://i.imgur.com/dRsacao.png",
-      "streams": [
-        {
-          "url": "https://livefta.malimarcdn.com/ftaedge00/hmongstartv.sdp/playlist.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
       "id": "HmongTVNetwork.us@SD",
       "name": "Hmong TV Network",
       "logo": "https://yt3.googleusercontent.com/aj3kdBQTgfxP-bDnleou4m1ykjPRFexvfTZZuvWlNc75Hn9-NTqXYEdEJ_KOcTSsbKj24K1B9BM=s512-c-k-c0x00ffffff-no-rj",
@@ -11290,18 +11429,6 @@
         },
         {
           "url": "https://amg00488-foxdigital-amg00488c3-vizio-us-899.playouts.now.amagi.tv/playlist/amg00488-foxdigitalfast-fox7austinktbc-vizious/playlist.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
-      "id": "KTOO360TV.us@KTOOTV",
-      "name": "KTOO 360TV 3 (FNX)",
-      "logo": "https://i.imgur.com/ppn5oJy.png",
-      "streams": [
-        {
-          "url": "https://api.v3.invintus.com/StreamURI/persis/2147483647/KTOO360TV.stream/media.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -14302,18 +14429,6 @@
       ]
     },
     {
-      "id": "Telemundo.us@KNSD",
-      "name": "NBC West (San Diego)",
-      "logo": "https://imgx.fubo.tv/station_logos/telemundo_c.png",
-      "streams": [
-        {
-          "url": "https://nbculocallive.akamaized.net/hls/live/2037098/sandiego/stream1/master.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
       "id": "NBC.us@WKYC",
       "name": "NBC WKYC",
       "logo": "https://i.imgur.com/nxY84W5.png",
@@ -14627,6 +14742,18 @@
           "url": "https://jmp2.uk/plu-5ca6748a37b88b269472dad9.m3u8",
           "userAgent": "",
           "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "Nickelodeon.us@East",
+      "name": "Nickelodeon (East)",
+      "logo": "https://i.imgur.com/E84jnP8.png",
+      "streams": [
+        {
+          "url": "https://cache0.wonvt.st/live/1ewxgzu023dos60vlh62k/master.m3u8",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+          "referrer": "https://tvnow.st/"
         }
       ]
     },
@@ -15015,6 +15142,18 @@
       ]
     },
     {
+      "id": "NTDTVAsiaPacific.us@SD",
+      "name": "NTD TV Asia-Pacific",
+      "logo": "",
+      "streams": [
+        {
+          "url": "https://live.ntdtv.com/aplive200/playlist.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
       "id": "NTDTVCanada.us@East",
       "name": "NTD TV Canada (East)",
       "logo": "",
@@ -15078,10 +15217,27 @@
       ]
     },
     {
+      "id": "NTDTVEnglish.us@UK",
+      "name": "NTD TV English UK",
+      "logo": "https://i.imgur.com/26uv1ww.png",
+      "streams": [
+        {
+          "url": "https://ntd02.akamaized.net/NTD-UK/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
       "id": "NTDTV.us@West",
       "name": "NTD TV West",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/NTD_Logo_with_symbol.svg/960px-NTD_Logo_with_symbol.svg.png",
       "streams": [
+        {
+          "url": "https://ntd02.akamaized.net/HD-LA/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        },
         {
           "url": "https://live.ntdtv.com/uwlive990/playlist.m3u8",
           "userAgent": "",
@@ -16066,11 +16222,6 @@
         },
         {
           "url": "https://jukin-peopleareawesome-2-se.samsung.wurl.tv/playlist.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        },
-        {
-          "url": "https://mumbai-edge.smartplaytv.in/PeopleAreAwesome/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -20400,6 +20551,11 @@
           "url": "https://fffffff110156200.tvustream.com:8298/ryfy.m3u8",
           "userAgent": "",
           "referrer": ""
+        },
+        {
+          "url": "https://FFFFFFF110156200.tvustream.com/ryfy.m3u8",
+          "userAgent": "",
+          "referrer": ""
         }
       ]
     },
@@ -22121,6 +22277,18 @@
       ]
     },
     {
+      "id": "TLCLatinAmerica.us@Panregional",
+      "name": "TLC Latin America (Panregional)",
+      "logo": "",
+      "streams": [
+        {
+          "url": "http://38.134.250.110:8000/play/a00n/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
       "id": "TLNMediaChicago.us@SD",
       "name": "TLN Media Chicago",
       "logo": "",
@@ -22228,6 +22396,18 @@
         },
         {
           "url": "http://190.93.224.42/TNT-NOVELAS/index.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "TNTNovelas.us@Colombia",
+      "name": "TNT Novelas Colombia",
+      "logo": "",
+      "streams": [
+        {
+          "url": "http://190.61.47.54:8000/play/a02f/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -22837,18 +23017,6 @@
       ]
     },
     {
-      "id": "TVSMainstreet.us@SD",
-      "name": "TVS Mainstreet",
-      "logo": "https://i.imgur.com/N9nQpnP.png",
-      "streams": [
-        {
-          "url": "https://rpn.bozztv.com/gusa/gusa-tvsmainst/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
       "id": "TVSMusicNetwork.us@SD",
       "name": "TVS Music Network",
       "logo": "",
@@ -22987,18 +23155,6 @@
       "streams": [
         {
           "url": "https://rpn.bozztv.com/gusa/gusa-tavern/index.m3u8",
-          "userAgent": "",
-          "referrer": ""
-        }
-      ]
-    },
-    {
-      "id": "TVSTelevisionNetwork.us@SD",
-      "name": "TVS Television Network",
-      "logo": "",
-      "streams": [
-        {
-          "url": "https://rpn.bozztv.com/gusa/gusa-tvstn/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }
@@ -23770,6 +23926,18 @@
         },
         {
           "url": "https://jmp2.uk/plu-62a0b114a1c8650007e93688.m3u8",
+          "userAgent": "",
+          "referrer": ""
+        }
+      ]
+    },
+    {
+      "id": "WarnerChannel.us@Colombia",
+      "name": "Warner Channel Colombia",
+      "logo": "",
+      "streams": [
+        {
+          "url": "http://38.134.250.110:8000/play/a029/index.m3u8",
           "userAgent": "",
           "referrer": ""
         }

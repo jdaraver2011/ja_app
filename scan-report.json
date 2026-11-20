@@ -1,13 +1,36 @@
 {
-  "generatedAt": "2026-11-20T00:42:03.745781+00:00",
-  "candidateStreams": 3190,
-  "verifiedChannels": 1754,
-  "verifiedStreams": 2603,
+  "generatedAt": "2026-11-20T01:53:32.119589+00:00",
+  "candidateStreams": 3202,
+  "verifiedChannels": 1764,
+  "verifiedStreams": 2618,
   "excluded": {
-    "error": 542,
-    "frozen": 32,
-    "ended": 6,
+    "frozen": 25,
+    "error": 543,
+    "ended": 9,
     "unsupported": 7
   },
-  "seconds": 238
+  "seconds": 228,
+  "sources": {
+    "iptv-org": {
+      "candidateStreams": 3190,
+      "verified": 2613,
+      "frozen": 25,
+      "error": 538,
+      "ended": 7,
+      "unsupported": 7,
+      "verifiedChannels": 1761
+    },
+    "free-tv": {
+      "candidateStreams": 28,
+      "error": 6,
+      "verified": 20,
+      "ended": 2,
+      "verifiedChannels": 20,
+      "usEntries": 28,
+      "duplicateStreamEntries": 16,
+      "additionalCandidates": 12,
+      "additionalVerifiedStreams": 5,
+      "additionalVerifiedChannels": 3
+    }
+  }
 }
