@@ -305,8 +305,9 @@ class MainActivity : ComponentActivity() {
     val detailsBackStack = remember { mutableStateListOf<DetailReturnPoint>() }
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
     val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext), scope) }
-    var liveChannel by remember { mutableStateOf<JaLiveChannel?>(null) }
-    val weather = rememberJaWeather(active = playback == null && liveChannel == null && !exiting)
+    val liveActive = tab == "IPTV" && liveTv.playerAttached
+    LaunchedEffect(tab){if(tab != "IPTV"){liveTv.fullscreen=false;liveTv.finishMove(false)}}
+    val weather = rememberJaWeather(active = playback == null && !liveTv.fullscreen && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
     SideEffect {
         weather.returnToNavigation = {
@@ -628,11 +629,11 @@ class MainActivity : ComponentActivity() {
             } finally { tvPopularLoading = false }
         }
     }
-    LaunchedEffect(playback,playbackLoading,liveChannel) {
-        JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading || liveChannel != null)
-        JaMusicService.setVideoActive(playback != null || playbackLoading || liveChannel != null)
+    LaunchedEffect(playback,playbackLoading,liveActive) {
+        JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading || liveActive)
+        JaMusicService.setVideoActive(playback != null || playbackLoading || liveActive)
     }
-    val catalogueVisible = liveChannel == null && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
+    val catalogueVisible = !liveTv.fullscreen && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.
     LaunchedEffect(catalogueGeneration, catalogueDate, catalogueVisible, tab, searchGenre, sourceDataVersion) {
         val genre = searchGenre
@@ -910,7 +911,7 @@ class MainActivity : ComponentActivity() {
     BackHandler {
         if (exiting) return@BackHandler
         when {
-            liveChannel != null -> { liveChannel = null }
+            tab == "IPTV" && liveTv.fullscreen -> { liveTv.fullscreen = false }
             weatherOpen -> { weatherOpen = false; weatherReturnFocus = true }
             playback != null -> {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=ANDROID_BACK")
@@ -935,10 +936,6 @@ class MainActivity : ComponentActivity() {
         Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) {
             Text("Closing JA…", color = Color.White)
         }
-        return
-    }
-    liveChannel?.let { channel ->
-        JaLiveTvPlayer(channel, liveTv.repository) { liveChannel = null }
         return
     }
     if (weatherOpen) {
@@ -1045,7 +1042,7 @@ class MainActivity : ComponentActivity() {
             items(listOf("Movies", "TV", "IPTV") + (if (showMusicTab) listOf("Music") else emptyList()) +
                 listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
                 TvFocusButton(
-                    modifier = if (t == "Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings = it.boundsInRoot() } else Modifier,
+                    modifier = if (t == "IPTV") Modifier.focusRequester(liveTv.mainFocus) else if (t == "Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings = it.boundsInRoot() } else Modifier,
                     onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null },
                     colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)
                 ) { Text(t, color = Color.Black) }
@@ -1366,7 +1363,10 @@ class MainActivity : ComponentActivity() {
                     onPositionRestored = { pendingSearchRestore = null }
                 )
             } else if (tab == "IPTV") {
-                JaLiveTvScreen(liveTv, onPlay = { liveChannel = it },
+                JaLiveTvScreen(liveTv, onMainMenu = { scope.launch {
+                    navigationRowState.scrollToItem(2); withFrameNanos { }; withFrameNanos { }
+                    liveTv.mainFocus.requestFocus()
+                } },
                     modifier = Modifier.fillMaxWidth().weight(1f))
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"
