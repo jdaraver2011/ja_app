@@ -21,7 +21,7 @@ internal fun JaGenreRows(
     returnFocus: JaTitleReturnFocus, jump: JaRowJumpState,
     visibleTitles: (List<TitleItem>) -> List<TitleItem>, marked: (TitleItem) -> TitleItem,
     onOpen: (TitleItem) -> Unit, onLoadMore: (GenreRow) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier, onBackToNavigation: () -> Unit = {}
 ) {
     val entries = rows.map { JaJumpRow(it.genreId.toString(), it.name) }
     JaRowJumpScrollEffect(jump, entries, sectionState)
@@ -73,5 +73,5 @@ internal fun JaGenreRows(
             }
         }
     }
-    JaRowJumpPanel(jump, entries, networks = false)
+    JaRowJumpPanel(jump, entries, networks = false, onBackToNavigation = onBackToNavigation)
 }
