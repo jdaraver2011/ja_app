@@ -1362,7 +1362,7 @@ class MainActivity : ComponentActivity() {
                 val activeView = if (isMovieTab) moviesView else tvView
                 JaUnscaledTopBar {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks", "Live TV")).forEach { view ->
+                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks", "IPTV")).forEach { view ->
                             TvSecondaryButton(
                                 text = view,
                                 selected = activeView == view,
@@ -1372,7 +1372,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                if (!isMovieTab && activeView == "Live TV") {
+                if (!isMovieTab && activeView == "IPTV") {
                     JaLiveTvScreen(liveTv, onPlay = { liveChannel = it },
                         modifier = Modifier.fillMaxWidth().weight(1f))
                 } else if (!isMovieTab && activeView == "Networks") {

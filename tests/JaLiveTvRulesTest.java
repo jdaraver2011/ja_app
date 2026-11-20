@@ -10,6 +10,15 @@ public final class JaLiveTvRulesTest {
         check(!JaLiveTvRules.guideName("ABC New Orleans").equals(JaLiveTvRules.guideName("ABC Los Angeles")));
         check(JaLiveTvRules.xmlTime("20261119120000 -0600")==JaLiveTvRules.xmlTime("20261119180000 +0000"));
         check(JaLiveTvRules.xmlTime("bad")==-1);
+        check(JaLiveTvRules.views().get(0).equals("Favorites"));
+        check(JaLiveTvRules.views().get(1).equals("United States"));
+        check(JaLiveTvRules.views().size()==21);
+        check(JaLiveTvRules.category("Documentaries").equals("documentary"));
+        check(JaLiveTvRules.category("Auto and Motoring").equals("auto"));
+        java.util.Set<String> groups=new java.util.HashSet<>(java.util.Arrays.asList("news","weather"));
+        check(JaLiveTvRules.categoryMatches("News",groups)&&JaLiveTvRules.categoryMatches("Weather",groups));
+        check(!JaLiveTvRules.categoryMatches("Sports",groups));
+        check(JaLiveTvRules.categoryMatches("Favorites",java.util.Collections.emptySet()));
         check(JaLiveTvRules.hasGuide(100,200,"Current",150,1000));
         check(JaLiveTvRules.hasGuide(300,400,"Upcoming",150,1000));
         check(!JaLiveTvRules.hasGuide(100,150,"Expired",150,1000));

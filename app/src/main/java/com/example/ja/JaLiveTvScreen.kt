@@ -115,7 +115,8 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
     val visible=remember(state.channels,state.query,state.view,state.favorites,programs,now){state.channels.filter{channel ->
-        (state.view!="Favorites"||channel.id in state.favorites)
+        JaLiveTvRules.categoryMatches(state.view,channel.categories)
+            &&(state.view!="Favorites"||channel.id in state.favorites)
             &&(state.view!="With EPG"||programs[channel.id].orEmpty().any{JaLiveTvRules.hasGuide(it.start,it.end,it.title,now,finish)})
             &&channel.name.contains(state.query,true)}}
     LaunchedEffect(state.view){if(state.returnChannel==null)state.list.scrollToItem(0)}
@@ -132,13 +133,13 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
         val channelWidth=if(maxWidth>=600.dp)180.dp else 124.dp
         Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(6.dp)){
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                listOf("United States","Favorites","With EPG").forEach{label->
+                JaLiveTvRules.views().forEach{label->
                     TvFocusButton(onClick={state.view=label},colors=ButtonDefaults.buttonColors(
                         containerColor=if(state.view==label)ColorGold else Color.DarkGray,
                         contentColor=if(state.view==label)Color.Black else Color.White)){Text(label,fontSize=12.sp)}
                 }
             }
-            Text("Live TV · ${state.view}",style=MaterialTheme.typography.titleLarge)
+            Text("IPTV · ${state.view}",style=MaterialTheme.typography.titleLarge)
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 OutlinedTextField(state.query,{state.query=it},modifier=Modifier.weight(1f).widthIn(max=420.dp),singleLine=true,label={Text("Find a channel")})
                 Text("${visible.size} channels",fontSize=12.sp)
@@ -254,7 +255,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,onRetry:()->Unit,onClose:()->U
     val player=remember(channel,source,generation){
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
-            .setUserAgent(headers["User-Agent"]?:"JA/2.4.4").setDefaultRequestProperties(headers)
+            .setUserAgent(headers["User-Agent"]?:"JA/2.4.5").setDefaultRequestProperties(headers)
         ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http))).build().apply{
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)

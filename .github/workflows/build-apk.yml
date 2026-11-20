@@ -200,7 +200,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.4.4-debug
+          name: JA-2.4.5-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -211,6 +211,9 @@ jobs:
           name: JA-lint-report
           path: app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
+      - name: Validate IPTV category catalog before publication
+        if: ${{ inputs.publish_update }}
+        run: python3 scripts/check_live_catalog.py
       - name: Prepare public update assets
         if: ${{ inputs.publish_update }}
         env:

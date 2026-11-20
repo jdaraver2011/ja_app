@@ -54,6 +54,24 @@ public final class JaLiveTvRules {
         String label=title.trim().toLowerCase(Locale.ROOT);
         return !Arrays.asList("tba","to be announced","no information","no information available","no program information","no programme information","no data","no data available","guide unavailable").contains(label);
     }
+    private static final Map<String,String> CATEGORIES;
+    static {
+        Map<String,String> map=new LinkedHashMap<>();
+        String[][] values={{"News","news"},{"Sports","sports"},{"Movies","movies"},{"Series","series"},
+            {"Entertainment","entertainment"},{"Documentaries","documentary"},{"Kids","kids"},{"Animation","animation"},
+            {"Comedy","comedy"},{"Music","music"},{"Cooking","cooking"},{"Travel","travel"},{"Science","science"},
+            {"Education","education"},{"Business","business"},{"Weather","weather"},{"Classic TV","classic"},{"Auto and Motoring","auto"}};
+        for(String[] value:values)map.put(value[0],value[1]);
+        CATEGORIES=Collections.unmodifiableMap(map);
+    }
+    public static List<String> views() {
+        List<String> result=new ArrayList<>();result.add("Favorites");result.add("United States");
+        result.addAll(CATEGORIES.keySet());result.add("With EPG");return result;
+    }
+    public static String category(String view){return CATEGORIES.getOrDefault(view,"");}
+    public static boolean categoryMatches(String view,Set<String> categories) {
+        String key=category(view);return key.isEmpty()||categories.contains(key);
+    }
     public static String baseId(String id) {return id.split("@",2)[0];}
     public static long xmlTime(String value) {
         try {return OffsetDateTime.parse(value.trim(),DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT)).toInstant().toEpochMilli();}

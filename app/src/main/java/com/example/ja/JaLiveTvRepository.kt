@@ -22,9 +22,9 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
 internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>,
-    val headers:Map<String,Map<String,String>> = emptyMap())
+    val headers:Map<String,Map<String,String>> = emptyMap(),val categories:Set<String> = emptySet())
 internal data class JaLiveProgram(val channel:String,val start:Long,val end:Long,val title:String)
-internal data class JaLiveChannels(val channels:List<JaLiveChannel>,val saved:Boolean,val verifiedAt:String)
+internal data class JaLiveChannels(val channels:List<JaLiveChannel>,val saved:Boolean,val verifiedAt:String,val categoriesAvailable:Boolean=false)
 internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Long,val saved:Boolean)
 
 internal class JaLiveTvRepository(private val context:Context) {
@@ -32,7 +32,7 @@ internal class JaLiveTvRepository(private val context:Context) {
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
     private val client=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS)
         .callTimeout(120,TimeUnit.SECONDS).build()
-    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.4 (https://github.com/jdaraver2011/ja_app)").build()
+    private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.5 (https://github.com/jdaraver2011/ja_app)").build()
     private fun text(url:String,limit:Long,timeoutSeconds:Long=120):String = client.newCall(request(url)).also{it.timeout().timeout(timeoutSeconds,TimeUnit.SECONDS)}.execute().use { r ->
         if(!r.isSuccessful)throw IOException("HTTP ${r.code}")
         val body=r.body?:throw IOException("Empty response")
@@ -41,11 +41,12 @@ internal class JaLiveTvRepository(private val context:Context) {
     suspend fun channels(force:Boolean=false):JaLiveChannels = withContext(Dispatchers.IO) { catalogLock.withLock {
         val file=File(root,"verified-us.json")
         val cached=runCatching{parseCatalog(file.readText(),false)}.getOrNull()
-        if(!force&&cached!=null&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),86_400_000))
+        if(!force&&cached!=null&&cached.categoriesAvailable&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),86_400_000))
             return@withContext cached
         try {
             val raw=text("https://raw.githubusercontent.com/jdaraver2011/ja_app/live-tv-data/catalog.json",8_000_000,25)
             val parsed=parseCatalog(raw,false)
+            require(parsed.categoriesAvailable)
             write(file,raw);parsed
         }catch(e:CancellationException){throw e}catch(e:Exception){
             cached?.copy(saved=true)?:throw e
@@ -71,10 +72,12 @@ internal class JaLiveTvRepository(private val context:Context) {
                     headers[url]=h;url
                 }
             }.distinct()
-            if(urls.isEmpty())null else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers)
+            val groups=c.optJSONArray("categories")
+            val categories=if(groups==null)emptySet() else (0 until groups.length()).map{groups.optString(it)}.filter{it.isNotBlank()}.toSet()
+            if(urls.isEmpty())null else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers,categories)
         }.distinctBy{it.id}.sortedBy{it.name.lowercase()}
         require(channels.isNotEmpty())
-        return JaLiveChannels(channels,saved,verified)
+        return JaLiveChannels(channels,saved,verified,doc.optJSONObject("counts")?.has("categories")==true)
     }
     suspend fun playbackChannel(channel:JaLiveChannel,force:Boolean=false):JaLiveChannel =
         channels(force).channels.firstOrNull{it.id==channel.id}?:throw IOException("Channel no longer verified live")
