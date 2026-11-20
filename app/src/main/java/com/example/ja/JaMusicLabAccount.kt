@@ -108,20 +108,32 @@ internal class JaMusicLabAccount(private val arl: String) {
         if (account.license.isBlank()) throw JaMusicLabFailure("ACCOUNT_HAS_NO_PLAYBACK_LICENSE")
         // Request only audio that the account's license authorizes. No preview or forged-CDN fallback.
         // Native playback in this milestone accepts unencrypted media only; no embedded decryption keys.
-        val formats = JSONArray().put(JSONObject().put("cipher", "NONE").put("format", "MP3_128"))
-        val body = JSONObject().put("license_token", account.license)
-            .put("media", JSONArray().put(JSONObject().put("type", "FULL").put("formats", formats)))
-            .put("track_tokens", JSONArray().put(track.token))
-        val result = json("https://media.deezer.com/v1/get_url".toHttpUrl(), body, "AUDIO")
-        val item = result.optJSONArray("data")?.optJSONObject(0) ?: throw JaMusicLabFailure("AUDIO_RESPONSE")
+        fun request(cipher: String): JSONObject {
+            val formats = JSONArray().put(JSONObject().put("cipher", cipher).put("format", "MP3_128"))
+            val body = JSONObject().put("license_token", account.license)
+                .put("media", JSONArray().put(JSONObject().put("type", "FULL").put("formats", formats)))
+                .put("track_tokens", JSONArray().put(track.token))
+            val result = json("https://media.deezer.com/v1/get_url".toHttpUrl(), body, "AUDIO")
+            return result.optJSONArray("data")?.optJSONObject(0) ?: throw JaMusicLabFailure("AUDIO_RESPONSE")
+        }
+        var requestedCipher = "NONE"
+        val first = try { request(requestedCipher) } catch (e: JaMusicLabFailure) {
+            if (e.reason == "AUDIO_HTTP_400") JSONObject() else throw e
+        }
+        // If clear audio is unavailable, probe the account-authorized encrypted format for diagnosis only.
+        // A returned encrypted source is never passed to the native player or decrypted here.
+        val item = if ((first.optJSONArray("media")?.length() ?: 0) > 0) first else {
+            requestedCipher = "BF_CBC_STRIPE"
+            request(requestedCipher)
+        }
         val errors = item.optJSONArray("errors")
         if (errors != null && errors.length() > 0) {
             val code = errors.optJSONObject(0)?.optInt("code", 0) ?: 0
             throw JaMusicLabFailure("AUDIO_ACCESS_OR_FORMAT_$code")
         }
         val media = item.optJSONArray("media")?.optJSONObject(0) ?: throw JaMusicLabFailure("AUDIO_NOT_PROVIDED")
-        val cipher = media.optJSONObject("cipher")?.optString("type", "NONE") ?: "NONE"
-        if (cipher != "NONE") throw JaMusicLabFailure("AUDIO_ENCRYPTION_UNSUPPORTED")
+        val cipher = media.optJSONObject("cipher")?.optString("type", requestedCipher) ?: requestedCipher
+        if (cipher != "NONE") throw JaMusicLabFailure("FULL_SOURCE_RETURNED_ENCRYPTED_AUDIO_UNSUPPORTED")
         val url = media.optJSONArray("sources")?.optJSONObject(0)?.optString("url").orEmpty()
         val parsed = runCatching { url.toHttpUrl() }.getOrNull() ?: throw JaMusicLabFailure("AUDIO_URL_INVALID")
         if (!parsed.isHttps || !(parsed.host == "dzcdn.net" || parsed.host.endsWith(".dzcdn.net")))
