@@ -31,7 +31,7 @@ internal fun JaNetworksScreen(
     returnFocus: JaTitleReturnFocus,
     marked: (TitleItem) -> TitleItem,
     onOpen: (TitleItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier, onBackToNavigation: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     suspend fun loadDirectory(force: Boolean) {
@@ -48,8 +48,6 @@ internal fun JaNetworksScreen(
     Column(modifier.jaCancelPendingRowJump(state.jump, returnFocus)) {
         Column(Modifier.jaWeatherIntroWidth()) {
         Text("TV Networks", style = MaterialTheme.typography.titleLarge, color = Color.White)
-        Text("Browse shows by their TMDB network.", color = Color.LightGray,
-            style = MaterialTheme.typography.bodySmall)
         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         val notice = state.error ?: state.directory?.warning
         if (notice != null) {
@@ -71,7 +69,7 @@ internal fun JaNetworksScreen(
             }
         }
     }
-    JaRowJumpPanel(state.jump, entries, networks = true)
+    JaRowJumpPanel(state.jump, entries, networks = true, onBackToNavigation = onBackToNavigation)
 }
 
 @Composable
