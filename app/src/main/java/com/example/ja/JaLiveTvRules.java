@@ -8,6 +8,7 @@ import java.util.regex.*;
 /** Shared, deterministic playlist/guide rules. No fuzzy station matching. */
 public final class JaLiveTvRules {
     private JaLiveTvRules() {}
+    private static final DateTimeFormatter XML_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT);
     public static String attribute(String line, String name) {
         Matcher m=Pattern.compile("(?:^|\\s)"+Pattern.quote(name)+"=\"([^\"]*)\"").matcher(line);
         return m.find()?m.group(1):"";
@@ -74,7 +75,7 @@ public final class JaLiveTvRules {
     }
     public static String baseId(String id) {return id.split("@",2)[0];}
     public static long xmlTime(String value) {
-        try {return OffsetDateTime.parse(value.trim(),DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT)).toInstant().toEpochMilli();}
+        try {return OffsetDateTime.parse(value.trim(),XML_TIME_FORMAT).toInstant().toEpochMilli();}
         catch(Exception e){return -1;}
     }
     public static double distance(double lat, double lon, double targetLat, double targetLon) {
