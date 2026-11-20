@@ -109,7 +109,7 @@ fun JaSearchScreen(
         }
         item(span = { GridItemSpan(maxLineSpan) }, key = "search-form") {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedTextField(
+                JaEntryField(
                     value = query, onValueChange = onQueryChange,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(if (mode == JaSearchMode.GENRES) "Filter genres (e.g. Horror)" else "Title, actor or director") },
