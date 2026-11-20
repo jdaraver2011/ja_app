@@ -66,8 +66,8 @@ public final class JaLiveTvRules {
         CATEGORIES=Collections.unmodifiableMap(map);
     }
     public static List<String> views() {
-        List<String> result=new ArrayList<>();result.add("Favorites");result.add("United States");
-        result.addAll(CATEGORIES.keySet());result.add("With EPG");return result;
+        List<String> result=new ArrayList<>();result.add("Favorites");result.add("With EPG");result.add("United States");
+        result.addAll(CATEGORIES.keySet());return result;
     }
     public static String category(String view){return CATEGORIES.getOrDefault(view,"");}
     public static boolean categoryMatches(String view,Set<String> categories) {
