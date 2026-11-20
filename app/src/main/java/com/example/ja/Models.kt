@@ -2,6 +2,7 @@ package com.example.ja
 
 import androidx.room.*
 
+@androidx.compose.runtime.Immutable
 data class TitleItem(val id: Int, val title: String, val overview: String, val poster: String?, val backdrop: String?, val type: String, val rating: Double = 0.0, val watched: Boolean = false) {
     val posterUrl get() = poster?.let { "https://image.tmdb.org/t/p/w500$it" }
     val backdropUrl get() = backdrop?.let { "https://image.tmdb.org/t/p/w780$it" }
