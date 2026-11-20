@@ -26,9 +26,10 @@ internal fun JaEntryField(
     label:@Composable (() -> Unit)?=null,singleLine:Boolean=true,
     keyboardOptions:KeyboardOptions=KeyboardOptions.Default,
     keyboardActions:KeyboardActions=KeyboardActions.Default,
-    colors:TextFieldColors=OutlinedTextFieldDefaults.colors()
+    colors:TextFieldColors=OutlinedTextFieldDefaults.colors(),
+    initiallyEditing:Boolean=false
 ){
-    var editing by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(initiallyEditing) }
     var focused by remember { mutableStateOf(false) }
     var hadEditFocus by remember { mutableStateOf(false) }
     val navigation=remember { FocusRequester() }
