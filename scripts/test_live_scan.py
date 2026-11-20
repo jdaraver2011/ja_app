@@ -34,4 +34,17 @@ class FreeTvTests(unittest.TestCase):
         extra=[{'externalId':'News.us','name':'News','logo':'','url':'https://b/live','userAgent':'','referrer':''}]
         out,stats=merge_free_tv(old,extra);self.assertEqual(len(out),2);self.assertEqual(out[1]['id'],'News.us@SD')
 
+class CategoryTests(unittest.TestCase):
+    def test_worldwide_category_uses_us_metadata(self):
+        from scan_live_tv import free_tv_us
+        raw='#EXTM3U\n#EXTINF:-1 tvg-id="Local.us@HD",Local\nhttps://a/live\n#EXTINF:-1 tvg-id="Foreign.gb@HD",Foreign\nhttps://b/live\n'
+        out=free_tv_us(raw,{'Local.us'});self.assertEqual(len(out),1);self.assertEqual(out[0]['externalId'],'Local.us@HD')
+    def test_multiple_categories_preserve_id_and_stream(self):
+        from scan_live_tv import merge_free_tv
+        old=[{'id':'Local.us@HD','name':'Local','logo':'','url':'https://a/live','userAgent':'','referrer':'','categories':['news']}]
+        extra=[{'externalId':'Local.us@HD','name':'Local','logo':'','url':'https://a/live','userAgent':'','referrer':''}]
+        out,stats=merge_free_tv(old,extra,'category:weather','iptv-category','weather')
+        self.assertEqual(len(out),1);self.assertEqual(out[0]['id'],'Local.us@HD');self.assertEqual(out[0]['categories'],['news','weather'])
+        self.assertIn('category:weather',out[0]['sources']);self.assertEqual(stats['additionalCandidates'],0)
+
 if __name__=='__main__':unittest.main()
