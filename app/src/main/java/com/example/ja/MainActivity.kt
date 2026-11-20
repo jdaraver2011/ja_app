@@ -1363,10 +1363,7 @@ class MainActivity : ComponentActivity() {
                     onPositionRestored = { pendingSearchRestore = null }
                 )
             } else if (tab == "IPTV") {
-                JaLiveTvScreen(liveTv, onMainMenu = { scope.launch {
-                    navigationRowState.scrollToItem(2); withFrameNanos { }; withFrameNanos { }
-                    liveTv.mainFocus.requestFocus()
-                } },
+                JaLiveTvScreen(liveTv,
                     modifier = Modifier.fillMaxWidth().weight(1f))
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"
