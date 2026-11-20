@@ -76,7 +76,7 @@ def inputs():
         key=(cid,feed,url)
         if key in seen:continue
         seen.add(key)
-        result.append({'id':cid+('@'+feed if feed else ''),'channel':cid,'name':us[cid]['name'],
+        result.append({'id':cid+('@'+feed if feed else ''),'channel':cid,'name':((s.get('title') or us[cid]['name'])+(' ('+feed+')' if feed not in ('','HD','SD','UHD') and (s.get('title') or us[cid]['name'])==us[cid]['name'] else '')),
             'logo':logos.get(cid,''),'url':url,'userAgent':s.get('user_agent') or '', 'referrer':s.get('referrer') or ''})
     return result
 
