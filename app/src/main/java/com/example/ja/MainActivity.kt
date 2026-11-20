@@ -1961,7 +1961,7 @@ internal class PlayerControlSettings(context: Context) {
 }
 
 @Composable
-private fun TvSettingsToggle(label: String, checked: Boolean, enabled: Boolean = true,
+internal fun TvSettingsToggle(label: String, checked: Boolean, enabled: Boolean = true,
     onChanged: (Boolean) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth()
