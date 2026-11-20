@@ -13,7 +13,7 @@ async def main():
   browser=await p.chromium.launch(executable_path=exe,headless=True,args=['--no-sandbox','--autoplay-policy=no-user-gesture-required'])
   page=await browser.new_page(viewport={'width':1280,'height':720})
   errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-  await page.goto(f'http://127.0.0.1:{server.server_port}/?viewMode=wide-enhanced&kiosk=true&refreshTime=900000&mediaPlaying=false&scanLines=false&latLonQuery=Metairie&latLon=%7B%22lat%22%3A29.99%2C%22lon%22%3A-90.18%7D')
+  await page.goto(f'http://127.0.0.1:{server.server_port}/?viewMode=wide-enhanced&kiosk=true&jaKiosk=true&refreshTime=900000&mediaPlaying=false&scanLines=false&latLonQuery=Metairie&latLon=%7B%22lat%22%3A29.99%2C%22lon%22%3A-90.18%7D')
   await page.wait_for_timeout(25000)
   source=(ROOT.parents[1]/'java/com/example/ja/JaWeatherStar.kt').read_text()
   controls=re.search(r'val soundScript="""(.*?)""".trimIndent',source,re.S).group(1)
@@ -27,6 +27,15 @@ async def main():
   await page.evaluate('window.jaWeatherSound(false,0.5)')
   assert await page.locator('#ToggleMedia').get_attribute('aria-pressed')=='false','Sound did not disable'
   classes=await page.locator('body').get_attribute('class')
+  for width,height in [(1920,1080),(1280,720),(960,540),(640,360),(360,800),(800,360)]:
+   await page.set_viewport_size({'width':width,'height':height})
+   await page.wait_for_timeout(350)
+   rect=await page.locator('#divTwcMain').bounding_box()
+   content=await page.locator('#container').bounding_box()
+   for box in [rect,content]:
+    assert box['x']>=-1 and box['y']>=-1 and box['x']+box['width']<=width+1 and box['y']+box['height']<=height+1,(width,height,box)
+   assert abs(rect['width']/rect['height']-854/480)<0.005,'Weather aspect ratio changed'
+   assert not await page.locator('#divTwcBottom').is_visible(),'Weather controls must stay hidden'
   await page.screenshot(path='/tmp/weatherstar-smoke.png')
   print(json.dumps({'errors':errors,'bodyClass':classes,'canvases':await page.locator('canvas').count(),'text':(await page.locator('body').inner_text())[:500]}))
   assert not errors,'WeatherStar runtime exception'
