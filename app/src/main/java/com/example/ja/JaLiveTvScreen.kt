@@ -22,7 +22,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import android.view.KeyEvent
@@ -38,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,6 +95,8 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     val groupFocus=FocusRequester()
     val groupList=LazyListState()
     var previewChannel by mutableStateOf<JaLiveChannel?>(null)
+    var playingChannelId by mutableStateOf<String?>(null)
+    var timelineScale=0f
     var playerAttached by mutableStateOf(false)
     var fullscreen by mutableStateOf(false)
     var lastChannelId=prefs.getString("last-channel",null)
@@ -123,10 +131,11 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         moveSession.clear();movingId=null;draftOrder=emptyList();suppressPickUpRelease=false;returnChannel=id
     }
     fun playbackStarted(channel:JaLiveChannel){
+        playingChannelId=channel.id
         if(lastChannelId!=channel.id){lastChannelId=channel.id;prefs.edit().putString("last-channel",channel.id).apply()}
     }
     fun tune(channel:JaLiveChannel,full:Boolean){
-        finishMove(false);previewChannel=channel;fullscreen=full;focusedChannel=channel.id
+        finishMove(false);if(previewChannel?.id!=channel.id)playingChannelId=null;previewChannel=channel;fullscreen=full;focusedChannel=channel.id
     }
     var appliedView:String?=null
     var view by mutableStateOf("United States")
@@ -186,10 +195,19 @@ private val liveTimeFormat=DateTimeFormatter.ofPattern("h:mm a",Locale.US)
 private fun time(value:Long):String=liveTimeFormat.withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
 @Composable
-internal fun JaLiveTvScreen(state:JaLiveTvState,onMainMenu:()->Unit,modifier:Modifier=Modifier) {
+internal fun JaLiveTvScreen(state:JaLiveTvState,modifier:Modifier=Modifier) {
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
+    var groupsFocused by remember{mutableStateOf(false)}
+    var guideFocused by remember{mutableStateOf(false)}
+    var searchFocused by remember{mutableStateOf(false)}
+    var focusedGroup by remember{mutableIntStateOf(0)}
+    var searchOpen by remember{mutableStateOf(false)}
+    var menuChannel by remember{mutableStateOf<JaLiveChannel?>(null)}
+    val menuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
+    val searchFocus=remember{FocusRequester()}
+    val returnFocus=remember{FocusRequester()}
     DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)}
         owner.lifecycle.addObserver(observer);onDispose{owner.lifecycle.removeObserver(observer)}}
     LaunchedEffect(resumed){if(resumed)while(isActive){state.refresh();delay(900_000)}}
@@ -202,7 +220,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onMainMenu:()->Unit,modifier:Mod
         }
     }
     var now by remember{mutableLongStateOf(System.currentTimeMillis())}
-    LaunchedEffect(resumed){if(resumed)while(isActive){now=System.currentTimeMillis();delay(30_000)}}
+    LaunchedEffect(resumed,state.fullscreen){if(resumed&&!state.fullscreen)while(isActive){now=System.currentTimeMillis();delay(30_000)}}
     val programs=state.guide?.byChannel.orEmpty()
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
@@ -214,167 +232,172 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onMainMenu:()->Unit,modifier:Mod
     val channelMap=remember(available){available.associateBy{it.id}}
     val visibleIds=state.order(state.view,available.map{it.id})
     val visible=remember(channelMap,visibleIds){visibleIds.mapNotNull{channelMap[it]}}
-    val returnFocus=remember{FocusRequester()}
+    val groups=remember{JaLiveTvRules.views()}
     fun focusGuide(){
         state.sidebarOpen=false
         state.returnChannel=state.focusedChannel?.takeIf{it in channelMap}?:visible.firstOrNull()?.id
     }
-    fun focusGroups(){
-        state.sidebarOpen=true
-        scope.launch{
-            val index=JaLiveTvRules.views().indexOf(state.view).coerceAtLeast(0)
-            state.groupList.scrollToItem(index);withFrameNanos{};withFrameNanos{}
-            runCatching{state.groupFocus.requestFocus()}
-        }
-    }
     fun selectGroup(group:String){
         if(state.view!=group){state.finishMove(false);state.view=group;state.returnChannel=null}
     }
-    fun play(channel:JaLiveChannel){state.tune(channel,true)}
-    LaunchedEffect(state.view){
-        if(state.appliedView!=state.view){
-            if(state.returnChannel==null)state.list.scrollToItem(0)
-            state.appliedView=state.view
+    fun focusGroups(first:Boolean=false){
+        state.sidebarOpen=true
+        if(first)selectGroup(groups.first())
+        scope.launch{
+            state.groupList.scrollToItem(groups.indexOf(state.view).coerceAtLeast(0))
+            withFrameNanos{};withFrameNanos{};runCatching{state.groupFocus.requestFocus()}
         }
     }
+    fun openMenu(channel:JaLiveChannel,remote:Boolean){
+        state.finishMove(false);menuGuard.open(remote);menuChannel=channel
+    }
+    fun closeMenu(){val channel=menuChannel;menuChannel=null;state.returnChannel=channel?.id}
+    fun play(channel:JaLiveChannel){state.tune(channel,true)}
+    LaunchedEffect(state.view){if(state.appliedView!=state.view){
+        if(state.returnChannel==null)state.list.scrollToItem(0);state.appliedView=state.view
+    }}
     LaunchedEffect(state.movingId,visibleIds){if(state.movingId!=null&&state.movingId !in channelMap)state.finishMove(false)}
     LaunchedEffect(state.returnChannel,visibleIds){
         val id=state.returnChannel?:return@LaunchedEffect
         val index=visible.indexOfFirst{it.id==id}
-        if(index>=0){
-            if(state.list.layoutInfo.visibleItemsInfo.none{it.key==id})state.list.scrollToItem(index)
-            withFrameNanos{};withFrameNanos{}
-            if(runCatching{returnFocus.requestFocus();true}.getOrDefault(false))state.returnChannel=null
-        }
+        if(index<0){state.returnChannel=visible.firstOrNull()?.id;if(visible.isEmpty())focusGroups();return@LaunchedEffect}
+        if(state.list.layoutInfo.visibleItemsInfo.none{it.key==id})state.list.scrollToItem(index)
+        withFrameNanos{};withFrameNanos{}
+        if(runCatching{returnFocus.requestFocus();true}.getOrDefault(false))state.returnChannel=null
     }
-    BackHandler(state.sidebarOpen&&!state.fullscreen&&state.movingId==null){focusGuide()}
+    BackHandler(!state.fullscreen&&menuChannel==null&&!searchOpen&&state.movingId==null&&(groupsFocused||guideFocused)){
+        if(state.sidebarOpen&&groupsFocused)focusGuide() else focusGroups()
+    }
     BackHandler(state.movingId!=null){state.finishMove(false)}
     val scroll=state.timeline
-    val minuteWidth=2.dp
-    val totalWidth=minuteWidth*1440
-    val density=androidx.compose.ui.platform.LocalDensity.current
-    val minutePixels=with(density){minuteWidth.toPx()}
-    val firstMinute by remember(scroll,minutePixels){derivedStateOf{((scroll.value/minutePixels)/15).toInt()*15}}
     BoxWithConstraints(modifier.onPreviewKeyEvent{event->
         val key=event.nativeKeyEvent
         if(state.movingId==null)false else when(key.keyCode){
-            KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{
-                if(key.action==KeyEvent.ACTION_DOWN)state.moveChannel(if(key.keyCode==KeyEvent.KEYCODE_DPAD_UP)-1 else 1)
-                true
-            }
+            KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(key.action==KeyEvent.ACTION_DOWN)state.moveChannel(if(key.keyCode==KeyEvent.KEYCODE_DPAD_UP)-1 else 1);true}
             KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER->{
-                if(key.action==KeyEvent.ACTION_UP){
-                    if(state.suppressPickUpRelease)state.suppressPickUpRelease=false else state.finishMove(true)
-                };true
+                if(key.action==KeyEvent.ACTION_UP){if(state.suppressPickUpRelease)state.suppressPickUpRelease=false else state.finishMove(true)};true
             }
             KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->true
             else->false
         }
     }){
         val sidebarWidth=if(state.sidebarOpen)minOf(180.dp,maxWidth*0.32f) else 0.dp
-        val guideWidth=(maxWidth-sidebarWidth-8.dp).coerceAtLeast(80.dp)
-        val channelWidth=if(guideWidth>=600.dp)180.dp else 140.dp
-        val viewportMinutes=((guideWidth-channelWidth).value/2).toInt().coerceAtLeast(1)
+        val guideWidth=(maxWidth-sidebarWidth-if(state.sidebarOpen)8.dp else 0.dp).coerceAtLeast(100.dp)
+        val channelWidth=(guideWidth*0.28f).coerceIn(140.dp,250.dp)
+        val timelineWidth=(guideWidth-channelWidth).coerceAtLeast(1.dp)
+        val minuteWidth=JaLiveTvGuideRules.pixelsPerMinute(timelineWidth.value.toDouble()).toFloat().dp
+        val totalWidth=minuteWidth*1440
+        val density=androidx.compose.ui.platform.LocalDensity.current
+        val minutePixels=with(density){minuteWidth.toPx()}
+        LaunchedEffect(minutePixels){
+            val old=state.timelineScale;state.timelineScale=minutePixels
+            if(old>0&&kotlin.math.abs(old-minutePixels)>0.01f){
+                val remapped=JaLiveTvGuideRules.remapScroll(scroll.value,old.toDouble(),minutePixels.toDouble())
+                withFrameNanos{};scroll.scrollTo(remapped)
+            }
+        }
+        val firstMinute by remember(scroll,minutePixels){derivedStateOf{((scroll.value/minutePixels)/15).toInt()*15}}
         val previewWidth=minOf(300.dp,guideWidth*0.52f,maxHeight*0.28f*(16f/9))
         val previewHeight=previewWidth*(9f/16)
-        Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(8.dp)){
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                TvFocusButton(onClick={if(state.sidebarOpen)focusGuide() else focusGroups()}){Text("Groups",fontSize=12.sp)}
-                Text("IPTV",style=MaterialTheme.typography.titleLarge,color=Color.White)
-                JaEntryField(state.query,{state.finishMove(false);state.returnChannel=null;state.query=it},modifier=Modifier.weight(1f),label={Text("Find a channel")})
-                TvFocusButton(onClick={state.refresh(true)},enabled=!state.loading&&!state.guideLoading){Text("Refresh",fontSize=12.sp)}
-            }
-            Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                if(state.sidebarOpen)Column(Modifier.width(sidebarWidth).fillMaxHeight().background(Color(0xFF1B2735),RoundedCornerShape(6.dp))){
-                    Text("Groups",Modifier.padding(10.dp),color=ColorGold,fontSize=16.sp)
-                    LazyColumn(state=state.groupList,modifier=Modifier.fillMaxWidth().weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(6.dp)){
-                        items(JaLiveTvRules.views(),key={it}){group->
-                            TvFocusButton(onClick={selectGroup(group);focusGuide()},modifier=Modifier.fillMaxWidth()
-                                .then(if(state.view==group)Modifier.focusRequester(state.groupFocus) else Modifier)
-                                .onFocusChanged{if(it.isFocused)selectGroup(group)}
-                                .onPreviewKeyEvent{event->val key=event.nativeKeyEvent
-                                    if(key.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT){if(key.action==KeyEvent.ACTION_DOWN)focusGuide();true}
-                                    else if(key.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){if(key.action==KeyEvent.ACTION_DOWN)onMainMenu();true}else false},
-                                colors=ButtonDefaults.buttonColors(containerColor=if(state.view==group)ColorGold else Color(0xFF263747),
-                                    contentColor=if(state.view==group)Color.Black else Color.White)){
-                                Text(group,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                            }
+        Row(Modifier.fillMaxSize(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            if(state.sidebarOpen)Column(Modifier.width(sidebarWidth).fillMaxHeight().background(Color(0xFF1B2735),RoundedCornerShape(6.dp))
+                .onFocusChanged{groupsFocused=it.hasFocus}.focusGroup()
+                .onPreviewKeyEvent{event->
+                    val key=event.nativeKeyEvent
+                    val action=JaLiveTvGuideRules.groupKey(key.keyCode,focusedGroup,groups.size,searchFocused)
+                    if(action==JaLiveTvGuideRules.DEFAULT)false else {
+                        if(key.action==KeyEvent.ACTION_DOWN)when(action){
+                            JaLiveTvGuideRules.SEARCH->runCatching{searchFocus.requestFocus()}
+                            JaLiveTvGuideRules.FIRST_GROUP->focusGroups(true)
+                            JaLiveTvGuideRules.GUIDE->focusGuide()
+                        };true
+                    }
+                }){
+                Row(Modifier.fillMaxWidth().padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically){
+                    Text("Groups",Modifier.weight(1f),color=ColorGold,fontSize=16.sp)
+                    var focused by remember{mutableStateOf(false)}
+                    IconButton(onClick={searchOpen=true},modifier=Modifier.size(40.dp).focusRequester(searchFocus)
+                        .onFocusChanged{focused=it.isFocused;searchFocused=it.isFocused}
+                        .border(if(focused)2.dp else 0.dp,if(focused)Color.White else Color.Transparent,RoundedCornerShape(6.dp))
+                        .semantics{contentDescription="Search channels"}){
+                        Canvas(Modifier.size(20.dp)){
+                            val stroke=2.dp.toPx();val color=if(state.query.isNotBlank())ColorGold else Color.White
+                            drawCircle(color,radius=size.minDimension*0.29f,center=Offset(size.width*0.40f,size.height*0.40f),style=Stroke(stroke))
+                            drawLine(color,Offset(size.width*0.62f,size.height*0.62f),Offset(size.width*0.91f,size.height*0.91f),strokeWidth=stroke,cap=StrokeCap.Round)
                         }
                     }
                 }
-                Column(Modifier.weight(1f).fillMaxHeight(),verticalArrangement=Arrangement.spacedBy(6.dp)){
-                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
-                        Box(Modifier.width(previewWidth).height(previewHeight).background(Color.Black,RoundedCornerShape(6.dp)).clipToBounds()){
-                            val channel=state.previewChannel
-                            if(channel==null)Text("Select a channel",Modifier.align(Alignment.Center),color=Color.LightGray,fontSize=12.sp)
-                            else key(channel.id){JaLiveTvPlayback(channel,state.repository,state.fullscreen,
-                                onFullscreen={state.fullscreen=it;if(!it)state.returnChannel=channel.id.takeIf{id->id in channelMap}?:visible.firstOrNull()?.id},
-                                onPlaying={state.playbackStarted(it)},onAttached={state.playerAttached=it})}
-                        }
-                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){
-                            Text(state.previewChannel?.name?:"IPTV",color=Color.White,fontSize=16.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                            val current=programs[state.previewChannel?.id].orEmpty().firstOrNull{it.start<=now&&it.end>now}
-                            Text(current?.title?:"Live television",color=Color.LightGray,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                            current?.let{Text("${time(it.start)}–${time(it.end)}",color=Color.LightGray,fontSize=11.sp)}
-                            Text("${state.view} · ${visible.size} channels",color=ColorGold,fontSize=11.sp)
-                            if(state.movingId!=null)Text("Moving: ${channelMap[state.movingId]?.name.orEmpty()}",color=ColorGold,fontSize=12.sp,maxLines=2)
-                            else if(state.loading||state.guideLoading)Text(if(state.loading)"Updating channels…" else "Updating guide…",fontSize=11.sp,color=Color.LightGray)
+                LazyColumn(state=state.groupList,modifier=Modifier.fillMaxWidth().weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(6.dp)){
+                    items(groups,key={it}){group->
+                        TvFocusButton(onClick={selectGroup(group)},modifier=Modifier.fillMaxWidth()
+                            .then(if(state.view==group)Modifier.focusRequester(state.groupFocus) else Modifier)
+                            .onFocusChanged{if(it.isFocused){focusedGroup=groups.indexOf(group);searchFocused=false;selectGroup(group)}},
+                            colors=ButtonDefaults.buttonColors(containerColor=if(state.view==group)ColorGold else Color(0xFF263747),
+                                contentColor=if(state.view==group)Color.Black else Color.White)){
+                            Text(group,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
                         }
                     }
-                    state.error?.let{Text(it,color=Color(0xFFFFAAAA),fontSize=11.sp)}
-                    state.guideError?.let{Text(it,color=Color.LightGray,fontSize=11.sp)}
-                    if(visible.isEmpty())Text(if(state.guideLoading&&state.view=="With EPG")"Loading program schedules…" else "No matching channels",color=Color.LightGray,fontSize=12.sp)
-                    Row(Modifier.fillMaxWidth().height(28.dp).background(Color(0xFF314254)),verticalAlignment=Alignment.CenterVertically){
-                        Text("Channel",Modifier.width(channelWidth).padding(start=38.dp),fontSize=12.sp,color=Color.White)
-                        Row(Modifier.weight(1f).horizontalScroll(scroll)){
-                            repeat(48){slot->Text(time(start+slot*1_800_000),Modifier.width(minuteWidth*30).padding(start=4.dp),fontSize=11.sp,maxLines=1,color=Color.White)}
-                        }
+                }
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged{guideFocused=it.hasFocus}.focusGroup(),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
+                    Box(Modifier.width(previewWidth).height(previewHeight).background(Color.Black,RoundedCornerShape(6.dp)).clipToBounds()){
+                        val channel=state.previewChannel
+                        if(channel==null)Text("Select a channel",Modifier.align(Alignment.Center),color=Color.LightGray,fontSize=12.sp)
+                        else key(channel.id){JaLiveTvPlayback(channel,state.repository,state.fullscreen,
+                            onFullscreen={state.fullscreen=it;if(!it)state.returnChannel=channel.id.takeIf{id->id in channelMap}?:visible.firstOrNull()?.id},
+                            onPlaying={state.playbackStarted(it)},onAttached={state.playerAttached=it})}
                     }
-                    LazyColumn(Modifier.fillMaxWidth().weight(1f),state=state.list,verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(bottom=12.dp)){
-                        items(visible,key={it.id}){channel->
-                            val visibleStart=start+(firstMinute-30).coerceAtLeast(0)*60_000L
-                            val visibleEnd=(start+(firstMinute+viewportMinutes+30)*60_000L).coerceAtMost(finish)
-                            val channelPrograms=programs[channel.id].orEmpty()
-                            val allEntries=remember(channelPrograms,start,finish){channelPrograms.filter{it.end>start&&it.start<finish}}
-                            val entries=remember(allEntries,visibleStart,visibleEnd){
-                                val first=allEntries.indexOfFirst{it.end>visibleStart};val last=allEntries.indexOfLast{it.start<visibleEnd}
-                                if(first<0||last<first)emptyList() else allEntries.subList((first-1).coerceAtLeast(0),(last+2).coerceAtMost(allEntries.size))
-                            }
-                            Row(Modifier.fillMaxWidth().height(78.dp),verticalAlignment=Alignment.CenterVertically){
-                                Row(Modifier.width(channelWidth).fillMaxHeight(),verticalAlignment=Alignment.CenterVertically){
-                                    var starFocused by remember{mutableStateOf(false)}
-                                    IconButton(onClick={state.finishMove(false);state.favorite(channel.id)},modifier=Modifier.width(32.dp).height(44.dp)
-                                        .onPreviewKeyEvent{event->if(event.nativeKeyEvent.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){if(event.nativeKeyEvent.action==KeyEvent.ACTION_DOWN)focusGroups();true}else false}
-                                        .semantics{contentDescription=if(channel.id in state.favorites)"Remove ${channel.name} from favorites" else "Add ${channel.name} to favorites"}
-                                        .onFocusChanged{starFocused=it.isFocused}.border(if(starFocused)2.dp else 0.dp,if(starFocused)Color.White else Color.Transparent,RoundedCornerShape(6.dp))){
-                                        Text(if(channel.id in state.favorites)"★" else "☆",color=ColorGold,fontSize=22.sp)
-                                    }
-                                    JaLiveChannelButton(channel,moving=state.movingId==channel.id,
-                                        modifier=Modifier.weight(1f).fillMaxHeight().then(if(state.returnChannel==channel.id)Modifier.focusRequester(returnFocus) else Modifier),
-                                        onFocus={state.focusedChannel=channel.id},onPlay={play(channel)},
-                                        onPickUp={remote->state.beginMove(channel.id,visibleIds,remote)},
-                                        onDragMove={state.moveChannel(it)},onDrop={state.finishMove(true)},onCancel={state.finishMove(false)})
-                                }
-                                Box(Modifier.weight(1f).fillMaxHeight().clipToBounds().horizontalScroll(scroll)){
-                                    Box(Modifier.width(totalWidth).fillMaxHeight().background(Color(0xFF1D2938))){
-                                        if(allEntries.isEmpty())Box(Modifier.width(240.dp).fillMaxHeight().clickable{play(channel)},contentAlignment=Alignment.CenterStart){
-                                            Text("Guide unavailable · Watch live",Modifier.padding(8.dp),color=Color.LightGray,fontSize=12.sp)
-                                        }
-                                        entries.forEach{program->key(program.channel,program.start,program.end,program.title){
-                                            val left=minuteWidth*((program.start.coerceAtLeast(start)-start)/60000f)
-                                            val width=minuteWidth*((program.end.coerceAtMost(finish)-program.start.coerceAtLeast(start))/60000f)
-                                            var focused by remember(program){mutableStateOf(false)}
-                                            Button(onClick={play(channel)},modifier=Modifier.offset(x=left).width(width.coerceAtLeast(8.dp)).fillMaxHeight().padding(end=2.dp)
-                                                .onFocusChanged{focused=it.isFocused},border=if(focused)androidx.compose.foundation.BorderStroke(2.dp,Color.White) else null,
-                                                shape=RoundedCornerShape(4.dp),contentPadding=PaddingValues(6.dp),
-                                                colors=ButtonDefaults.buttonColors(containerColor=if(program.start<=now&&program.end>now)Color(0xFF38516B) else Color(0xFF283747),contentColor=Color.White)){
-                                                Column(Modifier.fillMaxWidth()){
-                                                    Text(program.title,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                                                    Text("${time(program.start)}–${time(program.end)}",fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                                                }
-                                            }
-                                        }}
-                                    }
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                        Text(state.previewChannel?.name?:"IPTV",color=Color.White,fontSize=16.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        val current=programs[state.previewChannel?.id].orEmpty().firstOrNull{it.start<=now&&it.end>now}
+                        Text(current?.title?:"Live television",color=Color.LightGray,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        current?.let{Text("${time(it.start)}–${time(it.end)}",color=Color.LightGray,fontSize=11.sp)}
+                        Text("${state.view} · ${visible.size} channels",Modifier.clickable{focusGroups()}.padding(vertical=4.dp),color=ColorGold,fontSize=11.sp)
+                        if(state.query.isNotBlank())Text("Search: ${state.query}",color=ColorGold,fontSize=11.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        if(state.movingId!=null)Text("Moving: ${channelMap[state.movingId]?.name.orEmpty()}",color=ColorGold,fontSize=12.sp,maxLines=2)
+                        else if(state.loading||state.guideLoading)Text(if(state.loading)"Updating channels…" else "Updating guide…",fontSize=11.sp,color=Color.LightGray)
+                    }
+                }
+                state.error?.let{Text(it,color=Color(0xFFFFAAAA),fontSize=11.sp)}
+                state.guideError?.let{Text(it,color=Color.LightGray,fontSize=11.sp)}
+                if(visible.isEmpty()){
+                    Text(if(state.guideLoading&&state.view=="With EPG")"Loading program schedules…" else "No matching channels",color=Color.LightGray,fontSize=12.sp)
+                    if(!state.loading&&!state.guideLoading)TvFocusButton(onClick={state.refresh(true)}){Text("Refresh channels")}
+                }
+                Row(Modifier.fillMaxWidth().height(28.dp).background(Color(0xFF314254)),verticalAlignment=Alignment.CenterVertically){
+                    Text("Channel",Modifier.width(channelWidth).padding(start=6.dp),fontSize=12.sp,color=Color.White)
+                    Row(Modifier.weight(1f).horizontalScroll(scroll)){
+                        repeat(48){slot->Text(time(start+slot*1_800_000),Modifier.width(minuteWidth*30).padding(start=4.dp),fontSize=12.sp,maxLines=1,color=Color.White)}
+                    }
+                }
+                LazyColumn(Modifier.fillMaxWidth().weight(1f),state=state.list,verticalArrangement=Arrangement.spacedBy(2.dp),contentPadding=PaddingValues(bottom=8.dp)){
+                    items(visible,key={it.id}){channel->
+                        val visibleStart=start+(firstMinute-15).coerceAtLeast(0)*60_000L
+                        val visibleEnd=(start+(firstMinute+JaLiveTvGuideRules.WINDOW_MINUTES+15)*60_000L).coerceAtMost(finish)
+                        val channelPrograms=programs[channel.id].orEmpty()
+                        val allEntries=remember(channelPrograms,start,finish){channelPrograms.filter{it.end>start&&it.start<finish}}
+                        val entries=remember(allEntries,visibleStart,visibleEnd){
+                            val first=allEntries.indexOfFirst{it.end>visibleStart};val last=allEntries.indexOfLast{it.start<visibleEnd}
+                            if(first<0||last<first)emptyList() else allEntries.subList((first-1).coerceAtLeast(0),(last+2).coerceAtMost(allEntries.size))
+                        }
+                        val playing=state.playingChannelId==channel.id
+                        Row(Modifier.fillMaxWidth().height(48.dp),verticalAlignment=Alignment.CenterVertically){
+                            JaLiveChannelButton(channel,playing,channel.id in state.favorites,state.movingId==channel.id,
+                                modifier=Modifier.width(channelWidth).fillMaxHeight().then(if(state.returnChannel==channel.id)Modifier.focusRequester(returnFocus) else Modifier),
+                                onFocus={state.focusedChannel=channel.id},onPlay={play(channel)},onMenu={remote->openMenu(channel,remote)},
+                                onLeft={focusGroups()},onDragMove={state.moveChannel(it)},onDrop={state.finishMove(true)},onCancel={state.finishMove(false)})
+                            Box(Modifier.weight(1f).fillMaxHeight().clipToBounds().horizontalScroll(scroll)){
+                                Box(Modifier.width(totalWidth).fillMaxHeight().background(Color(0xFF1D2938))){
+                                    if(allEntries.isEmpty())JaLiveGuideCell("Guide unavailable",playing,false,
+                                        Modifier.width(timelineWidth).fillMaxHeight(),{play(channel)},{remote->openMenu(channel,remote)})
+                                    entries.forEach{program->key(program.channel,program.start,program.end,program.title){
+                                        val left=minuteWidth*((program.start.coerceAtLeast(start)-start)/60000f)
+                                        val width=minuteWidth*((program.end.coerceAtMost(finish)-program.start.coerceAtLeast(start))/60000f)
+                                        JaLiveGuideCell(program.title,playing,program.start<=now&&program.end>now,
+                                            Modifier.offset(x=left).width(width.coerceAtLeast(8.dp)).fillMaxHeight(),{play(channel)},{remote->openMenu(channel,remote)})
+                                    }}
+                                    Box(Modifier.offset(x=minuteWidth*((now-start)/60_000f)).width(1.dp).fillMaxHeight().background(ColorGold.copy(alpha=0.7f)))
                                 }
                             }
                         }
@@ -383,46 +406,104 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onMainMenu:()->Unit,modifier:Mod
             }
         }
     }
+    if(searchOpen)AlertDialog(onDismissRequest={searchOpen=false;focusGroups()},title={Text("Search channels")},
+        text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            Text(state.view,color=ColorGold)
+            JaEntryField(state.query,{state.finishMove(false);state.returnChannel=null;state.query=it},Modifier.fillMaxWidth(),label={Text("Channel name")},
+                initiallyEditing=true,keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(imeAction=androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions=androidx.compose.foundation.text.KeyboardActions(onSearch={searchOpen=false;focusGroups()}))
+        }},confirmButton={TextButton(onClick={searchOpen=false;focusGroups()}){Text("Done")}},
+        dismissButton={TextButton(onClick={state.query="";state.returnChannel=null}){Text("Clear")}})
+    menuChannel?.let{channel->
+        JaLiveChannelMenu(channel,state.favorites.contains(channel.id),menuGuard,
+            canReorder=channel.id in visibleIds,canRefresh=!state.loading&&!state.guideLoading,
+            onClose={closeMenu()},onWatch={menuChannel=null;play(channel)},
+            onFavorite={state.favorite(channel.id);closeMenu()},
+            onReorder={menuChannel=null;state.beginMove(channel.id,visibleIds,false)},
+            onRefresh={closeMenu();state.refresh(true)})
+    }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun JaLiveChannelButton(channel:JaLiveChannel,moving:Boolean,modifier:Modifier,onFocus:()->Unit,
-    onPlay:()->Unit,onPickUp:(Boolean)->Unit,onDragMove:(Int)->Unit,onDrop:()->Unit,onCancel:()->Unit){
-    var focused by remember{mutableStateOf(false)}
+private fun Modifier.jaLiveSelect(onClick:()->Unit,onMenu:(Boolean)->Unit,onFocus:(Boolean)->Unit={}):Modifier{
     val scope=rememberCoroutineScope()
     var hold by remember{mutableStateOf<Job?>(null)}
     var longPress by remember{mutableStateOf(false)}
-    val pickUp by rememberUpdatedState(onPickUp)
-    val play by rememberUpdatedState(onPlay)
-    val move by rememberUpdatedState(onDragMove)
-    val drop by rememberUpdatedState(onDrop)
-    val cancel by rememberUpdatedState(onCancel)
-    val threshold=with(androidx.compose.ui.platform.LocalDensity.current){78.dp.toPx()}
+    var focused by remember{mutableStateOf(false)}
+    val menu by rememberUpdatedState(onMenu);val click by rememberUpdatedState(onClick);val focus by rememberUpdatedState(onFocus)
     DisposableEffect(Unit){onDispose{hold?.cancel()}}
-    Box(modifier.onFocusChanged{focused=it.isFocused;if(it.isFocused)onFocus() else hold?.cancel()}
+    return onFocusChanged{focused=it.isFocused;focus(it.isFocused);if(!it.isFocused)hold?.cancel()}
         .onPreviewKeyEvent{event->val key=event.nativeKeyEvent
-            if(key.keyCode !in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER))false
-            else{
+            if(key.keyCode !in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER))false else{
                 if(key.action==KeyEvent.ACTION_DOWN&&key.repeatCount==0){
-                    longPress=false;hold?.cancel();hold=scope.launch{delay(android.view.ViewConfiguration.getLongPressTimeout().toLong());longPress=true;pickUp(true)}
-                }else if(key.action==KeyEvent.ACTION_UP){hold?.cancel();if(!longPress&&!key.isCanceled&&focused)play()}
+                    longPress=false;hold?.cancel();hold=scope.launch{delay(android.view.ViewConfiguration.getLongPressTimeout().toLong());longPress=true;menu(true)}
+                }else if(key.action==KeyEvent.ACTION_UP){hold?.cancel();if(!longPress&&!key.isCanceled&&focused)click()}
                 true
             }
-        }
-        .pointerInput(channel.id){var distance=0f
-            detectDragGesturesAfterLongPress(onDragStart={distance=0f;pickUp(false)},onDragEnd={drop()},onDragCancel={cancel()}){change,delta->
-                change.consume();distance+=delta.y
+        }.combinedClickable(onClick=onClick,onLongClick={onMenu(false)})
+}
+
+@Composable
+private fun JaLiveChannelButton(channel:JaLiveChannel,playing:Boolean,favorite:Boolean,moving:Boolean,modifier:Modifier,
+    onFocus:()->Unit,onPlay:()->Unit,onMenu:(Boolean)->Unit,onLeft:()->Unit,onDragMove:(Int)->Unit,onDrop:()->Unit,onCancel:()->Unit){
+    var focused by remember{mutableStateOf(false)}
+    val threshold=with(androidx.compose.ui.platform.LocalDensity.current){48.dp.toPx()}
+    val move by rememberUpdatedState(onDragMove);val drop by rememberUpdatedState(onDrop);val cancel by rememberUpdatedState(onCancel)
+    val contentColor=if(playing&&!moving)Color.Black else Color.White
+    Row(modifier.onPreviewKeyEvent{event->
+        if(event.nativeKeyEvent.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){if(event.nativeKeyEvent.action==KeyEvent.ACTION_DOWN)onLeft();true}else false
+    }.jaLiveSelect(onPlay,onMenu){focused=it;if(it)onFocus()}
+        .then(if(moving)Modifier.pointerInput(channel.id,threshold){var distance=0f
+            detectVerticalDragGestures(onDragEnd={drop()},onDragCancel={cancel()}){change,dy->
+                change.consume();distance+=dy
                 while(kotlin.math.abs(distance)>=threshold){val direction=if(distance>0)1 else -1;move(direction);distance-=threshold*direction}
             }
-        }
-        .combinedClickable(onClick=onPlay,onLongClick={onPickUp(false)})
-        .background(if(moving)Color(0xFF75551E) else Color(0xFF253343),RoundedCornerShape(6.dp))
-        .border(if(focused||moving)2.dp else 0.dp,if(moving)ColorGold else if(focused)Color.White else Color.Transparent,RoundedCornerShape(6.dp))
-        .padding(4.dp),contentAlignment=Alignment.Center){
-        Column(horizontalAlignment=Alignment.CenterHorizontally){
-            if(channel.logo.isNotBlank())AsyncImage(channel.logo,null,Modifier.size(26.dp))
-            Text(channel.name,fontSize=11.sp,maxLines=2,overflow=TextOverflow.Ellipsis,textAlign=TextAlign.Center,color=Color.White)
+        } else Modifier)
+        .background(if(moving)Color(0xFF75551E) else if(playing)ColorGold else Color(0xFF253343),RoundedCornerShape(4.dp))
+        .border(if(focused||moving)2.dp else 0.dp,if(moving)ColorGold else if(focused)Color.White else Color.Transparent,RoundedCornerShape(4.dp))
+        .padding(horizontal=6.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
+        Text(if(favorite)"★" else "",Modifier.width(12.dp),color=if(playing&&!moving)Color.Black else ColorGold,fontSize=12.sp)
+        if(channel.logo.isNotBlank())AsyncImage(channel.logo,null,Modifier.size(28.dp))
+        Text(channel.name,Modifier.weight(1f),fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis,color=contentColor)
+    }
+}
+
+@Composable
+private fun JaLiveGuideCell(title:String,playing:Boolean,current:Boolean,modifier:Modifier,onClick:()->Unit,onMenu:(Boolean)->Unit){
+    var focused by remember{mutableStateOf(false)}
+    Box(modifier.padding(end=2.dp).jaLiveSelect(onClick,onMenu){focused=it}
+        .background(if(playing)Color(0xFF5A4827) else if(current)Color(0xFF38516B) else Color(0xFF283747),RoundedCornerShape(3.dp))
+        .border(if(focused)2.dp else 0.dp,if(focused)Color.White else Color.Transparent,RoundedCornerShape(3.dp))
+        .padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){
+        Text(title,color=Color.White,fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiveTvGuideRules.MenuKeyGuard,
+    canReorder:Boolean,canRefresh:Boolean,onClose:()->Unit,onWatch:()->Unit,onFavorite:()->Unit,onReorder:()->Unit,onRefresh:()->Unit){
+    val first=remember{FocusRequester()}
+    Dialog(onDismissRequest=onClose,properties=DialogProperties(usePlatformDefaultWidth=false)){
+        LaunchedEffect(Unit){withFrameNanos{};first.requestFocus()}
+        Box(Modifier.fillMaxSize().onPreviewKeyEvent{event->val key=event.nativeKeyEvent
+            if(key.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER))
+                guard.consume(key.action==KeyEvent.ACTION_DOWN,key.action==KeyEvent.ACTION_UP,key.repeatCount)
+            else if(key.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){if(key.action==KeyEvent.ACTION_DOWN)onClose();true}else false
+        }){
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=0.45f)).focusProperties{canFocus=false}.clickable(onClick=onClose))
+            Column(Modifier.align(Alignment.CenterEnd).widthIn(max=340.dp).fillMaxWidth().fillMaxHeight().background(Color(0xFF1B2735))
+                .padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+                Text("Channel options",color=ColorGold,fontSize=20.sp)
+                Text(channel.name,color=Color.White,fontSize=16.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                Spacer(Modifier.height(6.dp))
+                val colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF2A3A4B),contentColor=Color.White)
+                TvFocusButton(onClick=onWatch,modifier=Modifier.fillMaxWidth().focusRequester(first),colors=colors){Text("Watch fullscreen")}
+                TvFocusButton(onClick=onFavorite,modifier=Modifier.fillMaxWidth(),colors=colors){Text(if(favorite)"Remove from Favorites" else "Add to Favorites")}
+                TvFocusButton(onClick=onReorder,enabled=canReorder,modifier=Modifier.fillMaxWidth(),colors=colors){Text("Reorder channels")}
+                TvFocusButton(onClick=onRefresh,enabled=canRefresh,modifier=Modifier.fillMaxWidth(),colors=colors){Text("Refresh channels and guide")}
+                TvFocusButton(onClick=onClose,modifier=Modifier.fillMaxWidth(),colors=colors){Text("Close")}
+            }
         }
     }
 }
@@ -492,7 +573,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
     val player=remember(channel,source,generation){
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
-            .setUserAgent(headers["User-Agent"]?:"JA/2.4.7").setDefaultRequestProperties(headers)
+            .setUserAgent(headers["User-Agent"]?:"JA/2.4.8").setDefaultRequestProperties(headers)
         ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http))).build().apply{
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)
