@@ -48,6 +48,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.time.Instant
@@ -56,9 +59,14 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Stable
-internal class JaLiveTvState(context:android.content.Context,val repository:JaLiveTvRepository) {
+internal class JaLiveTvState(context:android.content.Context,val repository:JaLiveTvRepository,private val scope:CoroutineScope) {
     private val prefs=context.getSharedPreferences("ja_live_favorites",android.content.Context.MODE_PRIVATE)
     var favorites by mutableStateOf(prefs.getStringSet("ids",emptySet())?.toSet()?:emptySet())
+    var favoriteOrder by mutableStateOf(runCatching {
+        val a=org.json.JSONArray(prefs.getString("order","[]"));(0 until a.length()).map{a.getString(it)}
+    }.getOrDefault(emptyList()))
+    var reordering by mutableStateOf(false)
+    var appliedView:String?=null
     var view by mutableStateOf("United States")
     var channels by mutableStateOf<List<JaLiveChannel>>(emptyList())
     var guide by mutableStateOf<JaLiveGuide?>(null)
@@ -66,20 +74,56 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     var guideLoading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var guideError by mutableStateOf<String?>(null)
-    var revision by mutableIntStateOf(0)
     var saved by mutableStateOf(false)
     var verifiedAt by mutableStateOf("")
     var query by mutableStateOf("")
     var returnChannel by mutableStateOf<String?>(null)
+    private var refreshJob:Job?=null
+    private var lastAttempt=0L
     val list=LazyListState()
+    val groups=androidx.compose.foundation.ScrollState(0)
+    val timeline=androidx.compose.foundation.ScrollState(0)
+    private fun saveOrder(){prefs.edit().putStringSet("ids",favorites.toSet()).putString("order",org.json.JSONArray(favoriteOrder).toString()).apply()}
     fun favorite(id:String){
         favorites=if(id in favorites)favorites-id else favorites+id
-        prefs.edit().putStringSet("ids",favorites.toSet()).apply()
+        favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id});saveOrder()
+    }
+    fun move(id:String,direction:Int){
+        // Only visible favorites swap: temporarily missing channels retain their stored position.
+        val shown=channels.filter{it.id in favorites&&it.name.contains(query,true)}.map{it.id}.toSet()
+        val order=favoriteOrder.filter{it in shown}
+        val changed=JaLiveTvOrder.move(order,id,direction)
+        val iterator=changed.iterator()
+        favoriteOrder=favoriteOrder.map{if(it in shown)iterator.next() else it};saveOrder()
+    }
+    fun refresh(force:Boolean=false){
+        if(refreshJob?.isActive==true)return
+        val now=SystemClock.elapsedRealtime()
+        if(!force&&channels.isNotEmpty()&&now-lastAttempt<60_000)return
+        lastAttempt=now
+        // Owned by StreamingApp's scope, so opening a channel does not cancel the EPG download.
+        refreshJob=scope.launch {
+            loading=true;error=null
+            try{
+                val result=repository.channels(force)
+                channels=result.channels;saved=result.saved;verifiedAt=result.verifiedAt
+                favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id});saveOrder()
+            }catch(e:CancellationException){throw e}catch(_:Exception){error="Channel catalog unavailable. Check your connection and retry."}
+            finally{loading=false}
+            if(channels.isEmpty())return@launch
+            repository.cachedGuide(channels)?.let{guide=it}
+            guideLoading=true;guideError=null
+            try{guide=repository.guide(channels,force){partial->guide=partial}}
+            catch(e:CancellationException){throw e}
+            catch(_:Exception){guideError="Guide unavailable. Channels can still be played."}
+            finally{guideLoading=false}
+        }
     }
 }
 
 private val ColorGold=Color(0xFFE5A43B)
-private fun time(value:Long):String=DateTimeFormatter.ofPattern("h:mm a",Locale.US).withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
+private val liveTimeFormat=DateTimeFormatter.ofPattern("h:mm a",Locale.US)
+private fun time(value:Long):String=liveTimeFormat.withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
 @Composable
 internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,modifier:Modifier=Modifier) {
@@ -87,69 +131,70 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)}
         owner.lifecycle.addObserver(observer);onDispose{owner.lifecycle.removeObserver(observer)}}
-    LaunchedEffect(state.revision,resumed){
-        if(!resumed)return@LaunchedEffect
-        var force=state.revision>0
-        while(isActive){
-            state.loading=true;state.error=null
-            try{val result=state.repository.channels(force)
-                state.channels=result.channels;state.saved=result.saved;state.verifiedAt=result.verifiedAt
-            }catch(e:CancellationException){throw e}catch(_:Exception){state.error="Live catalog unavailable. Check your connection and retry."}
-            finally{state.loading=false}
-            force=false;delay(900_000)
-        }
-    }
-    LaunchedEffect(state.channels,state.revision,resumed){
-        if(!resumed||state.channels.isEmpty())return@LaunchedEffect
-        while(isActive){
-            state.guideLoading=true;state.guideError=null
-            try{state.guide=state.repository.guide(state.channels)}catch(e:CancellationException){throw e}
-            catch(_:Exception){state.guideError="Guide unavailable. Channels can still be played."}
-            finally{state.guideLoading=false}
-            delay(21_600_000)
-        }
-    }
+    LaunchedEffect(resumed){if(resumed)while(isActive){state.refresh();delay(900_000)}}
     var now by remember{mutableLongStateOf(System.currentTimeMillis())}
     LaunchedEffect(resumed){if(resumed)while(isActive){now=System.currentTimeMillis();delay(30_000)}}
-    val programs=remember(state.guide){state.guide?.programs?.groupBy{it.channel}.orEmpty()}
+    val programs=state.guide?.byChannel.orEmpty()
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
-    val visible=remember(state.channels,state.query,state.view,state.favorites,programs,now){state.channels.filter{channel ->
+    val visible=remember(state.channels,state.query,state.view,state.favorites,state.favoriteOrder,programs,now){state.channels.filter{channel ->
         JaLiveTvRules.categoryMatches(state.view,channel.categories)
             &&(state.view!="Favorites"||channel.id in state.favorites)
             &&(state.view!="With EPG"||programs[channel.id].orEmpty().any{JaLiveTvRules.hasGuide(it.start,it.end,it.title,now,finish)})
-            &&channel.name.contains(state.query,true)}}
-    LaunchedEffect(state.view){if(state.returnChannel==null)state.list.scrollToItem(0)}
+            &&channel.name.contains(state.query,true)}.let{matches->
+            if(state.view=="Favorites"){
+                val ranks=state.favoriteOrder.withIndex().associate{it.value to it.index}
+                matches.sortedBy{ranks[it.id]?:Int.MAX_VALUE}
+            }else matches
+        }}
+    LaunchedEffect(state.view){
+        if(state.appliedView!=state.view){
+            state.reordering=false
+            if(state.returnChannel==null)state.list.scrollToItem(0)
+            state.appliedView=state.view
+        }
+    }
     val returnFocus=remember{FocusRequester()}
-    LaunchedEffect(state.returnChannel,visible){
+    LaunchedEffect(state.returnChannel,visible.map{it.id}){
         val id=state.returnChannel?:return@LaunchedEffect
         val index=visible.indexOfFirst{it.id==id}
-        if(index>=0){state.list.scrollToItem(index);withFrameNanos{};withFrameNanos{};runCatching{returnFocus.requestFocus()};state.returnChannel=null}
+        if(index>=0){
+            if(state.list.layoutInfo.visibleItemsInfo.none{it.key==id})state.list.scrollToItem(index)
+            withFrameNanos{};withFrameNanos{}
+            if(runCatching{returnFocus.requestFocus();true}.getOrDefault(false))state.returnChannel=null
+        }
     }
-    val scroll=rememberScrollState()
+    val scroll=state.timeline
     val minuteWidth=2.dp
     val totalWidth=minuteWidth*1440
+    val density=androidx.compose.ui.platform.LocalDensity.current
+    val minutePixels=with(density){minuteWidth.toPx()}
+    val firstMinute by remember(scroll,minutePixels){derivedStateOf{((scroll.value/minutePixels)/15).toInt()*15}}
     BoxWithConstraints(modifier){
-        val channelWidth=if(maxWidth>=600.dp)180.dp else 124.dp
+        val channelWidth=(if(maxWidth>=600.dp)180.dp else 140.dp)+(if(state.view=="Favorites"&&state.reordering)64.dp else 0.dp)
         Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(6.dp)){
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            Row(Modifier.horizontalScroll(state.groups),horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 JaLiveTvRules.views().forEach{label->
                     TvFocusButton(onClick={state.view=label},colors=ButtonDefaults.buttonColors(
                         containerColor=if(state.view==label)ColorGold else Color.DarkGray,
                         contentColor=if(state.view==label)Color.Black else Color.White)){Text(label,fontSize=12.sp)}
                 }
             }
-            Text("IPTV · ${state.view}",style=MaterialTheme.typography.titleLarge)
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                OutlinedTextField(state.query,{state.query=it},modifier=Modifier.weight(1f).widthIn(max=420.dp),singleLine=true,label={Text("Find a channel")})
-                Text("${visible.size} channels",fontSize=12.sp)
-                TvFocusButton(onClick={state.revision++},enabled=!state.loading){Text("Refresh",fontSize=12.sp)}
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                Text("IPTV",style=MaterialTheme.typography.titleLarge,color=Color.White)
+                OutlinedTextField(state.query,{state.query=it},modifier=Modifier.weight(1f),singleLine=true,
+                    label={Text("Find a channel")},textStyle=LocalTextStyle.current.copy(color=Color.White))
+                TvFocusButton(onClick={state.refresh(true)},enabled=!state.loading&&!state.guideLoading){Text("Refresh",fontSize=12.sp)}
             }
-            if(state.loading)Text("Updating live channels…",fontSize=11.sp)
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                Text("${visible.size} channels",fontSize=12.sp,color=Color.White)
+                if(state.view=="Favorites")TvFocusButton(onClick={state.reordering=!state.reordering},enabled=state.reordering||visible.isNotEmpty()){
+                    Text(if(state.reordering)"Done" else "Reorder",fontSize=12.sp)
+                }
+                if(state.loading||state.guideLoading)Text(if(state.loading)"Updating channels…" else "Updating guide…",fontSize=11.sp,color=Color.LightGray)
+            }
             state.error?.let{Text(it,color=Color(0xFFFFAAAA),fontSize=12.sp)}
-            if(state.verifiedAt.isNotBlank())Text("Live feeds checked: ${runCatching{DateTimeFormatter.ofPattern("MM-dd h:mm a",Locale.US).withZone(ZoneId.systemDefault()).format(Instant.parse(state.verifiedAt))}.getOrDefault(state.verifiedAt)}${if(state.saved)" · Saved catalog" else ""} · Daily automatic updates",fontSize=11.sp,color=Color.LightGray)
-            if(state.guideLoading)Text("Updating program guide…",fontSize=11.sp)
-            state.guideError?.let{Text(it,fontSize=11.sp)}
+            state.guideError?.let{Text(it,fontSize=11.sp,color=Color.LightGray)}
             if(!state.loading&&visible.isEmpty())Text(when {
                 state.view=="With EPG"&&state.guideLoading->"Loading channels with program schedules…"
                 state.view=="With EPG"->"No matching channels have current or upcoming guide data."
@@ -157,16 +202,35 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
                 else->"No matching live channels."
             })
             Row(Modifier.fillMaxWidth().height(28.dp).background(Color(0xFF314254)),verticalAlignment=Alignment.CenterVertically){
-                Text("Channel",Modifier.width(channelWidth).padding(start=6.dp),fontSize=12.sp)
+                Text("Channel",Modifier.width(channelWidth).padding(start=38.dp),fontSize=12.sp,color=Color.White)
                 Row(Modifier.weight(1f).horizontalScroll(scroll)){
                     repeat(48){slot->Text(time(start+slot*1_800_000),Modifier.width(minuteWidth*30).padding(start=4.dp),fontSize=11.sp,maxLines=1)}
                 }
             }
             LazyColumn(Modifier.fillMaxWidth().weight(1f),state=state.list,verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(bottom=12.dp)){
                 items(visible,key={it.id}){channel ->
-                    val entries=programs[channel.id].orEmpty().filter{it.end>start&&it.start<finish}
+                    val visibleStart=start+(firstMinute-30).coerceAtLeast(0)*60_000L
+                    val visibleEnd=(start+(firstMinute+((maxWidth-channelWidth).value/2).toInt()+30)*60_000L).coerceAtMost(finish)
+                    val channelPrograms=programs[channel.id].orEmpty()
+                    val allEntries=remember(channelPrograms,start,finish){channelPrograms.filter{it.end>start&&it.start<finish}}
+                    val entries=remember(allEntries,visibleStart,visibleEnd){
+                        val first=allEntries.indexOfFirst{it.end>visibleStart}
+                        val last=allEntries.indexOfLast{it.start<visibleEnd}
+                        if(first<0||last<first)emptyList() else allEntries.subList((first-1).coerceAtLeast(0),(last+2).coerceAtMost(allEntries.size))
+                    }
                     Row(Modifier.fillMaxWidth().height(84.dp),verticalAlignment=Alignment.CenterVertically){
                         Row(Modifier.width(channelWidth).fillMaxHeight(),verticalAlignment=Alignment.CenterVertically){
+                            var starFocus by remember{mutableStateOf(false)}
+                            IconButton(onClick={state.favorite(channel.id)},modifier=Modifier.width(32.dp).height(44.dp)
+                                .semantics{contentDescription=if(channel.id in state.favorites)"Remove ${channel.name} from favorites" else "Add ${channel.name} to favorites"}
+                                .onFocusChanged{starFocus=it.isFocused}.border(if(starFocus)2.dp else 0.dp,if(starFocus)Color.White else Color.Transparent,RoundedCornerShape(6.dp))){
+                                Text(if(channel.id in state.favorites)"★" else "☆",color=ColorGold,fontSize=22.sp)
+                            }
+                            if(state.view=="Favorites"&&state.reordering){
+                                val index=visible.indexOfFirst{it.id==channel.id}
+                                JaLiveMoveButton("↑","Move ${channel.name} up",index>0){state.move(channel.id,-1)}
+                                JaLiveMoveButton("↓","Move ${channel.name} down",index<visible.lastIndex){state.move(channel.id,1)}
+                            }
                             var focused by remember{mutableStateOf(false)}
                             Button(onClick={state.returnChannel=channel.id;onPlay(channel)},
                                 modifier=Modifier.weight(1f).fillMaxHeight().then(if(state.returnChannel==channel.id)Modifier.focusRequester(returnFocus) else Modifier)
@@ -179,19 +243,14 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
                                     Text(channel.name,fontSize=11.sp,maxLines=2,overflow=TextOverflow.Ellipsis,textAlign=TextAlign.Center)
                                 }
                             }
-                            var starFocus by remember{mutableStateOf(false)}
-                            IconButton(onClick={state.favorite(channel.id)},modifier=Modifier.width(32.dp).height(44.dp)
-                                .semantics{contentDescription=if(channel.id in state.favorites)"Remove ${channel.name} from favorites" else "Add ${channel.name} to favorites"}
-                                .onFocusChanged{starFocus=it.isFocused}.border(if(starFocus)2.dp else 0.dp,if(starFocus)Color.White else Color.Transparent,RoundedCornerShape(6.dp))){
-                                Text(if(channel.id in state.favorites)"★" else "☆",color=ColorGold,fontSize=22.sp)
-                            }
+
                         }
                         Box(Modifier.weight(1f).fillMaxHeight().clipToBounds().horizontalScroll(scroll)){
                             Box(Modifier.width(totalWidth).fillMaxHeight().background(Color(0xFF1D2938))){
-                                if(entries.isEmpty())Box(Modifier.width(240.dp).fillMaxHeight().clickable{state.returnChannel=channel.id;onPlay(channel)},contentAlignment=Alignment.CenterStart){
+                                if(allEntries.isEmpty())Box(Modifier.width(240.dp).fillMaxHeight().clickable{state.returnChannel=channel.id;onPlay(channel)},contentAlignment=Alignment.CenterStart){
                                     Text("Guide unavailable · Watch live",Modifier.padding(8.dp),color=Color.LightGray,fontSize=12.sp)
                                 }
-                                entries.forEach{program->
+                                entries.forEach{program->key(program.channel,program.start,program.end,program.title){
                                     val left=minuteWidth*((program.start.coerceAtLeast(start)-start)/60000f)
                                     val width=minuteWidth*((program.end.coerceAtMost(finish)-program.start.coerceAtLeast(start))/60000f)
                                     var programFocus by remember(program){mutableStateOf(false)}
@@ -206,7 +265,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
                                             Text("${time(program.start)}–${time(program.end)}",fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                                         }
                                     }
-                                }
+                                }}
                             }
                         }
                     }
@@ -215,6 +274,16 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,onPlay:(JaLiveChannel)->Unit,mod
         }
     }
 }
+@Composable
+private fun JaLiveMoveButton(symbol:String,label:String,enabled:Boolean,onClick:()->Unit){
+    var focused by remember{mutableStateOf(false)}
+    IconButton(onClick=onClick,enabled=enabled,modifier=Modifier.width(32.dp).height(44.dp)
+        .semantics{contentDescription=label}.onFocusChanged{focused=it.isFocused}
+        .border(if(focused)2.dp else 0.dp,if(focused)Color.White else Color.Transparent,RoundedCornerShape(6.dp))){
+        Text(symbol,color=if(enabled)Color.White else Color.Gray,fontSize=20.sp)
+    }
+}
+
 /** Resolve current alternatives before creating a player; no Movie/TV source changes. */
 @Composable
 internal fun JaLiveTvPlayer(channel:JaLiveChannel,repository:JaLiveTvRepository,onClose:()->Unit) {
@@ -255,7 +324,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,onRetry:()->Unit,onClose:()->U
     val player=remember(channel,source,generation){
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
-            .setUserAgent(headers["User-Agent"]?:"JA/2.4.5").setDefaultRequestProperties(headers)
+            .setUserAgent(headers["User-Agent"]?:"JA/2.4.6").setDefaultRequestProperties(headers)
         ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http))).build().apply{
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)
