@@ -4,6 +4,7 @@ import android.view.ViewGroup
 import android.os.SystemClock
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -92,6 +93,9 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     var sidebarOpen by mutableStateOf(true)
     var focusedChannel:String?=null
     val mainFocus=FocusRequester()
+    val previewFocus=FocusRequester()
+    var previewRequest by mutableIntStateOf(0)
+    fun focusPreview(){previewRequest++}
     val groupFocus=FocusRequester()
     val groupList=LazyListState()
     var previewChannel by mutableStateOf<JaLiveChannel?>(null)
@@ -101,6 +105,11 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     var fullscreen by mutableStateOf(false)
     var lastChannelId=prefs.getString("last-channel",null)
     init {
+        if(!prefs.getBoolean("weather-channel-added",false)){
+            favorites=favorites+JA_WEATHER_CHANNEL;favoriteOrder=listOf(JA_WEATHER_CHANNEL)+favoriteOrder.filter{it!=JA_WEATHER_CHANNEL}
+            prefs.edit().putStringSet("ids",favorites).putString("order",org.json.JSONArray(favoriteOrder).toString())
+                .putString("group-order:Favorites",org.json.JSONArray(favoriteOrder).toString()).putBoolean("weather-channel-added",true).apply()
+        }
         JaLiveTvRules.views().forEach{group->
             val stored=runCatching { val a=org.json.JSONArray(prefs.getString("group-order:$group","[]"));(0 until a.length()).map{a.getString(it)} }.getOrDefault(emptyList())
             groupOrders[group]=if(group=="Favorites"&&stored.isEmpty())favoriteOrder else stored
@@ -139,7 +148,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     }
     var appliedView:String?=null
     var view by mutableStateOf("United States")
-    var channels by mutableStateOf<List<JaLiveChannel>>(emptyList())
+    var channels by mutableStateOf<List<JaLiveChannel>>(listOf(jaWeatherChannel()))
     var guide by mutableStateOf<JaLiveGuide?>(null)
     var loading by mutableStateOf(false)
     var guideLoading by mutableStateOf(false)
@@ -172,7 +181,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
             loading=true;error=null
             try{
                 val result=repository.channels(force)
-                channels=result.channels;saved=result.saved;verifiedAt=result.verifiedAt
+                channels=listOf(jaWeatherChannel())+result.channels.filter{it.id!=JA_WEATHER_CHANNEL};saved=result.saved;verifiedAt=result.verifiedAt
                 favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id})
         groupOrders["Favorites"]=favoriteOrder
         prefs.edit().putString("group-order:Favorites",org.json.JSONArray(favoriteOrder).toString()).apply()
@@ -195,12 +204,13 @@ private val liveTimeFormat=DateTimeFormatter.ofPattern("h:mm a",Locale.US)
 private fun time(value:Long):String=liveTimeFormat.withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
 @Composable
-internal fun JaLiveTvScreen(state:JaLiveTvState,modifier:Modifier=Modifier) {
+internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,modifier:Modifier=Modifier) {
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     var groupsFocused by remember{mutableStateOf(false)}
     var guideFocused by remember{mutableStateOf(false)}
+    var previewFocused by remember { mutableStateOf(false) }
     var searchFocused by remember{mutableStateOf(false)}
     var focusedGroup by remember{mutableIntStateOf(0)}
     var searchOpen by remember{mutableStateOf(false)}
@@ -221,7 +231,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,modifier:Modifier=Modifier) {
     }
     var now by remember{mutableLongStateOf(System.currentTimeMillis())}
     LaunchedEffect(resumed,state.fullscreen){if(resumed&&!state.fullscreen)while(isActive){now=System.currentTimeMillis();delay(30_000)}}
-    val programs=state.guide?.byChannel.orEmpty()
+    val programs=remember(state.guide,now/1_800_000,weather.zip){state.guide?.byChannel.orEmpty()+mapOf(JA_WEATHER_CHANNEL to jaWeatherPrograms(now,weather.zip))}
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
     val available=remember(state.channels,state.query,state.view,state.favorites,programs,now){state.channels.filter{channel->
@@ -233,6 +243,12 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,modifier:Modifier=Modifier) {
     val visibleIds=state.order(state.view,available.map{it.id})
     val visible=remember(channelMap,visibleIds){visibleIds.mapNotNull{channelMap[it]}}
     val groups=remember{JaLiveTvRules.views()}
+    fun focusPlaying(){
+        val id=state.playingChannelId?:state.previewChannel?.id?:JA_WEATHER_CHANNEL
+        if(id !in channelMap){state.query="";state.view="United States"}
+        state.returnChannel=id
+    }
+    LaunchedEffect(state.previewRequest){if(state.previewRequest>0){withFrameNanos{};runCatching{state.previewFocus.requestFocus()}}}
     fun focusGuide(){
         state.sidebarOpen=false
         state.returnChannel=state.focusedChannel?.takeIf{it in channelMap}?:visible.firstOrNull()?.id
@@ -266,7 +282,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,modifier:Modifier=Modifier) {
         if(runCatching{returnFocus.requestFocus();true}.getOrDefault(false))state.returnChannel=null
     }
     BackHandler(!state.fullscreen&&menuChannel==null&&!searchOpen&&state.movingId==null&&(groupsFocused||guideFocused)){
-        if(state.sidebarOpen&&groupsFocused)focusGuide() else focusGroups()
+        if(state.sidebarOpen&&groupsFocused){state.sidebarOpen=false;onMainMenu()} else focusGroups()
     }
     BackHandler(state.movingId!=null){state.finishMove(false)}
     val scroll=state.timeline
@@ -341,9 +357,27 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,modifier:Modifier=Modifier) {
             }
             Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged{guideFocused=it.hasFocus}.focusGroup(),verticalArrangement=Arrangement.spacedBy(6.dp)){
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
-                    Box(Modifier.width(previewWidth).height(previewHeight).background(Color.Black,RoundedCornerShape(6.dp)).clipToBounds()){
+                    Box(Modifier.width(previewWidth).height(previewHeight).background(Color.Black,RoundedCornerShape(6.dp)).clipToBounds()
+                        .focusRequester(state.previewFocus).onFocusChanged { previewFocused=it.isFocused }.border(if(previewFocused)2.dp else 0.dp,Color.White).onPreviewKeyEvent{event->
+                            when(event.nativeKeyEvent.keyCode){
+                                KeyEvent.KEYCODE_DPAD_DOWN->{if(event.nativeKeyEvent.action==KeyEvent.ACTION_DOWN)focusPlaying();true}
+                                KeyEvent.KEYCODE_DPAD_UP->{if(event.nativeKeyEvent.action==KeyEvent.ACTION_DOWN)onMainMenu();true}
+                                KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER->{if(event.nativeKeyEvent.action==KeyEvent.ACTION_UP)state.fullscreen=true;true}
+                                else->false
+                            }
+                        }.focusable()) {
                         val channel=state.previewChannel
                         if(channel==null)Text("Select a channel",Modifier.align(Alignment.Center),color=Color.LightGray,fontSize=12.sp)
+                        else if(channel.id==JA_WEATHER_CHANNEL){
+                            JaLivePresentation(state.fullscreen,{state.fullscreen=false;state.returnChannel=channel.id}){
+                                if(state.fullscreen)JaWeatherStarPanel(weather,Modifier.fillMaxSize(),onFullscreen={state.fullscreen=false},
+                                    showChannels=true,onChannel={direction->
+                                        val choices=state.channels;val index=choices.indexOfFirst{it.id==channel.id}.coerceAtLeast(0)
+                                        choices.getOrNull((index+direction+choices.size)%choices.size)?.let{state.tune(it,true)}
+                                    },onReady={state.playbackStarted(channel)})
+                                else JaWeatherStarView(weather,Modifier.fillMaxSize(),onReady={state.playbackStarted(channel)})
+                            }
+                        }
                         else key(channel.id){JaLiveTvPlayback(channel,state.repository,state.fullscreen,
                             onFullscreen={state.fullscreen=it;if(!it)state.returnChannel=channel.id.takeIf{id->id in channelMap}?:visible.firstOrNull()?.id},
                             onPlaying={state.playbackStarted(it)},onAttached={state.playerAttached=it})}
