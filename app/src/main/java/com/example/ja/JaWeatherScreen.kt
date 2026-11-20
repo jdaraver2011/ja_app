@@ -118,7 +118,7 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
     var entry by rememberSaveable { mutableStateOf(state.zip) }
     var message by remember { mutableStateOf<String?>(null) }
     Text("Weather", style = MaterialTheme.typography.titleLarge, color = Color.White)
-    OutlinedTextField(value = entry, onValueChange = { value ->
+    JaEntryField(value = entry, onValueChange = { value ->
         entry = value.filter { it in '0'..'9' }.take(5); message = null
     }, label = { Text("Preferred ZIP code") }, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
