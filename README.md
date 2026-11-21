@@ -1,6 +1,6 @@
 # JA — current project
 
-Test branch: **2.5.1a (20501)**, based on stable v2.5.1. Native Deezer Music and Android Auto media test. See [Music Lab test guide](docs/MUSIC-LAB-2.5.1a.md). Stable public update remains v2.5.1. [Test workflow 44865276250](https://github.com/jdaraver2011/ja_app/actions/runs/44865276250) passed regressions, signed APK compilation and Android lint; real-account and car playback need device verification.
+Test branch: **2.5.1b (20501)**, based on v2.5.1a. Fixes music foreground-service registration/startup. Stable public update remains v2.5.1. See [service fix](docs/MUSIC-LAB-2.5.1b.md).
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
@@ -8,7 +8,7 @@ JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback o
 
 The checked-in configuration uses Java 17, Gradle 9.6.0, AGP 9.5.1, Kotlin/Compose compiler 2.4.21, compile SDK 37.2, GeckoView 160.0.20261104181552 and Media3 1.11.1. Keep the repository's existing Actions secrets and signing configuration.
 
-Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.5.1a-debug**. Local build: run `python3 scripts/build-weatherstar.py` with Node.js 24 and FFmpeg/ffprobe available, configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
+Run **Build JA APK** on your testing branch. The APK artifact is **JA-2.5.1b-debug**. Local build: run `python3 scripts/build-weatherstar.py` with Node.js 24 and FFmpeg/ffprobe available, configure local.properties using local.properties.example, then run `gradle assembleDebug lintDebug` with the configured SDK and toolchain. This experimental branch requires Android lint to pass for all builds. See [update setup](UPDATE-SETUP.md) for persistent signing and publishing. Publish only when the build is ready for devices.
 
 ## Current behavior and test status
 
