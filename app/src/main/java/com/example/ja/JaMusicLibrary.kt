@@ -9,6 +9,8 @@ import java.util.UUID
 /** Private JA library. No writes to the Deezer account. */
 internal class JaMusicLibrary(context: Context) {
     data class Playlist(val id: String, val name: String, val tracks: List<JaMusicCatalog.Track>)
+    data class SearchEntry(val query: String, val kind: String, val id: String, val title: String,
+        val subtitle: String, val art: String)
     private val prefs = context.applicationContext.getSharedPreferences("ja_music_library", Context.MODE_PRIVATE)
     val changes = MutableStateFlow(0)
     private fun notifyChange() { changes.value++ }
@@ -39,6 +41,27 @@ internal class JaMusicLibrary(context: Context) {
     }
     fun saved(): List<JaMusicCatalog.Card> = json("saved").let { a -> (0 until a.length()).mapNotNull { i -> runCatching { val o = a.getJSONObject(i)
         JaMusicCatalog.Card(o.getString("id"), o.getString("title"), o.optString("subtitle"), o.optString("art"), o.getString("kind")) }.getOrNull() } }
+    fun recentSearches(): List<SearchEntry> = json("recent_searches").let { a -> (0 until a.length()).mapNotNull { i -> runCatching {
+        val o = a.getJSONObject(i); SearchEntry(o.getString("query"), o.getString("kind"), o.optString("id"),
+            o.optString("title"), o.optString("subtitle"), o.optString("art")) }.getOrNull() } }
+    fun rememberSearch(query: String, kind: String, card: JaMusicCatalog.Card? = null, track: JaMusicCatalog.Track? = null) {
+        val value = query.trim().take(200)
+        if (value.isBlank() || kind !in listOf("track", "artist", "album", "playlist")) return
+        val entry = SearchEntry(value, kind, card?.id ?: track?.artistId.orEmpty(), value,
+            card?.subtitle?.takeIf { it.isNotBlank() } ?: kind.replaceFirstChar { it.uppercase() }, card?.art ?: track?.art.orEmpty())
+        val rows = (listOf(entry) + recentSearches().filterNot { it.query.equals(value, true) && it.kind == kind }).take(10)
+        prefs.edit().putString("recent_searches", JSONArray().apply { rows.forEach { row -> put(JSONObject()
+            .put("query", row.query).put("kind", row.kind).put("id", row.id).put("title", row.title)
+            .put("subtitle", row.subtitle).put("art", row.art)) } }.toString()).apply()
+        notifyChange()
+    }
+    fun removeRecentSearch(query: String, kind: String) {
+        val rows = recentSearches().filterNot { it.query == query && it.kind == kind }
+        prefs.edit().putString("recent_searches", JSONArray().apply { rows.forEach { row -> put(JSONObject()
+            .put("query", row.query).put("kind", row.kind).put("id", row.id).put("title", row.title)
+            .put("subtitle", row.subtitle).put("art", row.art)) } }.toString()).apply(); notifyChange()
+    }
+    fun clearRecentSearches() { prefs.edit().remove("recent_searches").apply(); notifyChange() }
     fun toggleSave(card: JaMusicCatalog.Card) {
         val rows = saved(); val next = if (rows.any { it.id == card.id && it.kind == card.kind }) rows.filterNot { it.id == card.id && it.kind == card.kind } else rows + card
         prefs.edit().putString("saved", JSONArray().apply { next.forEach { put(JSONObject().put("id", it.id).put("title", it.title)
