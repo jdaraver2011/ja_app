@@ -12,3 +12,4 @@ jobs:
     with:
       publish_update: true
     secrets: inherit
+# Verify initialized Android canvas before publication.
