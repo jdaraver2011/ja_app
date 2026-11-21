@@ -1,6 +1,6 @@
 # JA — current project
 
-Test branch: **2.5.1a (20501)**, based on stable v2.5.1. Native Deezer Music and Android Auto media test. See [Music Lab test guide](docs/MUSIC-LAB-2.5.1a.md). Stable public update remains v2.5.1.
+Test branch: **2.5.1a (20501)**, based on stable v2.5.1. Native Deezer Music and Android Auto media test. See [Music Lab test guide](docs/MUSIC-LAB-2.5.1a.md). Stable public update remains v2.5.1. [Test workflow 44865276250](https://github.com/jdaraver2011/ja_app/actions/runs/44865276250) passed regressions, signed APK compilation and Android lint; real-account and car playback need device verification.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
