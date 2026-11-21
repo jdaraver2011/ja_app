@@ -62,7 +62,7 @@ class JaMusicBrowseTest {
         compose.onNodeWithText("‹ JA").performClick()
         compose.runOnIdle { assertTrue(exited) }
     }
-    @Test(timeout = 60000) fun androidWebViewReceivesPcmAndRendersFrames() {
+    @Test(timeout = 120000) fun androidWebViewReceivesPcmAndRendersFrames() {
         compose.setContent { MaterialTheme { JaMusicVisualizer(onBack = {}) } }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         var view: android.webkit.WebView? = null
@@ -78,21 +78,22 @@ class JaMusicBrowseTest {
         }
         assertNotNull(view)
         val answer = java.util.concurrent.atomic.AtomicReference("")
-        val until = android.os.SystemClock.elapsedRealtime() + 35000
+        val until = android.os.SystemClock.elapsedRealtime() + 90000
         var passed = false
         while (android.os.SystemClock.elapsedRealtime() < until) {
-            val buffer = java.nio.ByteBuffer.allocate(4096)
-            repeat(1024) { buffer.put(0); buffer.put(64); buffer.put(0); buffer.put(64) }; buffer.flip()
+            val buffer = java.nio.ByteBuffer.allocate(4096).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            repeat(1024) { i -> val sample = (kotlin.math.sin(i * 0.1) * 18000).toInt().toShort(); buffer.putShort(sample); buffer.putShort(sample) }; buffer.flip()
             JaMusicVisualization.pcm.capture16(buffer, android.os.SystemClock.elapsedRealtime())
             instrumentation.runOnMainSync {
-                view!!.evaluateJavascript("JSON.stringify({frames:Number(document.querySelector('canvas').dataset.frames||0),error:document.querySelector('canvas').dataset.error||'',peak:Math.max(...JSON.parse(JaWave.samples()))})") { answer.set(it) }
+                view!!.evaluateJavascript("JSON.stringify({frames:Number(document.querySelector('canvas').dataset.frames||0),error:document.querySelector('canvas').dataset.error||'',peak:Math.max(...JSON.parse(JaWave.samples())),outputPeak:Number(document.querySelector('canvas').dataset.outputPeak||0),width:document.querySelector('canvas').width,expectedWidth:Math.max(64,Math.round(innerWidth*Math.min(1,1280/innerWidth,720/innerHeight)))})") { answer.set(it) }
             }
             android.os.SystemClock.sleep(250)
             val raw = answer.get()
             if (raw.startsWith("\"")) {
                 val obj = org.json.JSONObject(org.json.JSONArray("[" + raw + "]").getString(0))
                 assertEquals("Android renderer error", "", obj.optString("error"))
-                if (obj.optInt("frames") > 3 && obj.optInt("peak") > 128) { passed = true; break }
+                assertEquals("Canvas buffer must match renderer viewport", obj.optInt("expectedWidth"), obj.optInt("width"))
+                if (obj.optInt("frames") >= 40 && obj.optInt("peak") > 128 && obj.optInt("outputPeak") > 0) { passed = true; break }
             }
         }
         assertTrue("Android WebView must render and receive PCM: " + answer.get(), passed)
