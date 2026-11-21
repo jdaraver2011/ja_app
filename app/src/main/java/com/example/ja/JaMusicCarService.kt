@@ -54,7 +54,8 @@ private class MusicCarBrowse(context: CarContext, private val queueOnly: Boolean
                 carContext.getCarService(MediaPlaybackManager::class.java).registerMediaPlaybackToken(token)
                 tracks = if (queueOnly) JaMusicLabService.state.value.queue else withContext(Dispatchers.IO) { JaMusicCatalog.tracks() }
                 ready = true
-            } catch (e: CancellationException) { throw e }
+            } catch (_: TimeoutCancellationException) { failed = "Music connection timed out. Open Music on your phone." }
+            catch (e: CancellationException) { throw e }
             catch (_: Exception) { failed = "Open Music on your phone to check the connection." }
             invalidate()
         }
@@ -97,7 +98,8 @@ private class MusicCarPlaying(context: CarContext) : Screen(context) {
                 val token = MediaSessionCompat.Token.fromToken(JaMusicLabService.platformToken()) ?: error("No session")
                 carContext.getCarService(MediaPlaybackManager::class.java).registerMediaPlaybackToken(token)
                 ready = true
-            } catch (e: CancellationException) { throw e }
+            } catch (_: TimeoutCancellationException) { failed = true }
+            catch (e: CancellationException) { throw e }
             catch (_: Exception) { failed = true }
             invalidate()
         }
