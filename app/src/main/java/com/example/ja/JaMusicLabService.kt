@@ -125,7 +125,8 @@ class JaMusicLabService : MediaLibraryService() {
             scope.launch {
                 if (player.currentMediaItem?.mediaId == track.id) {
                     expectedDuration = track.duration
-                    val known = JaMusicCatalog.known(track.id).copy(title = track.title, artist = track.artist, seconds = track.duration / 1000)
+                    val known = JaMusicCatalog.known(track.id).copy(title = track.title, artist = track.artist, seconds = track.duration / 1000,
+                        album = track.album, art = track.art.ifBlank { JaMusicCatalog.known(track.id).art })
                     JaMusicCatalog.remember(listOf(known))
                     player.replaceMediaItem(player.currentMediaItemIndex, mediaItem(known))
                     mutable.value = mutable.value.copy(account = account.name, title = track.title, artist = track.artist,
