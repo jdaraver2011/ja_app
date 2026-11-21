@@ -280,10 +280,9 @@ class MainActivity : ComponentActivity() {
         (vidSrcQuality.cams.values.sortedBy { it.title } + otherTitles).distinctBy { it.id }
     }
     val otherMovieIds = remember(otherDisplayTitles) { otherDisplayTitles.map { it.id }.toSet() }
-    fun outsideOther(titles: List<TitleItem>): List<TitleItem> = titles.filter {
-        JaMovieReleaseRules.includeOutsideOther(it.type, it.id, otherMovieIds) &&
-            (it.type != "movie" || JaVidSrcCatalog.includeMovie(it.id))
-    }
+    val outsideOther = remember(otherMovieIds,vidSrcSnapshot) { { titles:List<TitleItem> -> titles.filter {
+        JaMovieReleaseRules.includeOutsideOther(it.type,it.id,otherMovieIds) && (it.type!="movie"||JaVidSrcCatalog.includeMovie(it.id))
+    } } }
     // TV has its own Popular/Genres toggle, paged results and scroll state.
     // Keep the original TV genre rows and all Movies/Search state intact.
     var tvView by remember { mutableStateOf("Popular") }
@@ -355,6 +354,18 @@ class MainActivity : ComponentActivity() {
     var search by remember { mutableStateOf("") }
     var searchMode by remember { mutableStateOf(JaSearchMode.ALL) }
     val searchGridState = rememberLazyGridState() // Keep search position while viewing title/person details.
+    // A new activity starts at the beginning. Returning from details keeps in-session positions.
+    LaunchedEffect(Unit) {
+        listOf(continueMovieGridState,continueTvGridState,popularGridState,otherGridState,tvPopularGridState,
+            favoriteMovieGridState,favoriteTvGridState,searchGridState).forEach{it.scrollToItem(0)}
+        sectionScrollStates.values.forEach{it.scrollToItem(0)};genreScrollStates.values.forEach{it.scrollToItem(0)}
+        networksState.listState.scrollToItem(0);networksState.rowStates.values.forEach{it.scrollToItem(0)}
+        liveTv.list.scrollToItem(0);liveTv.groupList.scrollToItem(0);liveTv.timeline.scrollTo(0)
+        navigationRowState.scrollToItem(0);titleReturnFocus.clear()
+        if(openMusicRequest==0){weatherOpen=false;weatherReturnFocus=false}
+        withFrameNanos{};withFrameNanos{};if(openMusicRequest==0)runCatching{mainRequesters.getValue("Movies").requestFocus()}
+        Log.i("JA_STARTUP","LISTS_RESET main=Movies index=0")
+    }
     fun focusSub() { exitGate.reset(); scope.launch {
         if(tab=="Search")searchGridState.scrollToItem(0)
         withFrameNanos { };withFrameNanos { };runCatching { subRequester.requestFocus() }
@@ -1420,7 +1431,7 @@ class MainActivity : ComponentActivity() {
                 } else if (activeView == "Popular" || activeView == "Other") {
                     val isOther = isMovieTab && activeView == "Other"
                     // The TV and Movies Popular lists share layout only, not data or scroll state.
-                    val titles = if (isOther) otherDisplayTitles else if (isMovieTab) outsideOther(popularTitles) else tvPopularTitles
+                    val titles = remember(isOther,isMovieTab,otherDisplayTitles,popularTitles,tvPopularTitles,outsideOther) { if (isOther) otherDisplayTitles else if (isMovieTab) outsideOther(popularTitles) else tvPopularTitles }
                     val gridState = if (isOther) otherGridState else if (isMovieTab) popularGridState else tvPopularGridState
                     val loading = if (isOther) otherLoading else if (isMovieTab) popularLoading || !vidSrcSnapshot.ready else tvPopularLoading
                     val loadedPage = if (isOther) otherPage else if (isMovieTab) popularPage else tvPopularPage
@@ -1451,7 +1462,7 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
-                        gridItems(titles, key = { "popular-${it.type}-${it.id}" }) { item ->
+                        gridItems(titles, key = { "popular-${it.type}-${it.id}" }, contentType={"poster"}) { item ->
                             JaSearchTitleCard(marked(item),
                                 badge = if (isOther) { if (item.id in vidSrcQuality.cams) "CAM" else "Upcoming" } else null,
                                 returnFocus = titleReturnFocus, returnKey = "$tab:$activeView:${item.type}:${item.id}",
@@ -1494,7 +1505,7 @@ class MainActivity : ComponentActivity() {
                         rowStates = genreScrollStates, rowLoading = genreRowLoading, rowErrors = genreRowErrors,
                         returnFocus = titleReturnFocus,
                         jump = genreJumpStates.getOrPut(tab) { JaRowJumpState("$tab:Genres") },
-                        visibleTitles = { outsideOther(it) }, marked = { marked(it) },
+                        visibleTitles = outsideOther, marked = { marked(it) },
                         onOpen = { open(it) },
                         onLoadMore = { row -> loadMoreGenreRow(if (isMovieTab) "movie" else "tv", row) },
                         onBackToNavigation = { focusSub() },
