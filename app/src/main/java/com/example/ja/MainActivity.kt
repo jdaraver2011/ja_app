@@ -113,10 +113,18 @@ class MainActivity : ComponentActivity() {
     private var explicitExit = false
     private var musicOpenRequest by mutableIntStateOf(0)
 
+    private fun handleMusicVoiceSearch(intent: Intent) {
+        if (intent.action == "android.media.action.MEDIA_PLAY_FROM_SEARCH") {
+            musicOpenRequest++
+            JaMusicLabService.playSearch(this, intent.getStringExtra(android.app.SearchManager.QUERY).orEmpty())
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(JaMusicService.OPEN_MUSIC, false)) musicOpenRequest++
+        handleMusicVoiceSearch(intent)
     }
 
     fun closeFromDoubleBack() {
@@ -142,6 +150,7 @@ class MainActivity : ComponentActivity() {
         JaLiveTvUpdates.schedule(applicationContext)
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()
         if (intent.getBooleanExtra(JaMusicService.OPEN_MUSIC, false)) musicOpenRequest++
+        handleMusicVoiceSearch(intent)
         setContent { MaterialTheme(colorScheme = darkColorScheme(primary = accent, background = bg, surface = Color(0xFF202832), onBackground = Color.White, onSurface = Color.White, onSurfaceVariant = Color.LightGray)) { StreamingApp(db.dao(), musicOpenRequest) } }
         // Start extension setup as soon as JA opens, rather than waiting for the
         // first Play press. Posting lets Compose draw the initial screen first.
