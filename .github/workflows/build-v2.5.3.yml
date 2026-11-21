@@ -1,0 +1,14 @@
+name: Build JA 2.5.3 Music Layout
+on:
+  push:
+    branches: [v2.5.3]
+    paths: ['.github/workflows/build-v2.5.3.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: false
+    secrets: inherit
