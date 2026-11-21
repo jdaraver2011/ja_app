@@ -1,0 +1,14 @@
+/* A stable full-width row for every normal condition; long alert crawls remain readable. */
+body.kiosk #container > .scroll .scroll-container {
+  width:100% !important; height:100%; margin:0 !important;
+  display:flex; flex-direction:column; justify-content:center; box-sizing:border-box;
+}
+body.kiosk #container > .scroll .scroll-container .fixed,
+body.kiosk #container > .scroll .scroll-container .scroll-header {
+  width:calc(100% - 48px) !important; margin:0 24px !important;
+  text-align:center; box-sizing:border-box; animation:none !important;
+}
+body.kiosk #container > .scroll .scroll-header:empty { display:none; }
+body.kiosk #container > .scroll .fixed .scroll-area {
+  width:100%; text-align:left;
+}
