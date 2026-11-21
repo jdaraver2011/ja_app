@@ -18,7 +18,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 20501
-        versionName = "2.5.1"
+        versionName = "2.5.1a"
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
         require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
         buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")
@@ -63,6 +63,9 @@ dependencies {
     kapt("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.21")
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
+    implementation("androidx.media3:media3-session:1.11.1")
+    // API 8 media templates; isolated test branch, no stable auto-update publication.
+    implementation("androidx.car.app:app-projected:1.8.0-rc01")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
