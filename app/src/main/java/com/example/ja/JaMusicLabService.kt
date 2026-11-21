@@ -45,7 +45,7 @@ class JaMusicLabService : MediaLibraryService() {
             val message: String = "Sign in to Deezer to play music.", val account: String = "",
             val title: String = "", val artist: String = "", val artwork: String = "", val playing: Boolean = false,
             val position: Long = 0, val duration: Long = 0, val queueIndex: Int = 0,
-            val queue: List<JaMusicCatalog.Track> = emptyList())
+            val queue: List<JaMusicCatalog.Track> = emptyList(), val shuffle: Boolean = false, val repeat: Int = 0)
         private val mutable = MutableStateFlow(State())
         val state = mutable.asStateFlow()
         fun connect(context: Context, arl: String) {
@@ -69,8 +69,8 @@ class JaMusicLabService : MediaLibraryService() {
             JaMusicCatalog.remember(tracks)
             JaMusicService.stop(context)
             ContextCompat.startForegroundService(context, Intent(context, JaMusicLabService::class.java)
-                .setAction("QUEUE").putExtra("ja.music.internal", commandNonce).putStringArrayListExtra("queue", ArrayList(tracks.take(100).map { it.id }))
-                .putExtra("index", index.coerceIn(0, minOf(tracks.size, 100) - 1)))
+                .setAction("QUEUE").putExtra("ja.music.internal", commandNonce).putStringArrayListExtra("queue", ArrayList(tracks.take(500).map { it.id }))
+                .putExtra("index", index.coerceIn(0, minOf(tracks.size, 500) - 1)))
         }
         fun playTrack(context: Context, input: String) {
             val id = parseTrack(input)
@@ -90,6 +90,8 @@ class JaMusicLabService : MediaLibraryService() {
             context.startService(Intent(context, JaMusicLabService::class.java).setAction(action).putExtra("ja.music.internal", commandNonce))
         }
         fun playPause() { instance?.let { if (it.player.isPlaying) it.player.pause() else if (!videoActive) it.player.play() } }
+        fun toggleShuffle() { instance?.player?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
+        fun cycleRepeat() { instance?.player?.let { it.repeatMode = (it.repeatMode + 1) % 3 } }
         fun next() { instance?.player?.let { if (it.hasNextMediaItem()) it.seekToNextMediaItem() } }
         fun previous() { instance?.player?.seekToPrevious() }
         fun seekTo(position: Long) { instance?.player?.seekTo(position.coerceAtLeast(0)) }
@@ -138,7 +140,7 @@ class JaMusicLabService : MediaLibraryService() {
             .setChannelName(R.string.ja_music_notification_channel).build())
         cache = SimpleCache(File(cacheDir, "music-lab"), LeastRecentlyUsedCacheEvictor(64L * 1024 * 1024), StandaloneDatabaseProvider(this))
         val cached = CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(
-            DefaultHttpDataSource.Factory().setUserAgent("JA-MusicLab/2.5.1b").setAllowCrossProtocolRedirects(false)
+            DefaultHttpDataSource.Factory().setUserAgent("JA-Music/2.5.2").setAllowCrossProtocolRedirects(false)
                 .setConnectTimeoutMs(20000).setReadTimeoutMs(20000))
         val audioSource = JaMusicTrackSource.Factory(this, cached) { account, track ->
             scope.launch {
@@ -154,7 +156,24 @@ class JaMusicLabService : MediaLibraryService() {
                 }
             }
         }
-        player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(audioSource)).build().apply {
+        val renderers = object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink {
+                val tee = androidx.media3.exoplayer.audio.TeeAudioProcessor(object : androidx.media3.exoplayer.audio.TeeAudioProcessor.AudioBufferSink {
+                    private var pcm16 = true
+                    override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
+                        pcm16 = encoding == C.ENCODING_PCM_16BIT
+                        JaMusicVisualization.pcm.format(channelCount)
+                    }
+                    override fun handleBuffer(buffer: java.nio.ByteBuffer) {
+                        if (pcm16) JaMusicVisualization.pcm.capture16(buffer, android.os.SystemClock.elapsedRealtime())
+                    }
+                })
+                return androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(false).setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+                    .setAudioProcessors(arrayOf(tee)).build()
+            }
+        }
+        player = ExoPlayer.Builder(this, renderers).setMediaSourceFactory(DefaultMediaSourceFactory(audioSource)).build().apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             setHandleAudioBecomingNoisy(true)
             addListener(object : Player.Listener {
@@ -195,7 +214,7 @@ class JaMusicLabService : MediaLibraryService() {
         mutable.value = mutable.value.copy(playing = player.isPlaying, position = player.currentPosition.coerceAtLeast(0),
             duration = player.duration.coerceAtLeast(0), busy = player.playbackState == Player.STATE_BUFFERING || connectJob?.isActive == true || searchJob?.isActive == true,
             title = metadata?.title?.toString().orEmpty(), artist = metadata?.artist?.toString().orEmpty(),
-            artwork = metadata?.artworkUri?.toString().orEmpty(), queueIndex = player.currentMediaItemIndex.coerceAtLeast(0), queue = queue)
+            artwork = metadata?.artworkUri?.toString().orEmpty(), queueIndex = player.currentMediaItemIndex.coerceAtLeast(0), queue = queue, shuffle = player.shuffleModeEnabled, repeat = player.repeatMode)
     }
     private fun beginForegroundPlayback(): Boolean {
         val current = session ?: return false
@@ -289,7 +308,11 @@ class JaMusicLabService : MediaLibraryService() {
             })
         override fun onGetChildren(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String, page: Int,
             pageSize: Int, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            if (parentId == "root") return Futures.immediateFuture(LibraryResult.ofItemList(listOf(folder("charts", "Top Tracks"), folder("queue", "Queue")), params))
+            if (parentId == "root") return Futures.immediateFuture(LibraryResult.ofItemList(listOf(folder("charts", "Top Tracks"), folder("liked", "Liked Songs"), folder("playlists", "JA Playlists"), folder("queue", "Queue")), params))
+            val local = JaMusicLibrary(this@JaMusicLabService)
+            if (parentId == "liked") return Futures.immediateFuture(LibraryResult.ofItemList(local.liked().map { JaMusicCatalog.remember(listOf(it)); mediaItem(it) }, params))
+            if (parentId == "playlists") return Futures.immediateFuture(LibraryResult.ofItemList(local.playlists().map { folder("local:${it.id}", it.name) }, params))
+            if (parentId.startsWith("local:")) return Futures.immediateFuture(LibraryResult.ofItemList(local.playlists().firstOrNull { it.id == parentId.removePrefix("local:") }?.tracks.orEmpty().map { JaMusicCatalog.remember(listOf(it)); mediaItem(it) }, params))
             if (parentId == "queue") return Futures.immediateFuture(LibraryResult.ofItemList(mutable.value.queue.map { mediaItem(it) }, params))
             return catalogResult("", params)
         }
@@ -304,7 +327,7 @@ class JaMusicLabService : MediaLibraryService() {
                 }
                 return future
             }
-            val items = mediaItems.take(100).mapNotNull { item -> parseTrack(item.mediaId)?.let { mediaItem(JaMusicCatalog.known(it)) } }
+            val items = mediaItems.take(500).mapNotNull { item -> parseTrack(item.mediaId)?.let { mediaItem(JaMusicCatalog.known(it)) } }
             return Futures.immediateFuture(items)
         }
         override fun onSearch(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, query: String, params: LibraryParams?): ListenableFuture<LibraryResult<Void>> {
