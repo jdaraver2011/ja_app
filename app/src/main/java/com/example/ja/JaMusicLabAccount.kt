@@ -106,6 +106,19 @@ internal class JaMusicLabAccount(private val arl: String) {
             data.optString("ALB_PICTURE").takeIf { Regex("[a-fA-F0-9]{32}").matches(it) }
                 ?.let { "https://e-cdns-images.dzcdn.net/images/cover/$it/500x500-000000-80-0-0.jpg" }.orEmpty())
     }
+    data class LyricLine(val milliseconds: Long, val text: String)
+    data class Lyrics(val text: String, val lines: List<LyricLine>, val credits: String)
+    fun lyrics(id: String, account: Account): Lyrics {
+        require(Regex("[1-9][0-9]{0,18}").matches(id))
+        val data = gateway("song.getLyrics", JSONObject().put("SNG_ID", id), account.csrf)
+        val sync = data.optJSONArray("LYRICS_SYNC_JSON") ?: runCatching { JSONArray(data.optString("LYRICS_SYNC_JSON")) }.getOrNull()
+        val lines = if (sync == null) emptyList() else (0 until sync.length()).mapNotNull { i ->
+            val row = sync.optJSONObject(i) ?: return@mapNotNull null
+            val time = row.optLong("milliseconds", -1).takeIf { it >= 0 } ?: return@mapNotNull null
+            LyricLine(time, row.optString("line"))
+        }.sortedBy { it.milliseconds }
+        return Lyrics(data.optString("LYRICS_TEXT"), lines, data.optString("LYRICS_COPYRIGHTS"))
+    }
     fun audio(track: Track, account: Account): Audio {
         if (account.license.isBlank()) throw JaMusicLabFailure("ACCOUNT_HAS_NO_PLAYBACK_LICENSE")
         // FULL only, using this account's license. No generated/legacy CDN URL or preview fallback.
