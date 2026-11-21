@@ -96,7 +96,7 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                         Triple("Featured Playlists", "chart/0/playlists?limit=20", "playlist"), Triple("New Releases", "editorial/0/releases?limit=20", "album"))
                     shelves = coroutineScope { specs.map { (title, path, kind) -> async(Dispatchers.IO) {
                         runCatching { MusicShelf(title, JaMusicCatalog.page(path, kind), path.replace("limit=20", "limit=50"), kind) }.getOrNull()
-                    } }.awaitAll().filterNotNull() }
+                    } }.awaitAll().filterNotNull().filter { it.page.tracks.isNotEmpty() || it.page.cards.isNotEmpty() } }
                     if (shelves.isEmpty()) message = "Deezer catalogue unavailable. Try again."
                 }
                 route.title == "Explore" -> page = withContext(Dispatchers.IO) { JaMusicCatalog.page("genre", "genre") }
