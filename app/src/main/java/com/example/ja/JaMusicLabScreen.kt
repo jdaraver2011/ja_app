@@ -4,6 +4,10 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -148,12 +152,24 @@ private fun MusicPlaybackControls(state: JaMusicLabService.Companion.State, onOp
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                     Text("${musicTime(state.position)} / ${musicTime(state.duration)}", color = Color.White)
-                    TvFocusButton(onClick = { JaMusicLabService.previous() }) { Text("Previous") }
-                    TvFocusButton(onClick = { JaMusicLabService.playPause() }) { Text(if (state.playing) "Pause" else "Play") }
-                    TvFocusButton(onClick = { JaMusicLabService.next() }, enabled = state.queueIndex + 1 < state.queue.size) { Text("Next") }
-                    TvFocusButton(onClick = { JaMusicLabService.stop(context) }) { Text("Stop") }
+                    MusicTransportButton(R.drawable.ja_music_previous, "Previous", { JaMusicLabService.previous() })
+                    MusicTransportButton(if (state.playing) R.drawable.ja_music_pause else R.drawable.ja_music_play,
+                        if (state.playing) "Pause" else "Play", { JaMusicLabService.playPause() }, primary = true)
+                    MusicTransportButton(R.drawable.ja_music_next, "Next", { JaMusicLabService.next() }, enabled = state.queueIndex + 1 < state.queue.size)
+                    MusicTransportButton(R.drawable.ja_music_stop, "Stop", { JaMusicLabService.stop(context) })
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MusicTransportButton(icon: Int, label: String, onClick: () -> Unit, enabled: Boolean = true, primary: Boolean = false) {
+    var focused by remember { mutableStateOf(false) }
+    FilledIconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp).onFocusChanged { focused = it.isFocused }
+        .then(if (focused) Modifier.border(2.dp, Color.White, CircleShape) else Modifier),
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (primary) Color(0xFFE5A43B) else Color(0xFF354653),
+            contentColor = if (primary) Color.Black else Color.White)) {
+        Icon(painterResource(icon), contentDescription = label)
     }
 }
