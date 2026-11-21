@@ -1,7 +1,7 @@
 a90e9f4b16c8fab8610927e91196ebb28645cb55959953cd3255c10f5cced437  .github/workflows/build-apk.yml
 dea441ca2f9e2c5039942b86f8bff7ca10186a8191d3c7d61a9bdf72e5c376db  .github/workflows/build-v2.5.1a.yml
 e96043c3c34410e76a35653a12bffe1bc92f90d55943a9e8fa1595672a11aa43  .github/workflows/refresh-live-tv.yml
-80dd3578822855a79983fba422a168488d1d1eaec2463ad8043824634d92f8d0  README.md
+34fbfcf3ec4c21450aacc54721b5e6fe1126610262f34b47ffdda265ef2f5b67  README.md
 f9662b2810af35c765e4ab1de5fcd640487ea8a9f15fef3460053d449c8141cd  UPDATE-SETUP.md
 54db5b656b424b2fedd9109d9e560167b7a4ef34ca6e812d6e8702e52d500e45  app/build.gradle.kts
 9efe491483d6605e4e2bf7af6e9e05a53606ebc663a0bc42dc1d733ec7b429af  app/src/main/AndroidManifest.xml
@@ -79,7 +79,7 @@ bb02c885d23955622e5e7cffddb606ba2a267b698c5fee8a5789ad7611b27e73  app/src/main/r
 73c8af9d554ed26404579f5740a94c07dd2ce528e9b1fbacee2b4bc94edf4f42  app/src/main/res/drawable/ja_music_stop.xml
 7e38b50b551f920c3b1247d322f68ab5cedb2adc0accc0be051b3cfe3533d58a  app/src/main/res/xml/automotive_app_desc.xml
 1419af4392a415cca645607566619dfffcebc6dda70a5f1b4a1e32ba82d9bd18  app/src/main/res/xml/update_paths.xml
-92dddf1a777e5db07c4789cb3a08bdefff320b47e1e78eaadf1e2a89b0ef59d2  docs/MUSIC-LAB-2.5.1a.md
+2a4f2e0e1ae3e91e2e19b1bce1d424526ef0ba330d443b60811f495cf1e63648  docs/MUSIC-LAB-2.5.1a.md
 c4730904c82a19e4667420bae6871adbdad412ea7c944c3f416879f1be1c83c2  docs/RELEASE-2.4.6.md
 725e664d7b41eb624978eb65ac23441ee63c512eec6db7d1ad891a6431d77604  docs/RELEASE-2.4.7.md
 319749cc7b41fc52790c356b93c8cf415433062eadd8131d3d800760b38e519a  docs/RELEASE-2.4.8.md
