@@ -280,7 +280,7 @@ class MainActivity : ComponentActivity() {
         (vidSrcQuality.cams.values.sortedBy { it.title } + otherTitles).distinctBy { it.id }
     }
     val otherMovieIds = remember(otherDisplayTitles) { otherDisplayTitles.map { it.id }.toSet() }
-    val outsideOther = remember(otherMovieIds,vidSrcSnapshot) { { titles:List<TitleItem> -> titles.filter {
+    val outsideOther = remember(otherMovieIds,vidSrcSnapshot,sourceDataVersion) { { titles:List<TitleItem> -> titles.filter {
         JaMovieReleaseRules.includeOutsideOther(it.type,it.id,otherMovieIds) && (it.type!="movie"||JaVidSrcCatalog.includeMovie(it.id))
     } } }
     // TV has its own Popular/Genres toggle, paged results and scroll state.
