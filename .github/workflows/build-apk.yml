@@ -48,10 +48,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Build bundled WeatherStar client
         run: python3 scripts/build-weatherstar.py
+      - name: Build offline MilkDrop-compatible visualizer
+        run: python3 scripts/build-music-visualizer.py
       - name: Smoke test bundled weather presentation
         run: |
           python3 -m pip install --user playwright==1.56.0
           python3 tests/weatherstar-smoke.py
+          python3 tests/music-visualizer-smoke.py
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-pcm" app/src/main/java/com/example/ja/JaMusicPcm.java tests/JaMusicPcmTest.java
+          java -cp "$RUNNER_TEMP/ja-pcm" com.example.ja.JaMusicPcmTest
       - name: Check WeatherStar condition graphics
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-weather-icons" app/src/main/java/com/example/ja/JaWeatherIcons.java tests/JaWeatherIconsTest.java
@@ -245,7 +250,7 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: gradle --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.ja.JaMusicForegroundTest
+          script: gradle --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.ja.JaMusicForegroundTest,com.example.ja.JaMusicBrowseTest
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
@@ -262,7 +267,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.5.1b-debug
+          name: JA-2.5.2-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
