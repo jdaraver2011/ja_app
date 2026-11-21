@@ -12,3 +12,4 @@ jobs:
     with:
       publish_update: true
     secrets: inherit
+# Include FFmpeg/ffprobe build dependencies.
