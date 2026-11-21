@@ -53,6 +53,11 @@ private val weatherRed = Color(0xFF631F28)
 
 @Stable
 internal class JaWeatherState(val repository: JaWeatherRepository) {
+    var musicChoice by mutableStateOf(repository.musicChoice()); private set
+    var customMusic by mutableStateOf(repository.customMusic()); private set
+    var musicError by mutableStateOf<String?>(null)
+    fun selectMusic(value:String){musicChoice=value;repository.saveMusicChoice(value);musicError=null}
+    fun saveCustomMusic(value:String){customMusic=value;repository.saveCustomMusic(value);selectMusic("custom")}
     var weatherStar by mutableStateOf(repository.weatherStar())
     var sound by mutableStateOf(repository.sound()); private set
     var volume by mutableFloatStateOf(repository.volume()); private set
@@ -112,7 +117,11 @@ internal fun rememberJaWeather(active: Boolean): JaWeatherState {
 @Composable
 internal fun JaHeaderClock(modifier: Modifier = Modifier) {
     var now by remember { mutableStateOf(Instant.now()) }
-    LaunchedEffect(Unit) { while (isActive) { now = Instant.now(); delay(1000) } }
+    val owner=LocalLifecycleOwner.current
+    var resumed by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)}
+        owner.lifecycle.addObserver(observer);onDispose{owner.lifecycle.removeObserver(observer)}}
+    LaunchedEffect(resumed) { if(resumed)while (isActive) { now=Instant.now();delay(60_000L-System.currentTimeMillis().mod(60_000L)) } }
     val formatter = remember { DateTimeFormatter.ofPattern("MM-dd-yyyy hh:mm a", Locale.US) }
     Text(formatter.withZone(ZoneId.systemDefault()).format(now), modifier,
         color = Color.White, fontSize = 14.sp, maxLines = 1, textAlign = TextAlign.End)
@@ -132,6 +141,7 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
         TvFocusButton(onClick={state.changeVolume((state.volume-0.1f).coerceAtLeast(0f))}){Text("−")}
         TvFocusButton(onClick={state.changeVolume((state.volume+0.1f).coerceAtMost(1f))}){Text("+")}
     }
+    JaWeatherMusicSettings(state)
     Text("Off: current NWS dashboard. On: bundled WeatherStar widescreen presentation. Both use NOAA/NWS weather and your saved ZIP code.",color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
     JaEntryField(value = entry, onValueChange = { value ->
         entry = value.filter { it in '0'..'9' }.take(5); message = null
@@ -152,7 +162,7 @@ internal fun JaWeatherSettings(state: JaWeatherState) {
     message?.let { Text(it, color = Color.LightGray) }
     Text("Saved on this device. U.S. weather: National Weather Service. ZIP lookup: Zippopotam.us. No location permission required.",
         color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-    Text("WeatherStar 4000+ (MIT). Music: Sunny Afternoon — netbymatt, Latest Observations, CC BY 4.0.",color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
+    Text("WeatherStar 4000+ (MIT). Bundled music: netbymatt, Latest Observations, CC BY 4.0.",color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
 }
 
@@ -185,10 +195,8 @@ internal fun JaWeatherCard(state: JaWeatherState, modifier: Modifier = Modifier,
             if (data != null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center) {
-                    data.icon?.let {
-                        AsyncImage(it, null, Modifier.size((if (compact) 16f else 32f * scale).dp))
-                        Spacer(Modifier.width((if (compact) 6f else 8f * scale).dp))
-                    }
+                    AsyncImage(JaWeatherIcons.asset(data.icon,data.conditions,null),data.conditions,Modifier.size((if(compact)16f else 32f*scale).dp))
+                    Spacer(Modifier.width((if(compact)6f else 8f*scale).dp))
                     Text("${data.temperature}  ${data.conditions}", color = Color.White,
                         fontSize = (if (compact) 12f else 13f * scale).sp,
                         lineHeight = (if (compact) 14f else 16f * scale).sp, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
@@ -317,7 +325,7 @@ private fun WeatherConditions(data:JaWeatherData,revision:Int,modifier:Modifier)
                 Text(data.temperature,color=Color.White,fontSize=28.sp,lineHeight=32.sp)
                 Spacer(Modifier.width(10.dp))
                 Text(data.conditions,color=Color.White,fontSize=14.sp,lineHeight=18.sp,modifier=Modifier.weight(1f),maxLines=2)
-                data.icon?.let{AsyncImage(it,null,Modifier.size(40.dp))}
+                AsyncImage(JaWeatherIcons.asset(data.icon,data.conditions,null),data.conditions,Modifier.size(40.dp))
             }
             val fields=listOf("Wind" to data.wind,"Humidity" to data.humidity,"Dewpoint" to data.dewpoint,
                 "Ceiling" to data.ceiling,"Visibility" to data.visibility,"Pressure" to data.pressure,"Wind chill" to data.windChill)
@@ -346,7 +354,7 @@ private fun WeatherExtendedForecast(data: JaWeatherData) {
                     .background(Color(0xFF1C2632)).clickable {expanded=period}.padding(5.dp),horizontalAlignment=Alignment.CenterHorizontally,
                     verticalArrangement=Arrangement.spacedBy(2.dp)) {
                     Text(period.name,color=Color.White,fontSize=11.sp,lineHeight=13.sp,maxLines=1)
-                    period.icon?.let{AsyncImage(it,null,Modifier.size(36.dp))}
+                    AsyncImage(JaWeatherIcons.asset(period.icon,period.description,period.day),period.description,Modifier.size(36.dp))
                     Text("${if(period.day) "High" else "Low"} ${period.temperature}",color=if(period.day)Color(0xFFFFBA91) else Color(0xFF8ED5FF),fontSize=11.sp,lineHeight=13.sp)
                     Text(period.description,color=Color.White,fontSize=10.sp,lineHeight=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis,textAlign=TextAlign.Center)
                     if(period.rainChance.isNotBlank()) Text("Rain ${period.rainChance}",color=Color.LightGray,fontSize=9.sp,lineHeight=10.sp)
