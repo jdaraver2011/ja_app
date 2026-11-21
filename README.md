@@ -1,6 +1,6 @@
 # JA — current project
 
-Test branch: **2.5.1b (20501)**, based on v2.5.1a. Fixes music foreground-service registration/startup. Stable public update remains v2.5.1. See [service fix](docs/MUSIC-LAB-2.5.1b.md). [Workflow 44868461692](https://github.com/jdaraver2011/ja_app/actions/runs/44868461692) passed regressions, compilation, lint and a real Android emulator foreground-service test (1 passed, 41.313s).
+Release branch: **2.5.2 (20502)**, based on the device-verified v2.5.1b native music player. Full-screen Music adds catalogue browsing, artists/albums, JA playlists, lyrics and an offline MilkDrop-compatible visualizer. See [2.5.2 release details](docs/RELEASE-2.5.2.md). Publication is gated by compilation, lint, browser/PCM tests and Android emulator UI/library/foreground-service regressions.
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
