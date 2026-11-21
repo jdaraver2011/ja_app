@@ -2,7 +2,7 @@
 dea441ca2f9e2c5039942b86f8bff7ca10186a8191d3c7d61a9bdf72e5c376db  .github/workflows/build-v2.5.1a.yml
 4f90778120d6f8daa381cf424385408afcfeab9618582cfb803fccfc62f3f95f  .github/workflows/build-v2.5.1b.yml
 e96043c3c34410e76a35653a12bffe1bc92f90d55943a9e8fa1595672a11aa43  .github/workflows/refresh-live-tv.yml
-2087d45d929611990c88770d7112f9d04f6a9a626727853fdeafd0f6aa73ea4e  README.md
+57a20fb2c3b76428591ace98b88f9eceb47b99ac26a6aee0d9daf9403d2b5fb9  README.md
 f9662b2810af35c765e4ab1de5fcd640487ea8a9f15fef3460053d449c8141cd  UPDATE-SETUP.md
 3517219d36bbff84564c225ffb47a67f06527409de8b84f14e1a04bd560d6ba0  app/build.gradle.kts
 4366433db268c9ca71c10f3041cff798d5260adc13051880030ded6be403af9b  app/src/androidTest/java/com/example/ja/JaMusicForegroundTest.kt
@@ -83,7 +83,7 @@ bb02c885d23955622e5e7cffddb606ba2a267b698c5fee8a5789ad7611b27e73  app/src/main/r
 7e38b50b551f920c3b1247d322f68ab5cedb2adc0accc0be051b3cfe3533d58a  app/src/main/res/xml/automotive_app_desc.xml
 1419af4392a415cca645607566619dfffcebc6dda70a5f1b4a1e32ba82d9bd18  app/src/main/res/xml/update_paths.xml
 2a4f2e0e1ae3e91e2e19b1bce1d424526ef0ba330d443b60811f495cf1e63648  docs/MUSIC-LAB-2.5.1a.md
-7dba432828fa77c63edd6f82fa6f30555409f63ed7b83f80826eefd61e1795bf  docs/MUSIC-LAB-2.5.1b.md
+84ffce033fc23754f3873cf8b68574d66d30b6f90e72d05d887d1bda6b99fdb4  docs/MUSIC-LAB-2.5.1b.md
 c4730904c82a19e4667420bae6871adbdad412ea7c944c3f416879f1be1c83c2  docs/RELEASE-2.4.6.md
 725e664d7b41eb624978eb65ac23441ee63c512eec6db7d1ad891a6431d77604  docs/RELEASE-2.4.7.md
 319749cc7b41fc52790c356b93c8cf415433062eadd8131d3d800760b38e519a  docs/RELEASE-2.4.8.md
