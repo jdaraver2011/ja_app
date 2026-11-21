@@ -95,7 +95,7 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier) {
                 }
                 JaEntryField(trackLink, { trackLink = it }, Modifier.fillMaxWidth(), label = { Text("Deezer track link or ID") })
                 TvFocusButton(onClick = { notifications(); JaMusicLabService.playTrack(context, trackLink) }, enabled = trackLink.isNotBlank()) { Text("Play track") }
-                Text("Temporary cache: 64 MB, automatically evicted. Sign out clears it. Version 2.5.1a test.", color = Color.LightGray)
+                Text("Temporary cache: 64 MB, automatically evicted. Sign out clears it. Version 2.5.1b test.", color = Color.LightGray)
             }
             "Now Playing" -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
