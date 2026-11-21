@@ -16,10 +16,16 @@ try:
     page.add_init_script('window.JaWave={samples:()=>JSON.stringify(Array.from({length:1024},(_,i)=>128+Math.round(70*Math.sin(i*0.1))))}')
     page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
     page.wait_for_function('Number(document.querySelector("canvas").dataset.frames)>10',timeout=30000)
+    page.wait_for_function('Number(document.querySelector("canvas").dataset.frames)>45',timeout=30000)
+    assert page.evaluate('document.querySelector("canvas").width')==960
+    assert page.evaluate('document.querySelector("canvas").height')==540
+    assert page.evaluate('Number(document.querySelector("canvas").dataset.outputPeak)')>0, 'Renderer must produce visible pixel output'
     first=page.locator('#status').inner_text(); page.evaluate('nextPreset()')
     assert page.locator('#status').inner_text()!=first
     page.set_viewport_size({'width':390,'height':760})
-    page.wait_for_function('Number(document.querySelector("canvas").dataset.frames)>20',timeout=30000)
+    page.wait_for_function('Number(document.querySelector("canvas").dataset.frames)>60',timeout=30000)
+    assert page.evaluate('document.querySelector("canvas").width')==369
+    assert page.evaluate('document.querySelector("canvas").height')==720
     assert not errors,errors
     (ROOT/'test-results').mkdir(exist_ok=True)
     page.screenshot(path=str(ROOT/'test-results/music-visualizer.png'))
