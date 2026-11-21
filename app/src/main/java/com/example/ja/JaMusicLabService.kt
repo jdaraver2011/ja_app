@@ -46,10 +46,15 @@ class JaMusicLabService : MediaLibraryService() {
             if (!Regex("[A-Za-z0-9_-]{64,512}").matches(value)) {
                 mutable.value = mutable.value.copy(message = "Enter a valid Deezer session."); return
             }
-            instance?.let { it.connectJob?.cancel(); it.player.stop(); it.player.clearMediaItems() }
+            instance?.let { it.connectJob?.cancel(); it.searchJob?.cancel(); it.player.stop(); it.player.clearMediaItems() }
             try { JaMusicLabVault(context).save(value) }
             catch (_: Exception) { mutable.value = mutable.value.copy(message = "Could not securely save the session."); return }
             launch(context, "CONNECT")
+        }
+        fun playSearch(context: Context, query: String) {
+            JaMusicService.stop(context)
+            context.startService(Intent(context, JaMusicLabService::class.java).setAction("SEARCH")
+                .putExtra("ja.music.internal", commandNonce).putExtra("query", query.take(200)))
         }
         fun restore(context: Context) = launch(context, "CONNECT")
         fun playTracks(context: Context, tracks: List<JaMusicCatalog.Track>, index: Int = 0) {
@@ -79,15 +84,16 @@ class JaMusicLabService : MediaLibraryService() {
         }
         fun playPause() { instance?.let { if (it.player.isPlaying) it.player.pause() else if (!videoActive) it.player.play() } }
         fun next() { instance?.player?.let { if (it.hasNextMediaItem()) it.seekToNextMediaItem() } }
-        fun previous() { instance?.player?.seekToPreviousMediaItem() }
+        fun previous() { instance?.player?.seekToPrevious() }
         fun seekTo(position: Long) { instance?.player?.seekTo(position.coerceAtLeast(0)) }
-        fun stop(context: Context) { instance?.player?.let { it.stop(); it.clearMediaItems() }; context.stopService(Intent(context, JaMusicLabService::class.java)) }
+        fun stop(context: Context) { instance?.searchJob?.cancel(); instance?.player?.let { it.stop(); it.clearMediaItems() };
+            mutable.value = mutable.value.copy(message = "Music stopped."); context.stopService(Intent(context, JaMusicLabService::class.java)) }
         fun logout(context: Context) {
             JaMusicLabVault(context).clear()
             android.webkit.CookieManager.getInstance().removeAllCookies(null)
             android.webkit.CookieManager.getInstance().flush()
             instance?.let {
-                it.connectJob?.cancel(); it.clearCacheOnDestroy = true
+                it.connectJob?.cancel(); it.searchJob?.cancel(); it.clearCacheOnDestroy = true
                 it.player.stop(); it.player.clearMediaItems()
                 it.scope.launch(Dispatchers.IO) { it.cache.keys.toList().forEach { key -> runCatching { it.cache.removeResource(key) } } }
                 it.stopSelf()
@@ -114,6 +120,7 @@ class JaMusicLabService : MediaLibraryService() {
     private lateinit var cache: SimpleCache
     private var clearCacheOnDestroy = false
     private var connectJob: Job? = null
+    private var searchJob: Job? = null
     private var expectedDuration = 0L
     override fun onCreate() {
         super.onCreate(); instance = this
@@ -169,13 +176,13 @@ class JaMusicLabService : MediaLibraryService() {
         val metadata = player.currentMediaItem?.mediaMetadata
         val queue = (0 until player.mediaItemCount).map { JaMusicCatalog.known(player.getMediaItemAt(it).mediaId) }
         mutable.value = mutable.value.copy(playing = player.isPlaying, position = player.currentPosition.coerceAtLeast(0),
-            duration = player.duration.coerceAtLeast(0), busy = player.playbackState == Player.STATE_BUFFERING,
+            duration = player.duration.coerceAtLeast(0), busy = player.playbackState == Player.STATE_BUFFERING || connectJob?.isActive == true || searchJob?.isActive == true,
             title = metadata?.title?.toString().orEmpty(), artist = metadata?.artist?.toString().orEmpty(),
             artwork = metadata?.artworkUri?.toString().orEmpty(), queueIndex = player.currentMediaItemIndex.coerceAtLeast(0), queue = queue)
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action in listOf("CONNECT", "QUEUE") && intent?.getStringExtra("ja.music.internal") != commandNonce)
+        if (intent?.action in listOf("CONNECT", "QUEUE", "SEARCH") && intent?.getStringExtra("ja.music.internal") != commandNonce)
             return START_NOT_STICKY
         val result = super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
@@ -196,7 +203,22 @@ class JaMusicLabService : MediaLibraryService() {
                     finally { mutable.value = mutable.value.copy(busy = false) }
                 }
             }
+            "SEARCH" -> {
+                searchJob?.cancel()
+                mutable.value = mutable.value.copy(busy = true, message = "Finding music…")
+                searchJob = scope.launch {
+                    try {
+                        val tracks = withContext(Dispatchers.IO) { JaMusicCatalog.tracks(intent.getStringExtra("query").orEmpty()) }
+                        if (tracks.isNotEmpty()) {
+                            player.setMediaItems(tracks.map { mediaItem(it) }); player.prepare(); player.playWhenReady = !videoActive
+                        } else mutable.value = mutable.value.copy(message = "No matching tracks found.")
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { mutable.value = mutable.value.copy(message = "Music search unavailable. Try again.") }
+                    finally { mutable.value = mutable.value.copy(busy = false) }
+                }
+            }
             "QUEUE" -> {
+                searchJob?.cancel()
                 val ids = intent.getStringArrayListExtra("queue").orEmpty().filter { parseTrack(it) == it }.take(100)
                 if (ids.isNotEmpty()) {
                     player.setMediaItems(ids.map { mediaItem(JaMusicCatalog.known(it)) }, intent.getIntExtra("index", 0).coerceIn(ids.indices), 0)
