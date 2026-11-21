@@ -46,9 +46,9 @@ class JaMusicBrowseTest {
         compose.onNodeWithText("Liked Songs").assertIsDisplayed()
         compose.onNodeWithText("‹ Back").performClick()
         compose.onNodeWithText("Your JA Library").assertIsDisplayed()
-        compose.onNodeWithText("Now Playing", useUnmergedTree = false).performClick()
-        compose.onNodeWithText("Choose a song").assertIsDisplayed()
-        compose.onNodeWithText("Shuffle Off").assertIsDisplayed()
+        compose.onNodeWithText("Now Playing", useUnmergedTree = false).performScrollTo().performClick()
+        compose.onNodeWithText("Choose a song").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Shuffle Off").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Lyrics").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Visualizer").performScrollTo().assertIsDisplayed()
         java.io.File(screenshots, "player.png").outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
