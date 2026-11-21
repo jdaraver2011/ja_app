@@ -21,7 +21,11 @@
     const presets = presetApi.getPresets();
     const names = Object.keys(presets);
     if (!names.length) throw Error('No presets');
-    const size = () => { const scale = Math.min(1, 1280 / innerWidth, 720 / innerHeight); return [Math.max(64, Math.round(innerWidth * scale)), Math.max(64, Math.round(innerHeight * scale))]; };
+    const nativePresentation = window.JaWave && typeof window.JaWave.present === 'function';
+    const renderLimitWidth = nativePresentation ? 960 : 1280;
+    const renderLimitHeight = nativePresentation ? 540 : 720;
+    const frameInterval = 1000 / 30;
+    const size = () => { const scale = Math.min(1, renderLimitWidth / innerWidth, renderLimitHeight / innerHeight); return [Math.max(64, Math.round(innerWidth * scale)), Math.max(64, Math.round(innerHeight * scale))]; };
     const [w,h] = size();
     // Butterchurn sets viewport/texture sizes, but does not resize the supplied canvas.
     canvas.width = renderCanvas.width = w; canvas.height = renderCanvas.height = h;
@@ -32,36 +36,25 @@
     addEventListener('resize', () => { const [width,height] = size(); canvas.width = renderCanvas.width = width; canvas.height = renderCanvas.height = height; visual.setRendererSize(width,height); });
     let last = 0;
     let heartbeat = 0;
-    let lastNativeFrame = 0;
-    const bitmapCanvas = document.createElement('canvas');
-    const bitmapContext = bitmapCanvas.getContext('2d', {alpha:false, willReadFrequently:true});
+
     let pixelChecked = false;
     report("READY");
     function render(now) {
       if (canvas.dataset.error) return;
       requestAnimationFrame(render);
-      if (document.hidden || now - last < 40) return;
-      last = now;
+      if (document.hidden || now - last < frameInterval) return;
+      if (nativePresentation && typeof window.JaWave.ready === 'function' && !window.JaWave.ready()) return;
+      last = now - ((now - last) % frameInterval);
       try {
         if (window.JaWave && typeof window.JaWave.samples !== 'function') throw {name:'PCM_BRIDGE_MISSING'};
         const data = window.JaWave ? JSON.parse(window.JaWave.samples()) : new Array(1024).fill(128);
         const samples = Uint8Array.from(data);
         visual.render({audioLevels:{timeByteArray:samples,timeByteArrayL:samples,timeByteArrayR:samples}});
         // Copy in this callback, before the browser can discard the WebGL drawing buffer.
-        const nativePresentation = window.JaWave && typeof window.JaWave.present === 'function';
-        if (!nativePresentation || now - lastNativeFrame >= 100) {
-          presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);
-          if (nativePresentation && bitmapContext) {
-            lastNativeFrame = now;
-            const scale = Math.min(1, 960 / canvas.width, 540 / canvas.height);
-            const width = Math.max(1, Math.round(canvas.width * scale));
-            const height = Math.max(1, Math.round(canvas.height * scale));
-            if (bitmapCanvas.width !== width || bitmapCanvas.height !== height) {
-              bitmapCanvas.width = width; bitmapCanvas.height = height;
-            }
-            bitmapContext.drawImage(canvas, 0, 0, width, height);
-            window.JaWave.present(bitmapCanvas.toDataURL('image/jpeg', 0.65), names[index]);
-          }
+        // Render at transfer resolution and perform one readback/copy, without a second resize canvas.
+        presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);
+        if (nativePresentation) {
+          window.JaWave.present(canvas.toDataURL('image/jpeg', 0.55), names[index]);
         }
         canvas.dataset.frames = String(++frames);
         if (!pixelChecked && frames >= 40) {
