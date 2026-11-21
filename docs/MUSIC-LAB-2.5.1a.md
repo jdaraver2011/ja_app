@@ -52,3 +52,11 @@ adb -s DEVICE_SERIAL shell run-as com.example.ja du -sk cache/music-lab
 ```
 
 The first command uses the same search entry point as a voice assistant. The second checks temporary cache size; it does not print credentials or audio URLs.
+
+## Verified build
+
+[Workflow 44865276250](https://github.com/jdaraver2011/ja_app/actions/runs/44865276250) passed all regression checks, persistent-key signed APK compilation and Android lint. Built source commit: `d74c18b5dd16a6486026e4183dcf0ba8600ed42d`.
+
+The downloaded workflow archive matched GitHub's SHA-256 digest. The binary APK manifest was checked independently: `com.example.ja`, version `2.5.1a`, code `20501`, min SDK 26, target SDK 35. APK size: 561,258,332 bytes. APK SHA-256: `961b400e8e293b9414a2f64bdb74510c9925a8912cf033f2a35aa4d0fee3d33a`.
+
+Full-track account authorization, audible playback, real seeking/queue behavior and Android Auto interaction still require the device checks above. The latest stable public release remains v2.5.1.
