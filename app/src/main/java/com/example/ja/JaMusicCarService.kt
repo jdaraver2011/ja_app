@@ -22,7 +22,7 @@ class JaMusicCarService : CarAppService() {
     override fun createHostValidator(): HostValidator = if (BuildConfig.DEBUG) HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
         else HostValidator.Builder(this).build() // This branch is a debug/device test, not a production car release.
     override fun onCreateSession(): Session = object : Session() {
-        override fun onCreateScreen(intent: Intent): Screen = MusicCarBrowse(carContext)
+        override fun onCreateScreen(intent: Intent): Screen = if (intent.action == "androidx.car.app.media.action.SHOW_MEDIA_PLAYBACK") MusicCarPlaying(carContext) else MusicCarBrowse(carContext)
         override fun onNewIntent(intent: Intent) {
             if (intent.action == "androidx.car.app.media.action.SHOW_MEDIA_PLAYBACK") {
                 carContext.getCarService(androidx.car.app.ScreenManager::class.java).push(MusicCarPlaying(carContext))
