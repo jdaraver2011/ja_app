@@ -9,6 +9,7 @@ import android.util.Base64
 import android.widget.ImageView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -76,6 +78,7 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
         android.util.Log.i("JA_MUSIC_VIS", "WEB_$safe frames=$frames jsPeak=$peak ${JaMusicVisualization.pcm.diagnostic(now)}")
     }
     @JavascriptInterface fun samples(): String = JaMusicVisualization.pcm.snapshot(SystemClock.elapsedRealtime())
+    @JavascriptInterface fun isPlaying(): Boolean = JaMusicLabService.state.value.playing
 }
 @SuppressLint("SetJavaScriptEnabled")
 @Composable internal fun JaMusicVisualizer(onBack: () -> Unit) {
@@ -149,10 +152,20 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
             modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xDD101923)).padding(8.dp).horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-            TvFocusButton(onClick = onBack) { Text("‹ Player") }
-            TvFocusButton(onClick = { JaMusicLabService.playPause() }) { Text(if (state.playing) "Pause" else "Play") }
-            TvFocusButton(onClick = { view.evaluateJavascript("window.nextPreset && window.nextPreset()", null) }) { Text("Next Visual") }
-            Text("MilkDrop · Butterchurn", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            VisualizerIconButton(R.drawable.ja_music_back, "Back to player", onBack)
+            VisualizerIconButton(R.drawable.ja_music_previous, "Previous track", { JaMusicLabService.previous() })
+            VisualizerIconButton(if (state.playing) R.drawable.ja_music_pause else R.drawable.ja_music_play,
+                if (state.playing) "Pause" else "Play", { JaMusicLabService.playPause() })
+            VisualizerIconButton(R.drawable.ja_music_stop, "Stop music", { JaMusicLabService.stop(context) })
+            VisualizerIconButton(R.drawable.ja_music_next, "Next track", { JaMusicLabService.next() })
+            VisualizerIconButton(R.drawable.ja_music_visual_presets, "Next visual preset",
+                { view.evaluateJavascript("window.nextPreset && window.nextPreset()", null) })
         }
+    }
+}
+
+@Composable private fun VisualizerIconButton(icon: Int, description: String, onClick: () -> Unit) {
+    TvFocusButton(onClick = onClick) {
+        Image(painter = painterResource(icon), contentDescription = description, modifier = Modifier.size(24.dp))
     }
 }
