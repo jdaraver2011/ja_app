@@ -42,6 +42,13 @@ class JaMusicBrowseTest {
         compose.onNodeWithText("Your JA Library").assertIsDisplayed()
         val screenshots = java.io.File(context.getExternalFilesDir(null), "music-ui").apply { mkdirs() }
         java.io.File(screenshots, "library.png").outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        compose.onNodeWithText("Artists").performClick()
+        compose.onNodeWithText("No saved artists yet.").assertIsDisplayed()
+        compose.onNodeWithText("Albums").performClick()
+        compose.onNodeWithText("No saved albums yet.").assertIsDisplayed()
+        compose.onNodeWithText("Playlists").performScrollTo().performClick()
+        compose.onNodeWithText("Create Playlist").assertIsDisplayed()
+        compose.onNodeWithText("Tracks").performScrollTo().performClick()
         compose.onNodeWithText("Liked Songs · 0").performClick()
         compose.onNodeWithText("Liked Songs").assertIsDisplayed()
         compose.onNodeWithText("‹ Back").performClick()
@@ -55,4 +62,40 @@ class JaMusicBrowseTest {
         compose.onNodeWithText("‹ JA").performClick()
         compose.runOnIdle { assertTrue(exited) }
     }
+    @Test(timeout = 60000) fun androidWebViewReceivesPcmAndRendersFrames() {
+        compose.setContent { MaterialTheme { JaMusicVisualizer(onBack = {}) } }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        var view: android.webkit.WebView? = null
+        instrumentation.runOnMainSync {
+            fun find(v: android.view.View): android.webkit.WebView? {
+                if (v is android.webkit.WebView) return v
+                if (v is android.view.ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { return it }
+                return null
+            }
+            val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first()
+            view = find(activity.window.decorView)
+        }
+        assertNotNull(view)
+        val answer = java.util.concurrent.atomic.AtomicReference("")
+        val until = android.os.SystemClock.elapsedRealtime() + 35000
+        var passed = false
+        while (android.os.SystemClock.elapsedRealtime() < until) {
+            val buffer = java.nio.ByteBuffer.allocate(4096)
+            repeat(1024) { buffer.put(0); buffer.put(64); buffer.put(0); buffer.put(64) }; buffer.flip()
+            JaMusicVisualization.pcm.capture16(buffer, android.os.SystemClock.elapsedRealtime())
+            instrumentation.runOnMainSync {
+                view!!.evaluateJavascript("JSON.stringify({frames:Number(document.querySelector('canvas').dataset.frames||0),error:document.querySelector('canvas').dataset.error||'',peak:Math.max(...JSON.parse(JaWave.samples()))})") { answer.set(it) }
+            }
+            android.os.SystemClock.sleep(250)
+            val raw = answer.get()
+            if (raw.startsWith("\"")) {
+                val obj = org.json.JSONObject(org.json.JSONArray("[" + raw + "]").getString(0))
+                assertEquals("Android renderer error", "", obj.optString("error"))
+                if (obj.optInt("frames") > 3 && obj.optInt("peak") > 128) { passed = true; break }
+            }
+        }
+        assertTrue("Android WebView must render and receive PCM: " + answer.get(), passed)
+    }
+
 }
