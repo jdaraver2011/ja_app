@@ -12,3 +12,5 @@ jobs:
     with:
       publish_update: false
     secrets: inherit
+
+# Build revision 2: explicit Car App core API dependency and session cleanup.
