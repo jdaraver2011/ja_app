@@ -48,6 +48,10 @@ jobs:
         run: |
           python3 -m pip install --user playwright==1.56.0
           python3 tests/weatherstar-smoke.py
+      - name: Check WeatherStar condition graphics
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-weather-icons" app/src/main/java/com/example/ja/JaWeatherIcons.java tests/JaWeatherIconsTest.java
+          java -cp "$RUNNER_TEMP/ja-weather-icons" com.example.ja.JaWeatherIconsTest
       - name: Check navigation levels
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-navigation-tests" app/src/main/java/com/example/ja/JaNavigationRules.java tests/JaNavigationRulesTest.java
@@ -222,7 +226,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.5.0-debug
+          name: JA-2.5.1-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
