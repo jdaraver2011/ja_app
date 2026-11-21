@@ -45,6 +45,7 @@ class JaMusicService : Service() {
         val state = mutable.asStateFlow()
         fun open(context: Context, url: String = HOME) {
             if (!JaMusicRules.allowed(url)) return
+            JaMusicLabService.stop(context)
             val active = instance
             if (active != null) active.navigate(url)
             else ContextCompat.startForegroundService(context,
@@ -57,6 +58,7 @@ class JaMusicService : Service() {
             service.current()?.let { page -> service.redirectGuards[page]?.reset(); page.reload() }
         } }
         fun setVideoActive(active: Boolean) {
+            JaMusicLabService.setVideoActive(active)
             videoActive = active
             if (active) instance?.pause()
         }
