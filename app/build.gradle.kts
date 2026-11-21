@@ -17,8 +17,9 @@ android {
         applicationId = "com.example.ja"
         minSdk = 26
         targetSdk = 35
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 20501
-        versionName = "2.5.1a"
+        versionName = "2.5.1b"
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
         require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
         buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")
@@ -70,6 +71,9 @@ dependencies {
     implementation("androidx.media:media:1.7.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core:1.6.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
 
