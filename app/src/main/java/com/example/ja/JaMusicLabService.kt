@@ -1,6 +1,11 @@
 package com.example.ja
 
 import android.app.PendingIntent
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.pm.ServiceInfo
+import androidx.core.app.ServiceCompat
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -30,6 +35,8 @@ import java.io.File
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class JaMusicLabService : MediaLibraryService() {
     companion object {
+        private const val MUSIC_CHANNEL = "ja-native-music"
+        private const val MUSIC_NOTIFICATION = 251
         private var instance: JaMusicLabService? = null
         // Public media-browser binding does not authorize arbitrary raw startService commands.
         private val commandNonce = java.util.UUID.randomUUID().toString()
@@ -124,9 +131,14 @@ class JaMusicLabService : MediaLibraryService() {
     private var expectedDuration = 0L
     override fun onCreate() {
         super.onCreate(); instance = this
+        getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel(MUSIC_CHANNEL, "JA Music", NotificationManager.IMPORTANCE_LOW))
+        setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this)
+            .setNotificationId(MUSIC_NOTIFICATION).setChannelId(MUSIC_CHANNEL)
+            .setChannelName(R.string.ja_music_notification_channel).build())
         cache = SimpleCache(File(cacheDir, "music-lab"), LeastRecentlyUsedCacheEvictor(64L * 1024 * 1024), StandaloneDatabaseProvider(this))
         val cached = CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(
-            DefaultHttpDataSource.Factory().setUserAgent("JA-MusicLab/2.5.1a").setAllowCrossProtocolRedirects(false)
+            DefaultHttpDataSource.Factory().setUserAgent("JA-MusicLab/2.5.1b").setAllowCrossProtocolRedirects(false)
                 .setConnectTimeoutMs(20000).setReadTimeoutMs(20000))
         val audioSource = JaMusicTrackSource.Factory(this, cached) { account, track ->
             scope.launch {
@@ -168,7 +180,12 @@ class JaMusicLabService : MediaLibraryService() {
         }
         val open = PendingIntent.getActivity(this, 251, Intent(this, MainActivity::class.java).putExtra(JaMusicService.OPEN_MUSIC, true)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        session = MediaLibrarySession.Builder(this, guarded, LibraryCallbacks()).setSessionActivity(open).build()
+        val musicSession = MediaLibrarySession.Builder(this, guarded, LibraryCallbacks()).setSessionActivity(open).build()
+        session = musicSession
+        // Local UI controls the player directly, so no browser/controller bind is guaranteed.
+        // Registration installs Media3's notification and foreground-lifecycle listeners now.
+        addSession(musicSession)
+        Log.i("JA_MUSIC_LAB", "SESSION_REGISTERED count=${sessions.size}")
         mutable.value = mutable.value.copy(running = true)
         scope.launch { while (isActive) { delay(1000); publish() } }
     }
@@ -180,10 +197,37 @@ class JaMusicLabService : MediaLibraryService() {
             title = metadata?.title?.toString().orEmpty(), artist = metadata?.artist?.toString().orEmpty(),
             artwork = metadata?.artworkUri?.toString().orEmpty(), queueIndex = player.currentMediaItemIndex.coerceAtLeast(0), queue = queue)
     }
+    private fun beginForegroundPlayback(): Boolean {
+        val current = session ?: return false
+        val open = PendingIntent.getActivity(this, 251, Intent(this, MainActivity::class.java)
+            .putExtra(JaMusicService.OPEN_MUSIC, true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val preparing = Notification.Builder(this, MUSIC_CHANNEL).setSmallIcon(R.drawable.ja_music_car_icon)
+            .setContentTitle("JA Music").setContentText("Preparing playback…").setContentIntent(open)
+            .setCategory(Notification.CATEGORY_TRANSPORT).setOngoing(true)
+            .setStyle(Notification.MediaStyle().setMediaSession(current.platformToken)).build()
+        return try {
+            // Satisfy startForegroundService immediately. Media3 replaces this same notification
+            // ID with its normal controls and owns foreground/demotion after player state changes.
+            ServiceCompat.startForeground(this, MUSIC_NOTIFICATION, preparing,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+            Log.i("JA_MUSIC_LAB", "FOREGROUND_READY sessionAdded=${isSessionAdded(current)}")
+            true
+        } catch (_: IllegalStateException) {
+            mutable.value = mutable.value.copy(message = "Android blocked music service startup. Open JA and try again.")
+            Log.w("JA_MUSIC_LAB", "FOREGROUND_START_BLOCKED")
+            stopSelf(); false
+        } catch (_: SecurityException) {
+            mutable.value = mutable.value.copy(message = "Music service permission was denied by Android.")
+            Log.w("JA_MUSIC_LAB", "FOREGROUND_PERMISSION_DENIED")
+            stopSelf(); false
+        }
+    }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action in listOf("CONNECT", "QUEUE", "SEARCH") && intent?.getStringExtra("ja.music.internal") != commandNonce)
             return START_NOT_STICKY
+        if (intent?.action == "QUEUE" && !beginForegroundPlayback()) return START_NOT_STICKY
         val result = super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             "CONNECT" -> {
