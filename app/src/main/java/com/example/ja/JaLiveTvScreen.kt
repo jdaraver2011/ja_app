@@ -235,7 +235,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
     val available=remember(state.channels,state.query,state.view,state.favorites,programs,now){state.channels.filter{channel->
-        JaLiveTvRules.categoryMatches(state.view,channel.categories)
+        (channel.id!=JA_WEATHER_CHANNEL||state.view=="Favorites")&&JaLiveTvRules.categoryMatches(state.view,channel.categories)
             &&(state.view!="Favorites"||channel.id in state.favorites)
             &&(state.view!="With EPG"||programs[channel.id].orEmpty().any{JaLiveTvRules.hasGuide(it.start,it.end,it.title,now,finish)})
             &&channel.name.contains(state.query,true)}}
@@ -245,7 +245,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
     val groups=remember{JaLiveTvRules.views()}
     fun focusPlaying(){
         val id=state.playingChannelId?:state.previewChannel?.id?:JA_WEATHER_CHANNEL
-        if(id !in channelMap){state.query="";state.view="United States"}
+        if(id !in channelMap){state.query="";state.view=if(id==JA_WEATHER_CHANNEL)"Favorites" else "United States"}
         state.returnChannel=id
     }
     LaunchedEffect(state.previewRequest){if(state.previewRequest>0){withFrameNanos{};runCatching{state.previewFocus.requestFocus()}}}
@@ -494,7 +494,7 @@ private fun JaLiveChannelButton(channel:JaLiveChannel,playing:Boolean,favorite:B
         .padding(horizontal=6.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
         Text(if(favorite)"★" else "",Modifier.width(12.dp),color=if(playing&&!moving)Color.Black else ColorGold,fontSize=12.sp)
         if(channel.logo.isNotBlank())AsyncImage(channel.logo,null,Modifier.size(28.dp))
-        Text(channel.name,Modifier.weight(1f),fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis,color=contentColor)
+        Text(if(channel.id==JA_WEATHER_CHANNEL)"1 · ${channel.name}" else channel.name,Modifier.weight(1f),fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis,color=contentColor)
     }
 }
 
