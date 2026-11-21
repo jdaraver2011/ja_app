@@ -1,0 +1,14 @@
+name: Build JA 2.5.1a Music Test
+on:
+  push:
+    branches: [v2.5.1a]
+    paths: ['.github/workflows/build-v2.5.1a.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: false
+    secrets: inherit
