@@ -231,10 +231,38 @@ jobs:
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
         run: gradle --no-daemon lintDebug
+      - name: Enable KVM for music service regression
+        run: |
+          sudo chmod 666 /dev/kvm
+      - name: Test music foreground lifecycle on Android 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: gradle --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.ja.JaMusicForegroundTest
+        env:
+          JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
+          JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
+          JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
+      - name: Upload music device regression reports
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: JA-music-service-regression
+          path: |
+            app/build/reports/androidTests/connected/**
+            app/build/outputs/androidTest-results/connected/**
+          if-no-files-found: ignore
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.5.1a-debug
+          name: JA-2.5.1b-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
