@@ -42,7 +42,8 @@
     function render(now) {
       if (canvas.dataset.error) return;
       requestAnimationFrame(render);
-      if (document.hidden || now - last < frameInterval) return;
+      // Keep the last frame on screen while the native player is paused or stopped.
+      if (document.hidden || (nativePresentation && !window.JaWave.isPlaying()) || now - last < frameInterval) return;
       if (nativePresentation && typeof window.JaWave.ready === 'function' && !window.JaWave.ready()) return;
       last = now - ((now - last) % frameInterval);
       try {
