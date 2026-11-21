@@ -1,6 +1,7 @@
 package com.example.ja
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -39,6 +40,8 @@ class JaMusicBrowseTest {
         compose.onNodeWithText("JA Music").assertIsDisplayed()
         compose.onNodeWithText("Library", useUnmergedTree = false).performClick()
         compose.onNodeWithText("Your JA Library").assertIsDisplayed()
+        val screenshots = java.io.File(context.getExternalFilesDir(null), "music-ui").apply { mkdirs() }
+        java.io.File(screenshots, "library.png").outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         compose.onNodeWithText("Liked Songs · 0").performClick()
         compose.onNodeWithText("Liked Songs").assertIsDisplayed()
         compose.onNodeWithText("‹ Back").performClick()
@@ -46,8 +49,9 @@ class JaMusicBrowseTest {
         compose.onNodeWithText("Now Playing", useUnmergedTree = false).performClick()
         compose.onNodeWithText("Choose a song").assertIsDisplayed()
         compose.onNodeWithText("Shuffle Off").assertIsDisplayed()
-        compose.onNodeWithText("Lyrics").assertIsDisplayed()
-        compose.onNodeWithText("Visualizer").assertIsDisplayed()
+        compose.onNodeWithText("Lyrics").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Visualizer").performScrollTo().assertIsDisplayed()
+        java.io.File(screenshots, "player.png").outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         compose.onNodeWithText("‹ JA").performClick()
         compose.runOnIdle { assertTrue(exited) }
     }
