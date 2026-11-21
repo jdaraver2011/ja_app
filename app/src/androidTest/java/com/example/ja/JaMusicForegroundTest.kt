@@ -89,6 +89,33 @@ class JaMusicForegroundTest {
                 assertEquals("Bootstrap must be replaced, not duplicated", 1, notices.count { it.id == 251 })
             }
         } finally {
+            instrumentation.runOnMainSync {
+                JaMusicLabService.stop(context)
+                assertTrue(JaMusicLabService.state.value.queue.isEmpty())
+                assertEquals("", JaMusicLabService.state.value.title)
+            }
+            scenario.close()
+        }
+    }
+
+    @Test(timeout = 30000)
+    fun largeQueueKeepsTheSelectedSongAndStopClearsPlayerMetadata() {
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        try {
+            instrumentation.runOnMainSync {
+                JaMusicLabService.playTracks(context, (1..700).map {
+                    JaMusicCatalog.Track(it.toString(), "Queue $it", "Synthetic", "", "", 70)
+                }, 600)
+            }
+            await(15000) { service()?.let { player(it).mediaItemCount == 500 } == true }
+            instrumentation.runOnMainSync {
+                assertEquals("601", player(service()!!).currentMediaItem?.mediaId)
+                assertEquals(400, player(service()!!).currentMediaItemIndex)
+                JaMusicLabService.stop(context)
+                assertTrue(JaMusicLabService.state.value.queue.isEmpty())
+                assertEquals("", JaMusicLabService.state.value.title)
+            }
+        } finally {
             instrumentation.runOnMainSync { JaMusicLabService.stop(context) }
             scenario.close()
         }
