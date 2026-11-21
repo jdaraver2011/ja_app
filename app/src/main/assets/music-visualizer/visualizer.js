@@ -11,7 +11,7 @@
     const size = () => { const scale = Math.min(1, 1280 / innerWidth, 720 / innerHeight); return [Math.max(64, Math.round(innerWidth * scale)), Math.max(64, Math.round(innerHeight * scale))]; };
     const [w,h] = size();
     const visual = engine.createVisualizer(null, canvas, {width:w, height:h, meshWidth:32, meshHeight:24, pixelRatio:1});
-    let index = 0;
+    let index = Math.max(0, names.indexOf('Flexi - mindblob mix'));
     window.nextPreset = () => { index = (index + 1) % names.length; visual.loadPreset(presets[names[index]], 1.5); status.textContent = names[index]; };
     visual.loadPreset(presets[names[index]], 0); status.textContent = names[index];
     addEventListener('resize', () => { const [width,height] = size(); visual.setRendererSize(width,height); });
