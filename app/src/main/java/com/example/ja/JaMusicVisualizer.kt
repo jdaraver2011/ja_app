@@ -22,7 +22,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 
 internal object JaMusicVisualization { val pcm = JaMusicPcm() }
 /** Offline, fixed-origin renderer. Its only bridge exposes a 1024-sample waveform, never account data. */
-private class MusicWaveBridge {
+internal class MusicWaveBridge {
+    private var lastReport = 0L
+    @JavascriptInterface fun report(code: String, frames: Int, peak: Int) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastReport < 4000 && code == "FRAME") return
+        lastReport = now
+        val safe = code.take(60).replace(Regex("[^A-Za-z0-9_:-]"), "_")
+        android.util.Log.i("JA_MUSIC_VIS", "WEB_$safe frames=$frames jsPeak=$peak ${JaMusicVisualization.pcm.diagnostic(now)}")
+    }
     @JavascriptInterface fun samples(): String = JaMusicVisualization.pcm.snapshot(SystemClock.elapsedRealtime())
 }
 @SuppressLint("SetJavaScriptEnabled")
@@ -39,9 +47,21 @@ private class MusicWaveBridge {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
+            tag = "ja-music-visualizer"
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                    if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR || message.message().contains("shader", true))
+                        android.util.Log.w("JA_MUSIC_VIS", "CONSOLE level=${message.messageLevel()} line=${message.lineNumber()} " + message.message().take(600))
+                    return true
+                }
+            }
             addJavascriptInterface(MusicWaveBridge(), "JaWave")
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(v: WebView?, request: WebResourceRequest?) = true
+                override fun onPageFinished(v: WebView?, url: String?) { android.util.Log.i("JA_MUSIC_VIS", "PAGE_READY hardware=${v?.isHardwareAccelerated}") }
+                override fun onRenderProcessGone(v: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                    android.util.Log.e("JA_MUSIC_VIS", "WEBVIEW_PROCESS_GONE crash=${detail?.didCrash()}"); return false
+                }
                 override fun shouldInterceptRequest(v: WebView?, request: WebResourceRequest?): WebResourceResponse {
                     val uri = request?.url
                     val name = uri?.lastPathSegment.orEmpty()
@@ -55,16 +75,16 @@ private class MusicWaveBridge {
         }
     }
     DisposableEffect(view, lifecycle) {
-        JaMusicVisualization.pcm.enable(true)
+        android.util.Log.i("JA_MUSIC_VIS", "OPEN"); JaMusicVisualization.pcm.enable(true)
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) { JaMusicVisualization.pcm.enable(false); view.onPause() }
             if (event == Lifecycle.Event.ON_RESUME) { JaMusicVisualization.pcm.enable(true); view.onResume() }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); JaMusicVisualization.pcm.enable(false); view.removeJavascriptInterface("JaWave"); view.stopLoading(); view.destroy() }
+        onDispose { android.util.Log.i("JA_MUSIC_VIS", "CLOSE"); lifecycle.removeObserver(observer); JaMusicVisualization.pcm.enable(false); view.removeJavascriptInterface("JaWave"); view.stopLoading(); view.destroy() }
     }
     BackHandler(onBack = onBack)
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().padding(bottom = 64.dp))
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xDD101923)).padding(8.dp).horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
