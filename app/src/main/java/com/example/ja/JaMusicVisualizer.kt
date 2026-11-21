@@ -6,9 +6,7 @@ import android.os.SystemClock
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import android.widget.ImageView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -35,6 +33,8 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
     @Volatile var active = true
     private var lastBitmapLog = 0L
     private var bitmapCount = 0
+    private var lastBitmapCount = 0
+    @JavascriptInterface fun ready(): Boolean = active && !closed && !pending.get()
     fun close() { closed = true; active = false }
     @JavascriptInterface fun present(data: String, preset: String) {
         if (closed || !active || data.length > 1024 * 1024 || !data.startsWith("data:image/jpeg;base64,") || !pending.compareAndSet(false, true)) return
@@ -53,8 +53,11 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
                         bitmapCount++
                         val now = SystemClock.elapsedRealtime()
                         if (now - lastBitmapLog >= 5000) {
+                            val previousBitmapLog = lastBitmapLog
                             lastBitmapLog = now
-                            android.util.Log.i("JA_MUSIC_VIS", "NATIVE_BITMAP frames=$bitmapCount width=${bitmap.width} height=${bitmap.height}")
+                            val fps = if (lastBitmapCount == 0) "startup" else java.lang.String.format(java.util.Locale.US, "%.1f", (bitmapCount - lastBitmapCount) * 1000.0 / (now - previousBitmapLog).coerceAtLeast(1))
+                            lastBitmapCount = bitmapCount
+                            android.util.Log.i("JA_MUSIC_VIS", "NATIVE_BITMAP frames=$bitmapCount fps=$fps width=${bitmap.width} height=${bitmap.height}")
                         }
                     }
                 } finally { pending.set(false) }
@@ -79,9 +82,20 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val state by JaMusicLabService.state.collectAsState()
-    var nativeFrame by remember { mutableStateOf<Bitmap?>(null) }
     var nativePreset by remember { mutableStateOf("") }
-    val bridge = remember { MusicWaveBridge { bitmap, preset -> nativeFrame = bitmap; nativePreset = preset } }
+    val imageView = remember {
+        ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(android.graphics.Color.BLACK)
+            contentDescription = "Music visualizer"
+            visibility = android.view.View.INVISIBLE
+        }
+    }
+    val bridge = remember { MusicWaveBridge { bitmap, preset ->
+        imageView.setImageBitmap(bitmap)
+        imageView.visibility = android.view.View.VISIBLE
+        if (nativePreset != preset) nativePreset = preset
+    } }
     val view = remember {
         WebView(context).apply {
             setBackgroundColor(android.graphics.Color.BLACK)
@@ -125,18 +139,14 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
             if (event == Lifecycle.Event.ON_RESUME) { bridge.active = true; JaMusicVisualization.pcm.enable(true); view.onResume() }
         }
         lifecycle.addObserver(observer)
-        onDispose { bridge.close(); android.util.Log.i("JA_MUSIC_VIS", "CLOSE"); lifecycle.removeObserver(observer); JaMusicVisualization.pcm.enable(false); view.removeJavascriptInterface("JaWave"); view.stopLoading(); view.destroy() }
+        onDispose { bridge.close(); imageView.setImageDrawable(null); android.util.Log.i("JA_MUSIC_VIS", "CLOSE"); lifecycle.removeObserver(observer); JaMusicVisualization.pcm.enable(false); view.removeJavascriptInterface("JaWave"); view.stopLoading(); view.destroy() }
     }
     BackHandler(onBack = onBack)
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().padding(bottom = 64.dp))
-        nativeFrame?.let { bitmap ->
-            Image(bitmap.asImageBitmap(), contentDescription = "Music visualizer",
-                modifier = Modifier.fillMaxSize().padding(bottom = 64.dp).background(Color.Black),
-                contentScale = ContentScale.Fit)
-            Text(nativePreset, color = Color.White, style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
-        }
+        AndroidView(factory = { imageView }, modifier = Modifier.fillMaxSize().padding(bottom = 64.dp))
+        if (nativePreset.isNotBlank()) Text(nativePreset, color = Color.White, style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xDD101923)).padding(8.dp).horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
             TvFocusButton(onClick = onBack) { Text("‹ Player") }
