@@ -6,6 +6,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -48,6 +52,7 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
     var query by remember { mutableStateOf("") }
     var submitted by remember { mutableStateOf("") }
     var searchKind by remember { mutableStateOf("track") }
+    var libraryKind by remember { mutableStateOf("Tracks") }
     var artistKind by remember(route) { mutableStateOf("track") }
     var page by remember(route, submitted, searchKind, artistKind) { mutableStateOf(JaMusicCatalog.Page()) }
     var shelves by remember { mutableStateOf(emptyList<MusicShelf>()) }
@@ -164,7 +169,7 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
     if (route.title == "Lyrics") {
         MusicLyrics(state, onBack = { back() }); return
     }
-    Column(modifier.fillMaxSize().background(Color(0xFF101923)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.fillMaxSize().background(Color(0xFF101923)).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MusicButton(if (stack.size > 1) "‹ Back" else "‹ JA", { back() })
             Text("JA Music", color = musicGold, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
@@ -209,11 +214,14 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                     listOf("track" to "Songs", "artist" to "Artists", "album" to "Albums", "playlist" to "Playlists").forEach { (kind, title) -> MusicButton(title, { searchKind = kind }, active = kind == searchKind) }
                 }
             }
+            if (route.title == "Library") Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Tracks", "Artists", "Albums", "Playlists").forEach { name -> MusicButton(name, { libraryKind = name }, active = libraryKind == name) }
+            }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (message.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(message, color = musicGold, modifier = Modifier.weight(1f)); MusicButton("Retry", { reload++ })
             }
-            key(route, searchKind, submitted, artistKind) {
+            key(route, searchKind, submitted, artistKind, libraryKind) {
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (route.title == "Home" && route.kind == "root") {
                         items(shelves, key = { it.title }) { shelf ->
@@ -227,12 +235,29 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                             }
                         }
                     } else if (route.title == "Library") {
-                        item { Row(verticalAlignment = Alignment.CenterVertically) { MusicHeading("Your JA Library", Modifier.weight(1f)); MusicButton("Create Playlist", { playlistName = ""; nameDialog = "new" }) } }
-                        item { MusicButton("Liked Songs · ${library.liked().size}", { open(MusicRoute("Liked Songs")) }, Modifier.fillMaxWidth()) }
-                        items(library.playlists(), key = { it.id }) { p -> MusicButton("${p.name} · ${p.tracks.size} songs", { open(MusicRoute(p.name, "local", p.id)) }, Modifier.fillMaxWidth()) }
-                        item { MusicHeading("Saved Artists, Albums and Playlists") }
-                        items(library.saved(), key = { "${it.kind}:${it.id}" }) { c -> MusicButton("${c.title} · ${c.kind.replaceFirstChar { it.uppercase() }}", { card(c) }, Modifier.fillMaxWidth()) }
-                        item { Text("Playlists, likes and saved music stay on this device. Browse or search Deezer to add more.", color = Color.LightGray) }
+                        item { Row(verticalAlignment = Alignment.CenterVertically) {
+                            MusicHeading("Your JA Library", Modifier.weight(1f))
+                            if (libraryKind == "Playlists") MusicButton("Create Playlist", { playlistName = ""; nameDialog = "new" })
+                        } }
+                        if (libraryKind == "Tracks") {
+                            item { MusicButton("Liked Songs · ${library.liked().size}", { open(MusicRoute("Liked Songs")) }, Modifier.fillMaxWidth()) }
+                            itemsIndexed(library.liked(), key = { _, t -> t.id }) { i, t ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    MusicButton("${t.title} · ${t.artist}", { play(library.liked(), i) }, Modifier.weight(1f))
+                                    MusicButton("•••", { selectedTrack = t })
+                                }
+                            }
+                        } else {
+                            if (libraryKind == "Playlists") items(library.playlists(), key = { "local:${it.id}" }) { p -> MusicButton("${p.name} · ${p.tracks.size} songs", { open(MusicRoute(p.name, "local", p.id)) }, Modifier.fillMaxWidth()) }
+                            val kind = when (libraryKind) { "Artists" -> "artist"; "Albums" -> "album"; else -> "playlist" }
+                            val saved = library.saved().filter { it.kind == kind }
+                            items(saved.chunked(3), key = { it.first().id }) { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { c -> MusicCard(c.title, c.subtitle, c.art, { card(c) }, Modifier.weight(1f), round = c.kind == "artist") }
+                                repeat(3-row.size) { Spacer(Modifier.weight(1f)) }
+                            } }
+                            if (saved.isEmpty() && (kind != "playlist" || library.playlists().isEmpty())) item { Text("No saved ${libraryKind.lowercase()} yet.", color = Color.LightGray) }
+                        }
+                        item { Text("Your JA library is saved on this device. Use song menus to like tracks and Save on artist, album and playlist pages.", color = Color.LightGray) }
                     } else {
                         item { MusicHeading(if (route.title == "Search") "${searchKind.replaceFirstChar { it.uppercase() }} Results" else localPlaylist?.name ?: route.title) }
                         detail?.let { c -> item {
@@ -297,12 +322,14 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
     }
 }
 @Composable private fun MusicCard(title: String, subtitle: String, art: String, click: () -> Unit, modifier: Modifier = Modifier.width(160.dp), round: Boolean = false) {
-    MusicButton("", click, modifier) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Surface(shape = if (round) CircleShape else MaterialTheme.shapes.small, color = Color.Transparent) { AsyncImage(art, null, Modifier.size(100.dp)) }
-            Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (subtitle.isNotBlank()) Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-        }
+    var focused by remember { mutableStateOf(false) }
+    Column(modifier.clip(RoundedCornerShape(8.dp)).onFocusChanged { focused = it.isFocused }
+        .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(8.dp)) else Modifier)
+        .clickable(role = Role.Button, onClick = click).padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Surface(shape = if (round) CircleShape else MaterialTheme.shapes.small, color = Color.Transparent) { AsyncImage(art, null, Modifier.size(100.dp)) }
+        Text(title, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (subtitle.isNotBlank()) Text(subtitle, color = Color.LightGray, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
     }
 }
 private fun musicTime(ms: Long) = "%d:%02d".format(ms / 60000, (ms / 1000) % 60)
