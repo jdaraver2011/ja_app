@@ -31,6 +31,8 @@ import java.io.File
 class JaMusicLabService : MediaLibraryService() {
     companion object {
         private var instance: JaMusicLabService? = null
+        // Public media-browser binding does not authorize arbitrary raw startService commands.
+        private val commandNonce = java.util.UUID.randomUUID().toString()
         private var videoActive = false
         data class State(val running: Boolean = false, val busy: Boolean = false,
             val message: String = "Sign in to Deezer to play music.", val account: String = "",
@@ -44,6 +46,7 @@ class JaMusicLabService : MediaLibraryService() {
             if (!Regex("[A-Za-z0-9_-]{64,512}").matches(value)) {
                 mutable.value = mutable.value.copy(message = "Enter a valid Deezer session."); return
             }
+            instance?.let { it.connectJob?.cancel(); it.player.stop(); it.player.clearMediaItems() }
             try { JaMusicLabVault(context).save(value) }
             catch (_: Exception) { mutable.value = mutable.value.copy(message = "Could not securely save the session."); return }
             launch(context, "CONNECT")
@@ -54,7 +57,7 @@ class JaMusicLabService : MediaLibraryService() {
             JaMusicCatalog.remember(tracks)
             JaMusicService.stop(context)
             ContextCompat.startForegroundService(context, Intent(context, JaMusicLabService::class.java)
-                .setAction("QUEUE").putStringArrayListExtra("queue", ArrayList(tracks.take(100).map { it.id }))
+                .setAction("QUEUE").putExtra("ja.music.internal", commandNonce).putStringArrayListExtra("queue", ArrayList(tracks.take(100).map { it.id }))
                 .putExtra("index", index.coerceIn(0, minOf(tracks.size, 100) - 1)))
         }
         fun playTrack(context: Context, input: String) {
@@ -72,7 +75,7 @@ class JaMusicLabService : MediaLibraryService() {
             } catch (_: Exception) { null }
         }
         private fun launch(context: Context, action: String) {
-            context.startService(Intent(context, JaMusicLabService::class.java).setAction(action))
+            context.startService(Intent(context, JaMusicLabService::class.java).setAction(action).putExtra("ja.music.internal", commandNonce))
         }
         fun playPause() { instance?.let { if (it.player.isPlaying) it.player.pause() else if (!videoActive) it.player.play() } }
         fun next() { instance?.player?.let { if (it.hasNextMediaItem()) it.seekToNextMediaItem() } }
@@ -83,9 +86,14 @@ class JaMusicLabService : MediaLibraryService() {
             JaMusicLabVault(context).clear()
             android.webkit.CookieManager.getInstance().removeAllCookies(null)
             android.webkit.CookieManager.getInstance().flush()
-            instance?.let { it.clearCacheOnDestroy = true; it.player.stop(); it.stopSelf() }
+            instance?.let {
+                it.connectJob?.cancel(); it.clearCacheOnDestroy = true
+                it.player.stop(); it.player.clearMediaItems()
+                it.scope.launch(Dispatchers.IO) { it.cache.keys.toList().forEach { key -> runCatching { it.cache.removeResource(key) } } }
+                it.stopSelf()
+            }
                 ?: File(context.cacheDir, "music-lab").deleteRecursively()
-            mutable.value = State(message = "Signed out. Session and temporary audio cache cleared.")
+            mutable.value = State(running = instance != null, message = "Signed out. Session and temporary audio cache cleared.")
         }
         fun setVideoActive(active: Boolean) { videoActive = active; if (active) instance?.player?.pause() }
         fun keepsProcessAlive(): Boolean = instance?.let { it.player.playWhenReady || mutable.value.busy } == true
@@ -131,7 +139,7 @@ class JaMusicLabService : MediaLibraryService() {
             setHandleAudioBecomingNoisy(true)
             addListener(object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) { publish() }
-                override fun onMediaItemTransition(item: MediaItem?, reason: Int) { expectedDuration = 0; publish() }
+                override fun onMediaItemTransition(item: MediaItem?, reason: Int) { expectedDuration = item?.mediaId?.let { JaMusicCatalog.known(it).seconds * 1000 } ?: 0; publish() }
                 override fun onPlaybackStateChanged(state: Int) {
                     Log.i("JA_MUSIC_LAB", "PLAYER_STATE state=$state")
                     if (state == Player.STATE_READY && expectedDuration > 45000 && player.duration in 1 until expectedDuration - 10000) {
@@ -166,6 +174,8 @@ class JaMusicLabService : MediaLibraryService() {
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action in listOf("CONNECT", "QUEUE") && intent?.getStringExtra("ja.music.internal") != commandNonce)
+            return START_NOT_STICKY
         val result = super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             "CONNECT" -> {
@@ -217,6 +227,16 @@ class JaMusicLabService : MediaLibraryService() {
             return catalogResult("", params)
         }
         override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo, mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> {
+            val query = mediaItems.firstOrNull()?.requestMetadata?.searchQuery
+            if (!query.isNullOrBlank()) {
+                val future = SettableFuture.create<List<MediaItem>>()
+                scope.launch {
+                    try { future.set(withContext(Dispatchers.IO) { JaMusicCatalog.tracks(query) }.map { mediaItem(it) }) }
+                    catch (e: CancellationException) { future.cancel(false) }
+                    catch (_: Exception) { future.setException(IllegalStateException("Music search unavailable")) }
+                }
+                return future
+            }
             val items = mediaItems.take(100).mapNotNull { item -> parseTrack(item.mediaId)?.let { mediaItem(JaMusicCatalog.known(it)) } }
             return Futures.immediateFuture(items)
         }
