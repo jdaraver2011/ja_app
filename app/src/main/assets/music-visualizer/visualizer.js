@@ -32,6 +32,9 @@
     addEventListener('resize', () => { const [width,height] = size(); canvas.width = renderCanvas.width = width; canvas.height = renderCanvas.height = height; visual.setRendererSize(width,height); });
     let last = 0;
     let heartbeat = 0;
+    let lastNativeFrame = 0;
+    const bitmapCanvas = document.createElement('canvas');
+    const bitmapContext = bitmapCanvas.getContext('2d', {alpha:false, willReadFrequently:true});
     let pixelChecked = false;
     report("READY");
     function render(now) {
@@ -45,7 +48,21 @@
         const samples = Uint8Array.from(data);
         visual.render({audioLevels:{timeByteArray:samples,timeByteArrayL:samples,timeByteArrayR:samples}});
         // Copy in this callback, before the browser can discard the WebGL drawing buffer.
-        presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);
+        const nativePresentation = window.JaWave && typeof window.JaWave.present === 'function';
+        if (!nativePresentation || now - lastNativeFrame >= 100) {
+          presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);
+          if (nativePresentation && bitmapContext) {
+            lastNativeFrame = now;
+            const scale = Math.min(1, 960 / canvas.width, 540 / canvas.height);
+            const width = Math.max(1, Math.round(canvas.width * scale));
+            const height = Math.max(1, Math.round(canvas.height * scale));
+            if (bitmapCanvas.width !== width || bitmapCanvas.height !== height) {
+              bitmapCanvas.width = width; bitmapCanvas.height = height;
+            }
+            bitmapContext.drawImage(canvas, 0, 0, width, height);
+            window.JaWave.present(bitmapCanvas.toDataURL('image/jpeg', 0.65), names[index]);
+          }
+        }
         canvas.dataset.frames = String(++frames);
         if (!pixelChecked && frames >= 40) {
           pixelChecked = true;
