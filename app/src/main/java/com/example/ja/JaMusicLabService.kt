@@ -99,7 +99,7 @@ class JaMusicLabService : MediaLibraryService() {
         fun previous() { instance?.player?.seekToPrevious() }
         fun seekTo(position: Long) { instance?.player?.seekTo(position.coerceAtLeast(0)) }
         fun stop(context: Context) { instance?.searchJob?.cancel(); instance?.player?.let { it.stop(); it.clearMediaItems() };
-            mutable.value = mutable.value.copy(message = "Music stopped."); context.stopService(Intent(context, JaMusicLabService::class.java)) }
+            mutable.value = State(message = "Music stopped.", account = mutable.value.account); context.stopService(Intent(context, JaMusicLabService::class.java)) }
         fun logout(context: Context) {
             JaMusicLabVault(context).clear()
             android.webkit.CookieManager.getInstance().removeAllCookies(null)
@@ -285,7 +285,7 @@ class JaMusicLabService : MediaLibraryService() {
             }
             "QUEUE" -> {
                 searchJob?.cancel()
-                val ids = intent.getStringArrayListExtra("queue").orEmpty().filter { parseTrack(it) == it }.take(100)
+                val ids = intent.getStringArrayListExtra("queue").orEmpty().filter { parseTrack(it) == it }.take(500)
                 if (ids.isNotEmpty()) {
                     player.setMediaItems(ids.map { mediaItem(JaMusicCatalog.known(it)) }, intent.getIntExtra("index", 0).coerceIn(ids.indices), 0)
                     player.prepare(); player.playWhenReady = !videoActive
@@ -306,7 +306,12 @@ class JaMusicLabService : MediaLibraryService() {
                 "root" -> LibraryResult.ofItem(folder("root", "JA Music"), null)
                 "charts" -> LibraryResult.ofItem(folder("charts", "Top Tracks"), null)
                 "queue" -> LibraryResult.ofItem(folder("queue", "Queue"), null)
-                else -> if (parseTrack(mediaId) == mediaId) LibraryResult.ofItem(mediaItem(JaMusicCatalog.known(mediaId)), null)
+                "liked" -> LibraryResult.ofItem(folder("liked", "Liked Songs"), null)
+                "playlists" -> LibraryResult.ofItem(folder("playlists", "JA Playlists"), null)
+                else -> if (mediaId.startsWith("local:")) {
+                    val playlist = JaMusicLibrary(this@JaMusicLabService).playlists().firstOrNull { it.id == mediaId.removePrefix("local:") }
+                    if (playlist != null) LibraryResult.ofItem(folder(mediaId, playlist.name), null) else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                } else if (parseTrack(mediaId) == mediaId) LibraryResult.ofItem(mediaItem(JaMusicCatalog.known(mediaId)), null)
                     else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
             })
         override fun onGetChildren(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String, page: Int,
