@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
     val context = LocalContext.current
     var view by remember { mutableStateOf<WebView?>(null) }
+    val redirects = remember { JaMusicRules.RedirectGuard() }
     var captured by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("Sign in on Deezer’s secure page. JA saves the session on this device.") }
     fun capture(value: String?) {
@@ -63,7 +64,11 @@ internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
                             if (uri.scheme == "deezer" && uri.host == "autolog") {
                                 capture(uri.lastPathSegment); return true
                             }
-                            val allowed = uri.scheme == "https" && (uri.host == "deezer.com" || uri.host?.endsWith(".deezer.com") == true)
+                            val upgrade = JaMusicRules.secureDeezerRedirect(uri.toString())
+                            if (upgrade != null && redirects.tryUpgrade(android.os.SystemClock.elapsedRealtime())) {
+                                v?.loadUrl(upgrade); return true
+                            }
+                            val allowed = JaMusicRules.allowed(uri.toString()) && (uri.host == "deezer.com" || uri.host?.endsWith(".deezer.com") == true)
                             if (!allowed) message = "Continue with email sign-in on Deezer. App-install links and external sign-in redirects stay closed."
                             return !allowed
                         }
