@@ -28,6 +28,11 @@ public final class JaMusicPcm {
             updated = now;
         }
     }
+    public synchronized String diagnostic(long now) {
+        int peak = 0;
+        for (int sample : samples) peak = Math.max(peak, Math.abs(sample - 128));
+        return "enabled=" + enabled + " channels=" + channels + " ageMs=" + (updated == 0 ? -1 : now - updated) + " peak=" + peak;
+    }
     public synchronized String snapshot(long now) {
         StringBuilder out = new StringBuilder(4200).append('[');
         boolean fresh = enabled && updated != 0 && now - updated < 500;
