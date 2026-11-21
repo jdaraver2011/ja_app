@@ -130,6 +130,10 @@ jobs:
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-music-tests" app/src/main/java/com/example/ja/JaMusicRules.java tests/JaMusicRulesTest.java
           java -cp "$RUNNER_TEMP/ja-music-tests" com.example.ja.JaMusicRulesTest
+      - name: Test native music stripe decoding and seek ranges
+        run: |
+          java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-deezer-tests" app/src/main/java/com/example/ja/JaDeezerStripeInputStream.java tests/JaDeezerStripeInputStreamTest.java
+          java -cp "$RUNNER_TEMP/ja-deezer-tests" com.example.ja.JaDeezerStripeInputStreamTest
       - name: Test experimental Music source coordination
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-music-source-tests" app/src/main/java/com/example/ja/experiments/music/JaMusicSourceCoordinator.java app/src/main/java/com/example/ja/experiments/music/JaMusicExperimentChecks.java
@@ -230,7 +234,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.5.1-debug
+          name: JA-2.5.1a-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
