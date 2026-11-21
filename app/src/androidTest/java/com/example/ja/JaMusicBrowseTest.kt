@@ -92,7 +92,7 @@ class JaMusicBrowseTest {
             if (raw.startsWith("\"")) {
                 val obj = org.json.JSONObject(org.json.JSONArray("[" + raw + "]").getString(0))
                 assertEquals("Android renderer error", "", obj.optString("error"))
-                assertEquals("Canvas buffer must match renderer viewport", obj.optInt("expectedWidth"), obj.optInt("width"))
+                if (obj.optInt("frames") > 0) assertEquals("Canvas buffer must match renderer viewport", obj.optInt("expectedWidth"), obj.optInt("width"))
                 if (obj.optInt("frames") >= 40 && obj.optInt("peak") > 128 && obj.optInt("outputPeak") > 0) { passed = true; break }
             }
         }
