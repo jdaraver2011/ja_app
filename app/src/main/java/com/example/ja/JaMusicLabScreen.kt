@@ -60,7 +60,8 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier) {
     if (signIn) JaMusicSignIn(onClose = { signIn = false }, onSession = {
         signIn = false; notifications(); JaMusicLabService.connect(context, it)
     })
-    if (manual) AlertDialog(onDismissRequest = { manual = false; arl = "" }, title = { Text("Deezer session") },
+    if (manual) AlertDialog(properties = androidx.compose.ui.window.DialogProperties(securePolicy = androidx.compose.ui.window.SecureFlagPolicy.SecureOn),
+        onDismissRequest = { manual = false; arl = "" }, title = { Text("Deezer session") },
         text = { OutlinedTextField(arl, { arl = it }, label = { Text("ARL") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation()) },
         confirmButton = { TextButton(onClick = { notifications(); JaMusicLabService.connect(context, arl); arl = ""; manual = false }) { Text("Connect") } },
