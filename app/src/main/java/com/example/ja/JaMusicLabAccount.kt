@@ -49,7 +49,7 @@ internal class JaMusicLabVault(context: Context) {
 internal class JaMusicLabFailure(val reason: String) : Exception(reason)
 internal class JaMusicLabAccount(private val arl: String) {
     class Account(val name: String, val id: String, val csrf: String, val license: String)
-    class Track(val id: String, val title: String, val artist: String, val duration: Long, val token: String)
+    class Track(val id: String, val title: String, val artist: String, val duration: Long, val token: String, val album: String = "", val art: String = "")
     class Audio(val url: String, val format: String, val cipher: String)
     private val cookies = mutableListOf<Cookie>()
     private val client = OkHttpClient.Builder().callTimeout(25, TimeUnit.SECONDS)
@@ -102,7 +102,9 @@ internal class JaMusicLabAccount(private val arl: String) {
         val token = data.optString("TRACK_TOKEN")
         if (token.isBlank()) throw JaMusicLabFailure("TRACK_TOKEN_UNAVAILABLE")
         return Track(data.optString("SNG_ID", id), data.optString("SNG_TITLE", "Track $id"),
-            data.optString("ART_NAME"), data.optLong("DURATION") * 1000, token)
+            data.optString("ART_NAME"), data.optLong("DURATION") * 1000, token, data.optString("ALB_TITLE"),
+            data.optString("ALB_PICTURE").takeIf { Regex("[a-fA-F0-9]{32}").matches(it) }
+                ?.let { "https://e-cdns-images.dzcdn.net/images/cover/$it/500x500-000000-80-0-0.jpg" }.orEmpty())
     }
     fun audio(track: Track, account: Account): Audio {
         if (account.license.isBlank()) throw JaMusicLabFailure("ACCOUNT_HAS_NO_PLAYBACK_LICENSE")
