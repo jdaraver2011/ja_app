@@ -44,6 +44,10 @@ internal class JaWeatherRepository(context: Context) {
     fun saveSound(value:Boolean){prefs.edit().putBoolean("weatherstar-sound",value).apply()}
     fun volume()=prefs.getFloat("weatherstar-volume",0.5f)
     fun saveVolume(value:Float){prefs.edit().putFloat("weatherstar-volume",value).apply()}
+    fun musicChoice()=prefs.getString("music-choice","sunny")?:"sunny"
+    fun saveMusicChoice(value:String){prefs.edit().putString("music-choice",value).apply()}
+    fun customMusic()=prefs.getString("custom-music","")?:""
+    fun saveCustomMusic(value:String){prefs.edit().putString("custom-music",value).apply()}
     fun savedZip(): String = prefs.getString("zip", "") ?: ""
     fun saveZip(zip: String) { prefs.edit().putString("zip", zip).apply() }
     private fun get(url: String, force: Boolean = false): JSONObject {
