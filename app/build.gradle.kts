@@ -65,7 +65,9 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.11.1")
     implementation("androidx.media3:media3-session:1.11.1")
     // API 8 media templates; isolated test branch, no stable auto-update publication.
+    implementation("androidx.car.app:app:1.8.0-rc01")
     implementation("androidx.car.app:app-projected:1.8.0-rc01")
+    implementation("androidx.media:media:1.7.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
