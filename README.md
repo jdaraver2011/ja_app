@@ -1,8 +1,6 @@
 # JA — current project
 
-Device-test build: **2.5.3 (20503)**. Transparent music cards, safe phone insets, Library category tabs and Android visualizer diagnostics. [Workflow 44949745674](https://github.com/jdaraver2011/ja_app/actions/runs/44949745674) passed compilation, lint, browser/PCM checks and five Android emulator regressions. Public release remains v2.5.2; publication is disabled for this test workflow. See [2.5.3 capture instructions](docs/RELEASE-2.5.3.md).
-
-Latest public update: **[JA 2.5.2 (20502)](https://github.com/jdaraver2011/ja_app/releases/tag/v2.5.2)**, based on the device-verified v2.5.1b native music player. Full-screen Music adds catalogue browsing, artists/albums, JA playlists, lyrics and an offline MilkDrop-compatible visualizer. [Workflow 44910992017](https://github.com/jdaraver2011/ja_app/actions/runs/44910992017) passed compilation, strict lint, browser/PCM checks, repository regressions and four Android 35 emulator tests. Public update metadata matches the uploaded APK size and SHA-256. See [release details](docs/RELEASE-2.5.2.md).
+Latest public update: **[JA 2.5.4 (20504)](https://github.com/jdaraver2011/ja_app/releases/tag/v2.5.4)**. Retains the 2.5.3 Music layout, Library categories and diagnostics, and corrects visualizer canvas drawing-buffer dimensions. [Workflow 44952719326](https://github.com/jdaraver2011/ja_app/actions/runs/44952719326) passed compile, strict lint, repository regressions, browser pixel-output/rotation checks and five Android tests. Android WebView produced nonzero RGB output with no GL error. Public update metadata matches the uploaded APK size/hash; available through Settings > Update Now. See [release verification](docs/RELEASE-2.5.4.md).
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
