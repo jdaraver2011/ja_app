@@ -1,6 +1,6 @@
 # JA — current project
 
-Release branch: **2.5.2 (20502)**, based on the device-verified v2.5.1b native music player. Full-screen Music adds catalogue browsing, artists/albums, JA playlists, lyrics and an offline MilkDrop-compatible visualizer. See [2.5.2 release details](docs/RELEASE-2.5.2.md). Publication is gated by compilation, lint, browser/PCM tests and Android emulator UI/library/foreground-service regressions.
+Latest public update: **[JA 2.5.2 (20502)](https://github.com/jdaraver2011/ja_app/releases/tag/v2.5.2)**, based on the device-verified v2.5.1b native music player. Full-screen Music adds catalogue browsing, artists/albums, JA playlists, lyrics and an offline MilkDrop-compatible visualizer. [Workflow 44910992017](https://github.com/jdaraver2011/ja_app/actions/runs/44910992017) passed compilation, strict lint, browser/PCM checks, repository regressions and four Android 35 emulator tests. Public update metadata matches the uploaded APK size and SHA-256. See [release details](docs/RELEASE-2.5.2.md).
 
 JA uses Kotlin/Jetpack Compose, TMDB metadata, and embedded GeckoView playback on Android phones and Android TV. Minimum Android API 26; target API 35. VidSrc is the primary source; source-specific integration includes VidFast.
 
