@@ -102,6 +102,9 @@ class JaMusicService : Service() {
             }.build()
         controls = AndroidMediaSession(this, "JA-Deezer").apply {
             setCallback(object : AndroidMediaSession.Callback() {
+                override fun onPlayFromSearch(query: String?, extras: android.os.Bundle?) {
+                    JaMusicLabService.playSearch(this@JaMusicService, query.orEmpty())
+                }
                 override fun onPlay() { play() }
                 override fun onPause() { pause() }
                 override fun onStop() { stopSelf() }
