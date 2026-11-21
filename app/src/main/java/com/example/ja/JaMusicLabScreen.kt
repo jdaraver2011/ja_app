@@ -70,7 +70,8 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Home", "Search", "Queue", "Now Playing", "Account").forEach { name ->
                 TvFocusButton(onClick = { section = name }, colors = ButtonDefaults.buttonColors(
-                    containerColor = if (section == name) Color(0xFFE5A43B) else Color(0xFF354653))) { Text(name) }
+                    containerColor = if (section == name) Color(0xFFE5A43B) else Color(0xFF354653),
+                    contentColor = if (section == name) Color.Black else Color.White)) { Text(name) }
             }
         }
         if (section == "Search") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -107,7 +108,7 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier) {
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     itemsIndexed(rows, key = { index, track -> "${track.id}:$index" }) { index, track ->
                         TvFocusButton(onClick = { play(rows, index) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(
-                            containerColor = if (state.queue.getOrNull(state.queueIndex)?.id == track.id) Color(0xFF725820) else Color(0xFF233747))) {
+                            containerColor = if (state.queue.getOrNull(state.queueIndex)?.id == track.id) Color(0xFF725820) else Color(0xFF233747), contentColor = Color.White)) {
                             AsyncImage(track.art, contentDescription = null, modifier = Modifier.size(48.dp))
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
