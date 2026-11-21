@@ -1,0 +1,15 @@
+name: Publish JA 2.5.7 Visualizer Performance
+on:
+  push:
+    branches: [v2.5.7]
+    paths: ['.github/workflows/publish-v2.5.7.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      publish_update: true
+      run_checks: false
+    secrets: inherit
