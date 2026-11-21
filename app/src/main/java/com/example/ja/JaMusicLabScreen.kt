@@ -105,7 +105,10 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                     if (shelves.isEmpty()) message = "Deezer catalogue unavailable. Try again."
                 }
                 route.title == "Explore" -> page = withContext(Dispatchers.IO) { JaMusicCatalog.page("genre", "genre") }
-                route.title == "Search" -> if (submitted.isNotBlank()) page = withContext(Dispatchers.IO) { JaMusicCatalog.search(submitted, searchKind) }
+                route.title == "Search" -> if (submitted.isNotBlank()) {
+                    page = withContext(Dispatchers.IO) { JaMusicCatalog.search(submitted, searchKind) }
+                    library.rememberSearch(submitted, searchKind, page.cards.firstOrNull(), page.tracks.firstOrNull())
+                }
                 route.kind == "genre" -> {
                     page = withContext(Dispatchers.IO) { JaMusicCatalog.page("chart/${route.id}/tracks?limit=50") }
                 }
@@ -259,10 +262,35 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                         }
                         item { Text("Your JA library is saved on this device. Use song menus to like tracks and Save on artist, album and playlist pages.", color = Color.LightGray) }
                     } else {
-                        item { MusicHeading(if (route.title == "Search") "${searchKind.replaceFirstChar { it.uppercase() }} Results" else localPlaylist?.name ?: route.title) }
+                        if (route.title == "Search" && submitted.isBlank()) {
+                            val recent = library.recentSearches()
+                            item { MusicHeading("Recent Searches") }
+                            if (recent.isEmpty()) item { Text("Your recent searches will appear here.", color = Color.LightGray) }
+                            items(recent, key = { "recent:${it.kind}:${it.query}" }) { entry ->
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    MusicButton("", {
+                                        if (entry.kind == "artist" && entry.id.isNotBlank()) open(MusicRoute(entry.query, "artist", entry.id))
+                                        else { query = entry.query; searchKind = entry.kind; submitted = entry.query }
+                                    }, Modifier.weight(1f)) {
+                                        AsyncImage(entry.art, null, Modifier.size(56.dp).clip(CircleShape))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(entry.query, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                            Text(entry.subtitle, color = Color.LightGray, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                                style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                    MusicButton("×", { library.removeRecentSearch(entry.query, entry.kind) })
+                                }
+                            }
+                            if (recent.isNotEmpty()) item { MusicButton("Clear Recent Searches", { library.clearRecentSearches() }) }
+                        } else item { MusicHeading(if (route.title == "Search") "${searchKind.replaceFirstChar { it.uppercase() }} Results" else localPlaylist?.name ?: route.title) }
                         detail?.let { c -> item {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                AsyncImage(c.art, null, Modifier.size(86.dp)); Column(Modifier.weight(1f)) { Text(c.title, color = Color.White); Text(c.subtitle, color = Color.LightGray) }
+                                AsyncImage(c.art, null, Modifier.size(86.dp)); Column(Modifier.weight(1f)) {
+                                    Text(c.title, color = Color.White, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(c.subtitle, color = Color.LightGray, minLines = 1, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
                                 MusicButton(if (library.saved().any { it.id == c.id && it.kind == c.kind }) "Unsave" else "Save", { library.toggleSave(c) })
                             }
                         } }
@@ -285,7 +313,10 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 MusicButton("", { play(tracks, i) }, Modifier.weight(1f), active = state.queue.getOrNull(state.queueIndex)?.id == t.id) {
                                     AsyncImage(t.art, null, Modifier.size(40.dp)); Spacer(Modifier.width(10.dp))
-                                    Column(Modifier.weight(1f)) { Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
+                                    Column(Modifier.weight(1f)) {
+                                        Text(t.title, minLines = 1, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(t.artist, minLines = 1, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                                    }
                                     Text(musicTime(t.seconds * 1000))
                                 }
                                 MusicButton("•••", { selectedTrack = t })
@@ -297,7 +328,7 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
-                        if (!loading && tracks.isEmpty() && page.cards.isEmpty()) item { Text(if (route.title == "Search" && submitted.isBlank()) "Search the Deezer music catalogue." else "No music here yet.", color = Color.LightGray) }
+                        if (!loading && tracks.isEmpty() && page.cards.isEmpty() && !(route.title == "Search" && submitted.isBlank())) item { Text("No music here yet.", color = Color.LightGray) }
                         if (page.next.isNotBlank()) item { MusicButton("Load More", {
                             scope.launch {
                                 loading = true
@@ -328,8 +359,8 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
         .clickable(role = Role.Button, onClick = click).padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Surface(shape = if (round) CircleShape else MaterialTheme.shapes.small, color = Color.Transparent) { AsyncImage(art, null, Modifier.size(100.dp)) }
-        Text(title, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (subtitle.isNotBlank()) Text(subtitle, color = Color.LightGray, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+        Text(title, color = Color.White, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (subtitle.isNotBlank()) Text(subtitle, color = Color.LightGray, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
     }
 }
 private fun musicTime(ms: Long) = "%d:%02d".format(ms / 60000, (ms / 1000) % 60)
@@ -340,7 +371,13 @@ private fun musicTime(ms: Long) = "%d:%02d".format(ms / 60000, (ms / 1000) % 60)
             if (state.title.isBlank()) Text(state.message, color = musicGold, maxLines = 2, style = MaterialTheme.typography.bodySmall)
             else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AsyncImage(state.artwork, null, Modifier.size(44.dp))
-                MusicButton("${state.title}\n${state.artist}", open, Modifier.weight(1f))
+                MusicButton("", open, Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(state.title, color = Color.White, minLines = 1, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(state.artist, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 MusicTransportButton(if (state.playing) R.drawable.ja_music_pause else R.drawable.ja_music_play, if (state.playing) "Pause" else "Play", { JaMusicLabService.playPause() }, primary = true)
                 MusicTransportButton(R.drawable.ja_music_next, "Next", { JaMusicLabService.next() }, enabled = state.queue.isNotEmpty())
             }
@@ -351,9 +388,10 @@ private fun musicTime(ms: Long) = "%d:%02d".format(ms / 60000, (ms / 1000) % 60)
     val context = LocalContext.current
     val current = state.queue.getOrNull(state.queueIndex)
     var drag by remember { mutableStateOf<Float?>(null) }
-    Text(state.title.ifBlank { "Choose a song" }, color = Color.White, style = MaterialTheme.typography.headlineSmall)
-    Text(state.artist, color = Color.LightGray)
-    current?.album?.takeIf { it.isNotBlank() }?.let { Text(it, color = Color.LightGray) }
+    Text(state.title.ifBlank { "Choose a song" }, color = Color.White, minLines = 1, maxLines = 2,
+        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineSmall)
+    Text(state.artist, color = Color.LightGray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    current?.album?.takeIf { it.isNotBlank() }?.let { Text(it, color = Color.LightGray, maxLines = 2, overflow = TextOverflow.Ellipsis) }
     Text(state.message, color = musicGold, style = MaterialTheme.typography.bodySmall)
     Slider(value = drag ?: state.position.toFloat().coerceIn(0f, state.duration.toFloat().coerceAtLeast(1f)), onValueChange = { drag = it },
         valueRange = 0f..state.duration.toFloat().coerceAtLeast(1f), onValueChangeFinished = { drag?.let { JaMusicLabService.seekTo(it.toLong()) }; drag = null }, enabled = state.duration > 0)
