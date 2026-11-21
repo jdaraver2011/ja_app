@@ -37,7 +37,7 @@ internal fun JaGenreRows(
         LazyColumn(state = sectionState, modifier = Modifier.fillMaxWidth().weight(1f).jaWeatherContentStart(),
             verticalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             items(rows, key = { it.genreId }) { row ->
-                val titles = visibleTitles(row.titles)
+                val titles = remember(row.titles,visibleTitles) { visibleTitles(row.titles) }
                 val rowId = row.genreId.toString()
                 val rowState = rowStates.getOrPut("$tab:${row.name}") { LazyListState() }
                 val emptyRequester = remember(rowId) { FocusRequester() }
