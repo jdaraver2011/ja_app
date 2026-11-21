@@ -66,11 +66,14 @@ class JaMusicLabService : MediaLibraryService() {
         fun restore(context: Context) = launch(context, "CONNECT")
         fun playTracks(context: Context, tracks: List<JaMusicCatalog.Track>, index: Int = 0) {
             if (tracks.isEmpty()) return
-            JaMusicCatalog.remember(tracks)
+            val selected = index.coerceIn(0, tracks.lastIndex)
+            val start = if (tracks.size > 500) (selected - 250).coerceIn(0, tracks.size - 500) else 0
+            val window = tracks.drop(start).take(500)
+            JaMusicCatalog.remember(window)
             JaMusicService.stop(context)
             ContextCompat.startForegroundService(context, Intent(context, JaMusicLabService::class.java)
-                .setAction("QUEUE").putExtra("ja.music.internal", commandNonce).putStringArrayListExtra("queue", ArrayList(tracks.take(500).map { it.id }))
-                .putExtra("index", index.coerceIn(0, minOf(tracks.size, 500) - 1)))
+                .setAction("QUEUE").putExtra("ja.music.internal", commandNonce).putStringArrayListExtra("queue", ArrayList(window.map { it.id }))
+                .putExtra("index", selected - start))
         }
         fun playTrack(context: Context, input: String) {
             val id = parseTrack(input)
