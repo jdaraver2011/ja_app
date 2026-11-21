@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         // Home, app switching and configuration changes never take this path.
-        if (explicitExit && !JaMusicService.keepsProcessAlive()) {
+        if (explicitExit && !JaMusicService.keepsProcessAlive() && !JaMusicLabService.keepsProcessAlive()) {
             val main = android.os.Handler(android.os.Looper.getMainLooper())
             val terminate = Runnable { android.os.Process.killProcess(android.os.Process.myPid()) }
             main.postDelayed(terminate, 5000L)
@@ -1090,7 +1090,7 @@ class MainActivity : ComponentActivity() {
         }
         Spacer(Modifier.height(12.dp))
         if (showMusicTab && tab == "Music" && selected == null && selectedPerson == null) {
-            JaMusicScreen(Modifier.fillMaxWidth().weight(1f))
+            JaMusicLabScreen(Modifier.fillMaxWidth().weight(1f))
         } else JaCompactContent {
         if (playbackLoading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening selected source…") }
         error?.let { Text(it, modifier = Modifier.jaWeatherIntroWidth(), color = Color(0xFFFFA8A8)) }
