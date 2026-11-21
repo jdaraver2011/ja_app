@@ -12,7 +12,7 @@ Version name 2.5.1a; version code 20501; same application ID and update signing 
 - Native Media3 playback and in-memory stripe decoding; range seeks align to 6144-byte stripe boundaries. The first 2048 bytes in each stripe are decrypted. Truncated final stripes below 2048 bytes remain unchanged.
 - 64 MiB evicting private cache upstream of the decoder, so encrypted media stays encrypted on disk. Sign out clears the session, WebView login cookies and music cache. No song exports or download folder.
 - One MediaLibraryService/session for JA, media notification, headsets and car controls. Queue autoplay/skip, scrub, audio focus, headphone disconnect, background playback. Movie/TV/IPTV/weather audio gate pauses music; closing video does not unexpectedly resume it.
-- Android Auto media browser fallback, search and shared queue; API-8 SectionedItemTemplate browsing and MediaPlaybackTemplate now playing on compatible hosts. Phone sign-in only; no video/catalogue screens are exposed to the car host.
+- Android Auto media browser fallback, search and shared queue, media voice search; API-8 SectionedItemTemplate browsing and MediaPlaybackTemplate now playing on compatible hosts. Phone sign-in only; no video/catalogue screens are exposed to the car host.
 - Car App Library 1.8.0-rc01 is pinned for the API-8 media template test. Debug host validation permits DHU/test hosts; release builds reject hosts until a production allowlist is configured. This is not a production car-store release.
 
 ## Upstream review / attribution
@@ -43,3 +43,12 @@ adb -s DEVICE_SERIAL logcat -v threadtime "JA_MUSIC_LAB:I" "AndroidRuntime:E" "*
 ```
 
 Only share the filtered log after checking it contains no session cookies, credentials or signed URLs. Expected events include SESSION_VALID, AUDIO_RESOLVED and PLAYER_STATE. Errors such as SESSION_EXPIRED_OR_INVALID, ACCOUNT_HAS_NO_PLAYBACK_LICENSE or AUDIO_HTTP_403 identify authorization/provider refusal. AUDIO_HTTP_404 still needs device investigation if returned by the legitimate endpoint.
+
+Phone voice-intent smoke test (after sign-in):
+
+```powershell
+adb -s DEVICE_SERIAL shell am start -n com.example.ja/.MainActivity -a android.media.action.MEDIA_PLAY_FROM_SEARCH --es query "artist name"
+adb -s DEVICE_SERIAL shell run-as com.example.ja du -sk cache/music-lab
+```
+
+The first command uses the same search entry point as a voice assistant. The second checks temporary cache size; it does not print credentials or audio URLs.
