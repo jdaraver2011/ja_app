@@ -1066,6 +1066,10 @@ class MainActivity : ComponentActivity() {
         }
         return
     }
+    if (showMusicTab && tab == "Music" && selected == null && selectedPerson == null) {
+        JaMusicLabScreen(Modifier.fillMaxSize(), onExit = { tab = "Movies"; navigationLevel = 0 })
+        return
+    }
     Box(Modifier.fillMaxSize().background(bg).padding(16.dp)) {
     JaWeatherHeaderFrame(weatherHeader, weather, navigationRowState,
         onOpen = { exitGate.reset(); weatherOpen = true }) { sideWeather ->
