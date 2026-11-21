@@ -45,7 +45,8 @@ object JaMusicCatalog {
             album?.optString("cover_medium").orEmpty(), o.optLong("duration"), artist?.optString("id").orEmpty(), album?.optString("id").orEmpty())
     }
     private fun card(o: JSONObject, kind: String): Card = Card(o.optString("id"), o.optString(if (kind in listOf("artist", "genre")) "name" else "title"),
-        o.optJSONObject("artist")?.optString("name") ?: o.optJSONObject("user")?.optString("name") ?: o.optString("release_date"),
+        if (kind == "artist") o.optInt("nb_album").takeIf { it > 0 }?.let { "$it albums" }.orEmpty()
+        else o.optJSONObject("artist")?.optString("name") ?: o.optJSONObject("user")?.optString("name") ?: o.optString("release_date"),
         o.optString(if (kind in listOf("artist", "genre", "playlist")) "picture_medium" else "cover_medium"), kind)
     fun page(path: String, kind: String = "track", fallbackAlbum: JSONObject? = null): Page {
         val result = request(path)
