@@ -164,6 +164,15 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     val groups=androidx.compose.foundation.ScrollState(0)
     val timeline=androidx.compose.foundation.ScrollState(0)
     private fun saveOrder(){prefs.edit().putStringSet("ids",favorites.toSet()).putString("order",org.json.JSONArray(favoriteOrder).toString()).apply()}
+    fun reloadPersonalFavorites(){
+        favorites=prefs.getStringSet("ids",emptySet())?.toSet()?:emptySet()
+        favoriteOrder=runCatching{val a=org.json.JSONArray(prefs.getString("order","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList())
+        groupOrders.clear()
+        JaLiveTvRules.views().forEach{group->
+            val saved=runCatching{val a=org.json.JSONArray(prefs.getString("group-order:$group","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList())
+            groupOrders[group]=if(group=="Favorites"&&saved.isEmpty())favoriteOrder else saved
+        }
+    }
     fun favorite(id:String){
         favorites=if(id in favorites)favorites-id else favorites+id
         favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id})

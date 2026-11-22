@@ -168,6 +168,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable fun StreamingApp(dao: WatchDao, openMusicRequest: Int = 0) {
+    val appContext = LocalContext.current.applicationContext
+    val account = remember { JaAccountSync(appContext, dao) }
+    var signedIn by remember { mutableStateOf(account.session() != null) }
+    if (signedIn) {
+        StreamingAppContent(dao, openMusicRequest, onSignedOut = { signedIn = false })
+    } else {
+        JaRequiredAccountGate(dao, onAuthenticated = { signedIn = true })
+    }
+}
+
+@Composable private fun StreamingAppContent(dao: WatchDao, openMusicRequest: Int, onSignedOut: () -> Unit) {
     val activity = LocalContext.current as? MainActivity
     val appContext = LocalContext.current.applicationContext
     val titleReturnFocus = remember { JaTitleReturnFocus() }
@@ -237,6 +248,22 @@ class MainActivity : ComponentActivity() {
     // User-triggered reset layer; leaves JA's existing history database untouched.
     val preferredSourceReset = remember { PreferredSourceReset(appContext) }
     val scope = rememberCoroutineScope()
+    val accountSync = remember { JaAccountSync(appContext, dao) }
+    DisposableEffect(lifecycleOwner, accountSync) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START && accountSync.session() != null) {
+                scope.launch {
+                    val outcome = runCatching { accountSync.sync() }
+                    if (outcome.exceptionOrNull()?.message?.contains("awaiting administrator approval") == true) {
+                        accountSync.signOut()
+                        onSignedOut()
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val settings = remember { PlayerControlSettings(context = appContext) }
     // Persist the order in which titles were favorited separately from the
     // watch-history timestamp, which changes whenever an episode is played.
@@ -1118,6 +1145,8 @@ class MainActivity : ComponentActivity() {
         }
         if (tab == "Settings" && selected == null) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+                JaAccountSyncSettings(dao, onCloudDataApplied = { liveTv.reloadPersonalFavorites() }, onSignedOut = onSignedOut)
+                Spacer(Modifier.height(16.dp))
                 JaUpdateSettings()
                 JaWeatherSettings(weather)
                 Text("This product uses the TMDB API but is not endorsed or certified by TMDB.", color=Color.LightGray,style=MaterialTheme.typography.bodySmall)

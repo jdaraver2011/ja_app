@@ -18,8 +18,8 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 20509
-        versionName = "2.5.9"
+        versionCode = 20600
+        versionName = "2.6.0-supabase-test"
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
         require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
         buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")
@@ -29,6 +29,8 @@ android {
         buildConfigField("String", "AUTHORIZED_EMBED_HOST", "\"${prop("AUTHORIZED_EMBED_HOST")}\"")
         buildConfigField("String", "DIRECT_MEDIA_TEMPLATE", "\"${prop("DIRECT_MEDIA_TEMPLATE")}\"")
         buildConfigField("String", "DIRECT_MEDIA_HOST", "\"${prop("DIRECT_MEDIA_HOST")}\"")
+        buildConfigField("String", "SUPABASE_URL", "\"${prop("SUPABASE_URL")}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${prop("SUPABASE_PUBLISHABLE_KEY")}\"")
     }
     val updateStore = System.getenv("JA_SIGNING_STORE")
     if (!updateStore.isNullOrBlank()) {

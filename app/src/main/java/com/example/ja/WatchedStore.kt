@@ -25,4 +25,10 @@ internal object WatchedStore {
         check(store.edit().putStringSet("watched", next).commit()) { "Could not save watched status" }
         mutable.value = next
     }
+    @Synchronized fun replaceAll(context: Context, values: Set<String>) {
+        if (prefs == null) initialize(context)
+        val store = checkNotNull(prefs)
+        check(store.edit().putStringSet("watched", values).commit()) { "Could not restore watched status" }
+        mutable.value = values.toSet()
+    }
 }

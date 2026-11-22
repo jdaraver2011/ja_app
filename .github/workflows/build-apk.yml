@@ -104,6 +104,8 @@ jobs:
           AUTHORIZED_EMBED_HOST: ${{ secrets.AUTHORIZED_EMBED_HOST }}
           DIRECT_MEDIA_TEMPLATE: ${{ secrets.DIRECT_MEDIA_TEMPLATE }}
           DIRECT_MEDIA_HOST: ${{ secrets.DIRECT_MEDIA_HOST }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
         run: python3 scripts/configure_build.py
       - name: Test TV season source preferences
         if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
@@ -315,7 +317,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-2.5.9-debug
+          name: JA-2.6.0-supabase-test-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

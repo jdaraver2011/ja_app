@@ -10,6 +10,10 @@ if not key:
 values = {name: os.environ.get(name, '') for name in (
     'TMDB_API_KEY', 'AUTHORIZED_EMBED_TEMPLATE', 'AUTHORIZED_EMBED_HOST',
     'DIRECT_MEDIA_TEMPLATE', 'DIRECT_MEDIA_HOST', 'JA_UPDATE_REPOSITORY')}
+values['SUPABASE_URL'] = os.environ.get('SUPABASE_URL', '').strip()
+values['SUPABASE_PUBLISHABLE_KEY'] = os.environ.get('SUPABASE_PUBLISHABLE_KEY', '').strip()
+if not values['SUPABASE_URL'].startswith('https://') or not values['SUPABASE_PUBLISHABLE_KEY'].startswith('sb_publishable_'):
+    raise SystemExit('Set the SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY Actions variables before building this test branch.')
 values['JA_UPDATE_REPOSITORY'] = os.environ.get('JA_UPDATE_REPOSITORY') or 'jdaraver2011/ja_app'
 sdk = os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT')
 if sdk:
