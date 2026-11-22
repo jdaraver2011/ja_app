@@ -72,7 +72,34 @@ public final class JaLiveTvRules {
         for(String category:CATEGORIES.keySet())if(!category.equals("Test"))result.add(category);
         return result;
     }
-    public static String category(String view){return CATEGORIES.getOrDefault(view,"");}
+    /** Adds source-country and playlist group-title filters without duplicating channel records. */
+    public static List<String> views(Set<String> availableCategories) {
+        List<String> result=views();
+        result.add(3,"United Kingdom");
+        Set<String> known=new HashSet<>(CATEGORIES.values());
+        known.add("country-us");known.add("country-uk");known.add("test");
+        Set<String> extras=new TreeSet<>();
+        if(availableCategories!=null)for(String value:availableCategories)
+            if(value!=null&&!value.isBlank()&&!known.contains(value))extras.add(value);
+        Set<String> labels=new HashSet<>();for(String view:result)labels.add(view.toLowerCase(Locale.ROOT));
+        for(String value:extras){String label=displayCategory(value);if(labels.add(label.toLowerCase(Locale.ROOT)))result.add(label);}
+        return result;
+    }
+    private static String displayCategory(String value) {
+        String[] words=value.replace('_','-').split("-");StringBuilder out=new StringBuilder();
+        for(String word:words)if(!word.isBlank()){
+            if(out.length()>0)out.append(' ');
+            out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return out.toString();
+    }
+    public static String category(String view){
+        if("Favorites".equals(view)||"With EPG".equals(view))return "";
+        if("United States".equals(view))return "country-us";
+        if("United Kingdom".equals(view))return "country-uk";
+        String known=CATEGORIES.get(view);if(known!=null)return known;
+        return view==null?"":view.toLowerCase(Locale.ROOT).trim().replaceAll("[^a-z0-9]+","-").replaceAll("^-|-$","");
+    }
     public static boolean categoryMatches(String view,Set<String> categories) {
         String key=category(view);return key.isEmpty()||categories.contains(key);
     }
