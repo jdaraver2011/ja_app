@@ -2,7 +2,11 @@ name: Publish JA 2.6.5
 on:
   push:
     branches: [v2.6.5]
-    paths: ['.github/workflows/publish-v2.6.5.yml']
+    paths:
+      - '.github/workflows/publish-v2.6.5.yml'
+      - '.github/workflows/build-apk.yml'
+      - 'app/src/**'
+      - 'app/build.gradle.kts'
   workflow_dispatch:
 permissions:
   contents: write
