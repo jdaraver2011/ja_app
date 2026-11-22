@@ -1,0 +1,12 @@
+name = "ja-live-tv-refresh"
+main = "src/index.js"
+compatibility_date = "2026-11-22"
+
+[triggers]
+crons = ["20 11 * * *"]
+
+[vars]
+SOURCE_PAGE_URL = "https://freeiptv2023-d.ottc.xyz/?action=view"
+GITHUB_REPOSITORY = "jdaraver2011/ja_app"
+DATA_BRANCH = "live-tv-data"
+MAX_CHANNELS = "2000"
