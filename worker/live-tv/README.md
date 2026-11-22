@@ -2,6 +2,10 @@
 
 This Worker refreshes the app's existing public catalog after 5:00 AM Central and republishes it to the `live-tv-data/catalog.json` branch. JA's existing Live TV repository reads that path, so no per-release catalog URL change is required. New version branches should be created from the latest JA branch so the Worker source, deployment workflow, and Test view carry forward.
 
+## Deployment branch
+
+Cloudflare Workers Builds currently deploys from the `v2.6.4` production branch, with this directory as the root. Pushing a commit to that branch triggers a fresh build and deploy.
+
 ## Schedule
 
 The Cron Trigger is `20 11 * * *` UTC (5:20 AM Central Standard Time; 6:20 AM Central Daylight Time). Cloudflare Cron Triggers use UTC.
