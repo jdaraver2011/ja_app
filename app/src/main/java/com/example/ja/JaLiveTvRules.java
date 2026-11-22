@@ -61,15 +61,13 @@ public final class JaLiveTvRules {
         String[][] values={{"News","news"},{"Sports","sports"},{"Movies","movies"},{"Series","series"},
             {"Entertainment","entertainment"},{"Documentaries","documentary"},{"Kids","kids"},{"Animation","animation"},
             {"Comedy","comedy"},{"Music","music"},{"Cooking","cooking"},{"Travel","travel"},{"Science","science"},
-            {"Education","education"},{"Business","business"},{"Weather","weather"},{"Classic TV","classic"},{"Auto and Motoring","auto"},
-            {"Test","test"}};
+            {"Education","education"},{"Business","business"},{"Weather","weather"},{"Classic TV","classic"},{"Auto and Motoring","auto"}};
         for(String[] value:values)map.put(value[0],value[1]);
         CATEGORIES=Collections.unmodifiableMap(map);
     }
     public static List<String> views() {
         List<String> result=new ArrayList<>();result.add("Favorites");result.add("With EPG");result.add("United States");
-        result.add("Test");
-        for(String category:CATEGORIES.keySet())if(!category.equals("Test"))result.add(category);
+        result.addAll(CATEGORIES.keySet());
         return result;
     }
     /** Adds source-country and playlist group-title filters without duplicating channel records. */
