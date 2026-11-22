@@ -104,8 +104,8 @@ jobs:
           AUTHORIZED_EMBED_HOST: ${{ secrets.AUTHORIZED_EMBED_HOST }}
           DIRECT_MEDIA_TEMPLATE: ${{ secrets.DIRECT_MEDIA_TEMPLATE }}
           DIRECT_MEDIA_HOST: ${{ secrets.DIRECT_MEDIA_HOST }}
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: python3 scripts/configure_build.py
       - name: Test TV season source preferences
         if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
