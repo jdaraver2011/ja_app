@@ -73,7 +73,7 @@ internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
                             return !allowed
                         }
                     }
-                    loadUrl("https://www.deezer.com/desktop/login/electron/callback")
+                    loadUrl("https://account.deezer.com/en-us/login/")
                 }
             })
         }
