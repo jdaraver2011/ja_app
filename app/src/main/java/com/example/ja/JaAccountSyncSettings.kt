@@ -186,7 +186,7 @@ internal fun JaRequiredAccountGate(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1B2A37), contentColor = Color.White)) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Image(
-                        painter = painterResource(R.mipmap.ic_launcher),
+                        painter = painterResource(R.mipmap.ic_launcher_foreground),
                         contentDescription = "JA app logo",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.size(72.dp).clickable {

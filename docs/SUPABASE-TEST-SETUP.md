@@ -1,6 +1,6 @@
 # JA Supabase test build setup
 
-The `v2.6.2` branch is a non-production test build. Its welcome page includes a hidden test-only unlock gesture: tap the JA logo seven times, then enter `192168` to use JA locally without an account. The unlock is remembered for that installed app version and is requested again after an app update. The code is present in this public repository and can be extracted from the APK; never merge or publish this bypass in a public device update.
+The `v2.6.3` branch is a non-production test build. Its welcome page includes a hidden test-only unlock gesture: tap the JA logo seven times, then enter `192168` to use JA locally without an account. The unlock is remembered for that installed app version and is requested again after an app update. The code is present in this public repository and can be extracted from the APK; never merge or publish this bypass in a public device update.
 
 With normal account access, this branch requires sign-in or account creation the first time JA opens after installation. New accounts remain pending until an administrator approves them in Supabase. It adds email/password authentication and account sync for watched/favorite Movies and TV, resume progress, JA Music likes/saved items/playlists/recent searches, and IPTV favorite channels and their order. Playback/display preferences, provider credentials, current playback state, and temporary caches remain on each device.
 
@@ -35,6 +35,6 @@ These are client-side connection values. Do not add a Supabase secret or `servic
 
 ## 5. Build the test APK
 
-Open **Actions → Build JA APK → Run workflow**, select branch `v2.6.2`, leave **Run automated tests and lint** off for this one-build smoke run, and leave **Publish this version as a public device update** off. Download artifact `JA-2.6.2-supabase-test-debug` and install the APK directly.
+Open **Actions → Build JA APK → Run workflow**, select branch `v2.6.3`, leave **Run automated tests and lint** off for this one-build smoke run, and leave **Publish this version as a public device update** off. Download artifact `JA-2.6.3-supabase-test-debug` and install the APK directly.
 
 Email verification remains enabled. A new user must verify the email address and receive admin approval before JA opens. Initial sync uploads this device's saved data if no cloud row exists. If cloud data already exists and this device also has saved data, JA asks whether to download or upload to prevent accidental replacement.
