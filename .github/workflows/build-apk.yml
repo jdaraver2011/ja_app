@@ -19,7 +19,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, master]
+    branches: [main, master, v2.6.0-supabase-test]
 permissions:
   contents: read
 concurrency:
