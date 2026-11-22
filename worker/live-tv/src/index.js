@@ -9,13 +9,14 @@ function decodeHtml(value) {
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
 }
 function attr(tag, key) {
-  const re = new RegExp('(?:^|\\s)' + key + '\\s*=\\s*("([^"]*)"|\\'([^\\']*)\\'|([^\\s>]+))', 'i');
-  const m = tag.match(re);
-  return m ? decodeHtml(m[2] || m[3] || m[4] || '') : '';
+  const doubleQuoted = new RegExp("(?:^|\\s)" + key + "\\s*=\\s*\"([^\"]*)\"", "i");
+  const bare = new RegExp("(?:^|\\s)" + key + "\\s*=\\s*([^\\s>]+)", "i");
+  const match = tag.match(doubleQuoted) || tag.match(bare);
+  return match ? decodeHtml(match[1]) : '';
 }
 function pageCredential(html, kind) {
-  const label = kind === 'username' ? /(?:iptv\\s*)?user(?:name)?/i : /(?:iptv\\s*)?pass(?:word)?/i;
-  const inputs = [...html.matchAll(/<input\\b[^>]*>/gi)].map(m => m[0]);
+  const label = kind === 'username' ? /(?:iptv\s*)?user(?:name)?/i : /(?:iptv\s*)?pass(?:word)?/i;
+  const inputs = [...html.matchAll(/<input\b[^>]*>/gi)].map(m => m[0]);
   for (const tag of inputs) {
     const clues = [attr(tag, 'name'), attr(tag, 'id'), attr(tag, 'aria-label'), attr(tag, 'placeholder'), attr(tag, 'autocomplete')].join(' ');
     if (label.test(clues)) {
@@ -24,9 +25,9 @@ function pageCredential(html, kind) {
     }
   }
   const labelText = kind === 'username' ? 'IPTV Username' : 'IPTV Password';
-  const plain = decodeHtml(html.replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, ' ')
-      .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' '));
+  const plain = decodeHtml(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
   const at = plain.toLowerCase().indexOf(labelText.toLowerCase());
   if (at >= 0) {
     const after = plain.slice(at + labelText.length, at + labelText.length + 160);
@@ -36,23 +37,23 @@ function pageCredential(html, kind) {
   throw new Error('Could not read the ' + kind + ' field from the source page');
 }
 function playlistHref(html, pageUrl) {
-  const attrs = [...html.matchAll(/<(?:a|form|button)\\b[^>]*>/gi)].map(m => m[0]);
-  for (const tag of attrs) {
+  const tags = [...html.matchAll(/<(?:a|form|button)\b[^>]*>/gi)].map(m => m[0]);
+  for (const tag of tags) {
     const value = attr(tag, 'href') || attr(tag, 'action') || attr(tag, 'data-href') || attr(tag, 'data-url');
     const text = (attr(tag, 'aria-label') + ' ' + attr(tag, 'title') + ' ' + tag).toLowerCase();
-    if (value && (/m3u|playlist|get\\.php|download/i.test(value) || /m3u|playlist/i.test(text))) {
+    if (value && (/m3u|playlist|get\.php|download/i.test(value) || /m3u|playlist/i.test(text))) {
       try { return new URL(value, pageUrl).toString(); } catch (_) {}
     }
   }
-  const literal = decodeHtml(html).match(/https?:[^"'\\s<>]+(?:m3u|playlist|get\\.php)[^"'\\s<>]*/i);
+  const literal = decodeHtml(html).match(/https?:[^"'\s<>]+(?:m3u|playlist|get\.php)[^"'\s<>]*/i);
   if (literal) { try { return new URL(literal[0], pageUrl).toString(); } catch (_) {} }
   return '';
 }
 function resolvePlaylist(template, discovered, username, password, pageUrl) {
   let raw = template || discovered;
   if (!raw) throw new Error('No M3U download link was found on the page; configure PLAYLIST_URL_TEMPLATE in Cloudflare if the page only displays credentials');
-  raw = raw.replace(/\\{username\\}|%USERNAME%|\\$username/gi, encodeURIComponent(username))
-           .replace(/\\{password\\}|%PASSWORD%|\\$password/gi, encodeURIComponent(password));
+  raw = raw.replace(/\{username\}|%USERNAME%|\$username/gi, encodeURIComponent(username))
+           .replace(/\{password\}|%PASSWORD%|\$password/gi, encodeURIComponent(password));
   const url = new URL(raw, pageUrl);
   if (!/^https?:$/.test(url.protocol)) throw new Error('The M3U URL must use HTTP or HTTPS');
   if (!/(?:username|user)=/i.test(url.search)) url.searchParams.set('username', username);
@@ -61,19 +62,19 @@ function resolvePlaylist(template, discovered, username, password, pageUrl) {
 }
 function countryIsUs(info) {
   const text = [info.country, info.group, info.id, info.name].join(' ').toLowerCase();
-  return /(?:^|[^a-z])(us|usa|united\\s+states)(?:$|[^a-z])/.test(text)
-      || /\\.us(?:$|[^a-z0-9])/.test(info.id.toLowerCase())
-      || /^(?:us|usa|united states)\\s*[:|/-]/i.test(info.name);
+  return /(?:^|[^a-z])(us|usa|united\s+states)(?:$|[^a-z])/.test(text)
+      || /\.us(?:$|[^a-z0-9])/.test(info.id.toLowerCase())
+      || /^(?:us|usa|united states)\s*[:|/-]/i.test(info.name);
 }
 function m3uAttribute(line, key) {
   const re = new RegExp('(?:^|\\s)' + key + '="([^"]*)"', 'i');
-  const m = line.match(re);
-  return m ? decodeHtml(m[1]) : '';
+  const match = line.match(re);
+  return match ? decodeHtml(match[1]) : '';
 }
 function parseM3u(text) {
   const rows = [];
   let current = null;
-  for (const raw of text.split(/\\r?\\n/)) {
+  for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
     if (line.startsWith('#EXTINF:')) {
@@ -199,7 +200,7 @@ async function refresh(env) {
     const n = (seen.get(base) || 0) + 1;
     seen.set(base, n);
     channels.push({ id: 'test-' + base + (n > 1 ? '-' + n : ''), name: row.name || row.id || 'U.S. channel',
-      logo: /^https?:\\/\\//i.test(row.logo) ? row.logo : '', categories: ['test'], streams: [{ url: row.url }] });
+      logo: /^https?:\/\//i.test(row.logo) ? row.logo : '', categories: ['test'], streams: [{ url: row.url }] });
   }
   if (!channels.length) throw new Error('No working U.S. channels were found; existing catalog was left untouched');
   const catalog = { schema: 1, generatedAt: new Date().toISOString(), channels,
