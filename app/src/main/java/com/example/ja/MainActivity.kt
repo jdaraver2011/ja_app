@@ -316,7 +316,7 @@ class MainActivity : ComponentActivity() {
     val genreRowErrors = remember { mutableStateMapOf<String,String>() }
     // Movies can switch between the existing genre rows and a paged popular grid.
     var moviesView by remember { mutableStateOf("Popular") }
-    val popularGridState = key(catalogueDate, catalogueGeneration, sourceDataVersion) { rememberLazyGridState() }
+    val popularGridState = rememberLazyGridState()
     var popularTitles by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableStateOf(emptyList<TitleItem>()) }
     var popularPage by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableIntStateOf(0) }
     var popularTotalPages by remember(catalogueDate, catalogueGeneration, sourceDataVersion) { mutableIntStateOf(1) }
@@ -346,6 +346,8 @@ class MainActivity : ComponentActivity() {
     var tvPopularTotalPages by remember { mutableIntStateOf(1) }
     var tvPopularLoading by remember { mutableStateOf(false) }
     var tvPopularError by remember { mutableStateOf<String?>(null) }
+    var moviePopularStartupResetDone by remember { mutableStateOf(false) }
+    var tvPopularStartupResetDone by remember { mutableStateOf(false) }
     // Favorites are one existing database collection, presented by media type.
     // Remember each subsection's scroll offset while browsing title details.
     var favoritesView by remember { mutableStateOf("Movies") }
@@ -417,6 +419,22 @@ class MainActivity : ComponentActivity() {
         if(openMusicRequest==0){weatherOpen=false;weatherReturnFocus=false}
         withFrameNanos{};withFrameNanos{};if(openMusicRequest==0)runCatching{mainRequesters.getValue("Movies").requestFocus()}
         Log.i("JA_STARTUP","LISTS_RESET main=Movies index=0")
+    }
+    // Lazy grids can restore a saved index before async Popular results arrive.
+    // Reset once after each list first becomes available on this activity startup.
+    LaunchedEffect(popularTitles.isNotEmpty()) {
+        if (popularTitles.isNotEmpty() && !moviePopularStartupResetDone) {
+            withFrameNanos { }
+            popularGridState.scrollToItem(0)
+            moviePopularStartupResetDone = true
+        }
+    }
+    LaunchedEffect(tvPopularTitles.isNotEmpty()) {
+        if (tvPopularTitles.isNotEmpty() && !tvPopularStartupResetDone) {
+            withFrameNanos { }
+            tvPopularGridState.scrollToItem(0)
+            tvPopularStartupResetDone = true
+        }
     }
     fun focusSub() { exitGate.reset(); scope.launch {
         if(tab=="Search")searchGridState.scrollToItem(0)
