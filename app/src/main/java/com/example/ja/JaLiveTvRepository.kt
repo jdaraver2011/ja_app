@@ -45,7 +45,6 @@ internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Lon
 }
 
 internal class JaLiveTvRepository(private val context:Context) {
-    val argonCatalog=JaArgonCatalogRepository(context)
     private companion object { val catalogLock=Mutex() }
     private val guideLock=Mutex()
     @Volatile private var memoryCatalog:Pair<JaLiveChannels,Long>?=null
@@ -102,7 +101,6 @@ internal class JaLiveTvRepository(private val context:Context) {
         val sources=listOf(
             M3uSource("us","country-us","https://iptv-org.github.io/iptv/countries/us.m3u"),
             M3uSource("uk","country-uk","https://iptv-org.github.io/iptv/countries/uk.m3u"),
-            M3uSource("test","test","https://freeiptv2023-d.ottc.xyz/?action=view",true)
         )
         val results=sources.map{source->async {
             try{source to downloadSource(source)}
@@ -252,7 +250,8 @@ internal class JaLiveTvRepository(private val context:Context) {
             val categories=if(groups==null)mutableSetOf<String>() else (0 until groups.length()).map{groups.optString(it)}.filter{it.isNotBlank()}.toMutableSet()
             // Older cached catalogs were US-only and did not carry an explicit source-country tag.
             if("country-us" !in categories&&"country-uk" !in categories&&"test" !in categories)categories.add("country-us")
-            if(urls.isEmpty())null else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers,categories)
+            if(urls.isEmpty()||("test" in categories&&"country-us" !in categories&&"country-uk" !in categories))null
+            else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers,categories)
         }.distinctBy{it.id}.sortedBy{it.name.lowercase()}
         require(channels.isNotEmpty())
         return JaLiveChannels(channels,saved,verified,doc.optJSONObject("counts")?.has("categories")==true)
