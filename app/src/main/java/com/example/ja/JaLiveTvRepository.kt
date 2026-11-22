@@ -45,6 +45,7 @@ internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Lon
 }
 
 internal class JaLiveTvRepository(private val context:Context) {
+    val argonCatalog=JaArgonCatalogRepository(context)
     private companion object { val catalogLock=Mutex() }
     private val guideLock=Mutex()
     @Volatile private var memoryCatalog:Pair<JaLiveChannels,Long>?=null
