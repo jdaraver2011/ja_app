@@ -176,11 +176,21 @@ class MainActivity : ComponentActivity() {
     val appContext = LocalContext.current.applicationContext
     val mainActivity = LocalContext.current as? MainActivity
     val account = remember { JaAccountSync(appContext, dao) }
-    var signedIn by remember { mutableStateOf(account.session() != null) }
+    val testAccessPrefs = remember(appContext) { appContext.getSharedPreferences("ja_test_access", Context.MODE_PRIVATE) }
+    val testAccessVersion = BuildConfig.VERSION_CODE
+    var testUnlocked by remember { mutableStateOf(testAccessPrefs.getInt("unlocked_version", -1) == testAccessVersion) }
+    var signedIn by remember { mutableStateOf(account.session() != null || testUnlocked) }
     if (signedIn) {
-        StreamingAppContent(dao, openMusicRequest, onSignedOut = { signedIn = false })
+        StreamingAppContent(dao, openMusicRequest, onSignedOut = { signedIn = testUnlocked })
     } else {
-        JaRequiredAccountGate(dao, authCallbackUri, onConsumeAuthCallback = { mainActivity?.consumeAuthCallback() }, onAuthenticated = { signedIn = true })
+        JaRequiredAccountGate(dao, authCallbackUri,
+            onConsumeAuthCallback = { mainActivity?.consumeAuthCallback() },
+            onTestUnlock = {
+                testAccessPrefs.edit().putInt("unlocked_version", testAccessVersion).apply()
+                testUnlocked = true
+                signedIn = true
+            },
+            onAuthenticated = { signedIn = true })
     }
 }
 

@@ -1,6 +1,9 @@
 package com.example.ja
 
 import android.net.Uri
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,12 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -27,6 +33,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
@@ -164,21 +172,62 @@ internal fun JaRequiredAccountGate(
     dao: WatchDao,
     authCallbackUri: String? = null,
     onConsumeAuthCallback: () -> Unit = {},
+    onTestUnlock: () -> Unit = {},
     onAuthenticated: () -> Unit
 ) {
+    var logoTapCount by remember { mutableStateOf(0) }
+    var showUnlockPrompt by remember { mutableStateOf(false) }
+    var unlockCode by remember { mutableStateOf("") }
+    var unlockError by remember { mutableStateOf("") }
     Surface(Modifier.fillMaxSize(), color = Color(0xFF101820), contentColor = Color.White) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally) {
             Card(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1B2A37), contentColor = Color.White)) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("JA", color = Color(0xFFE5A43B), fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Image(
+                        painter = painterResource(R.mipmap.ic_launcher),
+                        contentDescription = "JA app logo",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(72.dp).clickable {
+                            logoTapCount += 1
+                            if (logoTapCount >= 7) {
+                                showUnlockPrompt = true
+                                unlockCode = ""
+                                unlockError = ""
+                                logoTapCount = 0
+                            }
+                        }
+                    )
                     Text("Welcome", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
                     Text("Sign in or create an account to continue. Your saved data can sync across your devices.", color = Color(0xFFCBD5DE), fontSize = 16.sp)
                     JaAccountSyncSettings(dao, authCallbackUri = authCallbackUri, showIntro = false,
                         onConsumeAuthCallback = onConsumeAuthCallback, onAuthenticated = onAuthenticated)
                 }
             }
+        }
+        if (showUnlockPrompt) {
+            AlertDialog(
+                onDismissRequest = { showUnlockPrompt = false },
+                title = { Text("Test access") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Enter the test unlock code to continue without signing in.")
+                        OutlinedTextField(value = unlockCode, onValueChange = { unlockCode = it; unlockError = "" },
+                            label = { Text("Unlock code") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                        if (unlockError.isNotBlank()) Text(unlockError, color = Color(0xFFFF8A80))
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (unlockCode == "192168") {
+                            showUnlockPrompt = false
+                            onTestUnlock()
+                        } else unlockError = "That code is not correct."
+                    }) { Text("Unlock", color = Color(0xFFE5A43B)) }
+                },
+                dismissButton = { TextButton(onClick = { showUnlockPrompt = false }) { Text("Cancel") } }
+            )
         }
     }
 }
