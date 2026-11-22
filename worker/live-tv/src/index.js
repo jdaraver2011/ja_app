@@ -25,14 +25,24 @@ function pageCredential(html, kind) {
     }
   }
   const labelText = kind === 'username' ? 'IPTV Username' : 'IPTV Password';
+  const labelAt = html.toLowerCase().indexOf(labelText.toLowerCase());
+  if (labelAt >= 0) {
+    const nearby = html.slice(labelAt, labelAt + 1200);
+    const input = nearby.match(/<input\b[^>]*>/i);
+    if (input) {
+      const value = attr(input[0], 'value');
+      if (value) return value.trim();
+    }
+  }
   const plain = decodeHtml(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
   const at = plain.toLowerCase().indexOf(labelText.toLowerCase());
   if (at >= 0) {
     const after = plain.slice(at + labelText.length, at + labelText.length + 160);
-    const value = after.match(/[A-Za-z0-9._-]{4,}/);
-    if (value && !/^(copy|copied|username|password)$/i.test(value[0])) return value[0];
+    for (const value of after.matchAll(/[A-Za-z0-9._-]{4,}/g)) {
+      if (!/^(copy|copied|username|password)$/i.test(value[0])) return value[0];
+    }
   }
   throw new Error('Could not read the ' + kind + ' field from the source page');
 }
