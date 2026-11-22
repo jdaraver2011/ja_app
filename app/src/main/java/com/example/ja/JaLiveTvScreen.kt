@@ -91,7 +91,6 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     private var movingGroup=""
     var suppressPickUpRelease=false
     var sidebarOpen by mutableStateOf(true)
-    var argonCatalogOpen by mutableStateOf(false)
     var focusedChannel:String?=null
     val mainFocus=FocusRequester()
     val previewFocus=FocusRequester()
@@ -356,10 +355,6 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
                         }
                     }
                 }
-                TvFocusButton(onClick={state.argonCatalogOpen=true},modifier=Modifier.fillMaxWidth().padding(horizontal=6.dp),
-                    colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF263747),contentColor=Color.White)){
-                    Text("Argon USA Catalog",fontSize=12.sp)
-                }
                 LazyColumn(state=state.groupList,modifier=Modifier.fillMaxWidth().weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(6.dp)){
                     items(groups,key={it}){group->
                         TvFocusButton(onClick={selectGroup(group)},modifier=Modifier.fillMaxWidth()
@@ -468,7 +463,6 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
             onReorder={menuChannel=null;state.beginMove(channel.id,visibleIds,false)},
             onRefresh={closeMenu();state.refresh(true)})
     }
-    if(state.argonCatalogOpen)JaArgonUsaCatalogDialog(state.repository.argonCatalog){state.argonCatalogOpen=false}
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
