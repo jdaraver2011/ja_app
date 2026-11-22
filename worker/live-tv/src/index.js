@@ -97,13 +97,8 @@ async function probe(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 7000);
   try {
-    let response = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal,
-      headers: { 'User-Agent': 'JA-Live-TV-Refresh/1.0' } });
-    if (response.status === 405 || response.status === 501) {
-      try { await response.body?.cancel(); } catch (_) {}
-      response = await fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal,
-        headers: { 'User-Agent': 'JA-Live-TV-Refresh/1.0', 'Range': 'bytes=0-0' } });
-    }
+    const response = await fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal,
+      headers: { 'User-Agent': 'JA-Live-TV-Refresh/1.0', 'Range': 'bytes=0-0' } });
     const ok = response.status >= 200 && response.status < 300;
     try { await response.body?.cancel(); } catch (_) {}
     return ok;
