@@ -1,7 +1,11 @@
 package com.example.ja
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -408,6 +412,13 @@ private fun musicTime(ms: Long) = "%d:%02d".format(ms / 60000, (ms / 1000) % 60)
         MusicButton("Queue", { open("Queue") })
     }
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        MusicButton("Cast Screen", {
+            try {
+                context.startActivity(Intent(Settings.ACTION_CAST_SETTINGS))
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(context, "Open Quick Settings > Cast to choose a TV.", Toast.LENGTH_LONG).show()
+            }
+        })
         MusicButton("Lyrics", { open("Lyrics") }, enabled = current != null)
         MusicButton("Visualizer", { open("Visualizer") }, enabled = current != null)
         if (current != null) {
