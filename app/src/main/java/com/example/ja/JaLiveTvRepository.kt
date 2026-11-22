@@ -91,7 +91,7 @@ internal class JaLiveTvRepository(private val context:Context) {
             M3uSource("test","test","https://freeiptv2023-d.ottc.xyz/?action=view",true)
         )
         val loaded=sources.map{source->async{downloadSource(source)}}.map{it.await()}
-        val channels=mergeM3uChannels(loaded.flatten())
+        val channels=mergeM3uChannels(loaded)
         require(channels.isNotEmpty()){"All source playlists were empty"}
         catalogJson(channels)
     }
