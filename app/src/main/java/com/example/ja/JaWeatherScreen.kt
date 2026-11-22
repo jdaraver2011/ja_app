@@ -239,7 +239,7 @@ internal fun JaWeatherPage(state: JaWeatherState, onClose: () -> Unit, onSetting
     var alertDetails by remember { mutableStateOf(false) }
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF111725)).padding(12.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF111725)).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
         val wide = maxWidth >= 700.dp && maxWidth > maxHeight
         Column(if (wide) Modifier.fillMaxSize() else Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
