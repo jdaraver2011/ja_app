@@ -23,6 +23,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -103,7 +104,7 @@ internal class JaArgonCatalogRepository(context:Context) {
         val request=Request.Builder().url("$base/$endpoint?page=$page")
             .header("User-Agent","JA/2.6.6 (https://github.com/jdaraver2011/ja_app)")
             .post(payload.toString().toRequestBody(jsonType)).build()
-        client.newCall(request).execute().use{response->
+        return client.newCall(request).execute().use{response->
             if(!response.isSuccessful)throw IOException("ArgonTV catalog HTTP ${response.code}")
             val body=response.body?:throw IOException("ArgonTV catalog response was empty")
             val raw=body.string()
