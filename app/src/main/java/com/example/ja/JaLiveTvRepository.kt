@@ -1,6 +1,8 @@
 package com.example.ja
 
 import android.content.Context
+import android.net.Uri
+import android.text.Html
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -20,7 +22,11 @@ import java.io.File
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.IOException
+import java.net.URI
+import java.time.Instant
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
+import java.util.Locale
 import java.util.zip.GZIPInputStream
 
 @androidx.compose.runtime.Immutable
@@ -50,20 +56,157 @@ internal class JaLiveTvRepository(private val context:Context) {
         LimitedInput(body.byteStream(),limit).bufferedReader().use{it.readText()}
     }
     suspend fun channels(force:Boolean=false):JaLiveChannels = withContext(Dispatchers.IO) { catalogLock.withLock {
-        val file=File(root,"verified-us.json")
-        memoryCatalog?.takeIf{!force&&JaLiveTvRules.fresh(it.second,System.currentTimeMillis(),86_400_000)}?.let{return@withContext it.first}
-        val cached=runCatching{parseCatalog(file.readText(),false)}.getOrNull()
-        if(!force&&cached!=null&&cached.categoriesAvailable&&JaLiveTvRules.fresh(file.lastModified(),System.currentTimeMillis(),86_400_000))
-            return@withContext cached.also{memoryCatalog=it to file.lastModified()}
+        val now=System.currentTimeMillis()
+        val file=File(root,"direct-catalog.json")
+        val legacy=File(root,"verified-us.json")
+        val cachedRecord=listOf(file,legacy).mapNotNull{candidate->
+            runCatching{if(candidate.isFile)candidate to parseCatalog(candidate.readText(),false) else null}.getOrNull()
+        }.firstOrNull()
+        val cachedFile=cachedRecord?.first
+        val cached=cachedRecord?.second
+        val cachedAt=cachedFile?.lastModified()?:0L
+        // The prior cache came from a remotely checked catalog; fetch the new direct sources once after upgrade.
+        val due=cached==null||cachedFile!=file||refreshDueAfterSix(cachedAt,now)
+        memoryCatalog?.takeIf{cached!=null&&!due}?.let{return@withContext it.first}
+        if(cached!=null&&!due)return@withContext cached.also{memoryCatalog=it to cachedAt}
         try {
-            val raw=text("https://raw.githubusercontent.com/jdaraver2011/ja_app/live-tv-data/catalog.json",8_000_000,25)
+            val raw=downloadDirectCatalog()
             val parsed=parseCatalog(raw,false)
-            require(parsed.categoriesAvailable)
             write(file,raw);memoryCatalog=parsed to file.lastModified();parsed
         }catch(e:CancellationException){throw e}catch(e:Exception){
-            cached?.copy(saved=true)?.also{memoryCatalog=it to file.lastModified()}?:throw e
+            cached?.copy(saved=true)?.also{memoryCatalog=it to cachedAt}?:throw e
         }
     }}
+    private fun refreshDueAfterSix(lastDownload:Long,now:Long):Boolean {
+        val zone=ZoneId.systemDefault()
+        val todaySix=Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atTime(6,0).atZone(zone).toInstant().toEpochMilli()
+        return lastDownload<=0L||(now>=todaySix&&lastDownload<todaySix)
+    }
+    private data class M3uEntry(val id:String,val name:String,val logo:String,val groups:String,val url:String)
+    private data class M3uSource(val id:String,val category:String,val url:String,val testPage:Boolean=false)
+    private suspend fun downloadDirectCatalog():String = coroutineScope {
+        val sources=listOf(
+            M3uSource("us","country-us","https://iptv-org.github.io/iptv/countries/us.m3u"),
+            M3uSource("uk","country-uk","https://iptv-org.github.io/iptv/countries/uk.m3u"),
+            M3uSource("test","test","https://freeiptv2023-d.ottc.xyz/?action=view",true)
+        )
+        val loaded=sources.map{source->async{downloadSource(source)}}.map{it.await()}
+        val channels=mergeM3uChannels(loaded.flatten())
+        require(channels.isNotEmpty()){"All source playlists were empty"}
+        catalogJson(channels)
+    }
+    private fun downloadSource(source:M3uSource):List<JaLiveChannel> {
+        val playlist=if(source.testPage){
+            val page=text(source.url,2_000_000,30)
+            resolveTestPlaylist(page,source.url)
+        }else source.url
+        val raw=text(playlist,30_000_000,120)
+        return parseM3u(raw,source)
+    }
+    private fun decodeHtml(value:String):String=Html.fromHtml(value,Html.FROM_HTML_MODE_LEGACY).toString().trim()
+    private fun htmlAttribute(tag:String,name:String):String {
+        val pattern=Regex("""(?i)(?:^|\s)${Regex.escape(name)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""")
+        val match=pattern.find(tag)?:return ""
+        return decodeHtml(match.groups[1]?.value?:match.groups[2]?.value?:match.groups[3]?.value.orEmpty())
+    }
+    private fun pageCredential(html:String,kind:String):String? {
+        val label=if(kind=="username")Regex("(?:iptv\\s*)?user(?:name)?",RegexOption.IGNORE_CASE)
+            else Regex("(?:iptv\\s*)?pass(?:word)?",RegexOption.IGNORE_CASE)
+        val inputs=Regex("<input\\b[^>]*>",RegexOption.IGNORE_CASE).findAll(html).map{it.value}.toList()
+        for(tag in inputs){
+            val clues=listOf("name","id","aria-label","placeholder","autocomplete").joinToString(" "){htmlAttribute(tag,it)}
+            if(label.containsMatchIn(clues))htmlAttribute(tag,"value").takeIf{it.isNotBlank()}?.let{return it}
+        }
+        val labelText=if(kind=="username")"IPTV Username" else "IPTV Password"
+        val at=html.indexOf(labelText,ignoreCase=true)
+        if(at>=0){
+            val input=Regex("<input\\b[^>]*>",RegexOption.IGNORE_CASE).find(html.substring(at,(at+1200).coerceAtMost(html.length)))?.value
+            if(input!=null)htmlAttribute(input,"value").takeIf{it.isNotBlank()}?.let{return it}
+        }
+        val plain=decodeHtml(html.replace(Regex("(?is)<script\\b[^>]*>.*?</script>")," ")
+            .replace(Regex("(?is)<style\\b[^>]*>.*?</style>")," ").replace(Regex("<[^>]+>")," ").replace(Regex("\\s+")," "))
+        val plainAt=plain.indexOf(labelText,ignoreCase=true)
+        if(plainAt>=0){
+            val after=plain.substring(plainAt+labelText.length,(plainAt+labelText.length+160).coerceAtMost(plain.length))
+            Regex("[A-Za-z0-9._-]{4,}").findAll(after).map{it.value}.firstOrNull{!it.equals("copy",true)&&!it.equals("copied",true)
+                &&!it.equals("username",true)&&!it.equals("password",true)}?.let{return it}
+        }
+        return null
+    }
+    private fun resolveTestPlaylist(html:String,pageUrl:String):String {
+        val tags=Regex("<(?:a|form|button)\\b[^>]*>",RegexOption.IGNORE_CASE).findAll(html).map{it.value}
+        var discovered=""
+        for(tag in tags){
+            val value=listOf("href","action","data-href","data-url").map{htmlAttribute(tag,it)}.firstOrNull{it.isNotBlank()}.orEmpty()
+            val clue=(htmlAttribute(tag,"aria-label")+" "+htmlAttribute(tag,"title")+" "+tag).lowercase(Locale.ROOT)
+            if(value.isNotBlank()&&(Regex("m3u|playlist|get\\.php|download",RegexOption.IGNORE_CASE).containsMatchIn(value)
+                ||Regex("m3u|playlist",RegexOption.IGNORE_CASE).containsMatchIn(clue))){discovered=value;break}
+        }
+        if(discovered.isBlank())discovered=Regex("https?://[^\\\"'\\s<>]+(?:m3u|playlist|get\\.php)[^\\\"'\\s<>]*",RegexOption.IGNORE_CASE).find(decodeHtml(html))?.value.orEmpty()
+        if(discovered.isBlank())throw IOException("Test playlist link was not found on the source page")
+        val resolved=try{URI(pageUrl).resolve(discovered).toString()}catch(e:Exception){throw IOException("Test playlist URL was invalid",e)}
+        if(!webUrl(resolved))throw IOException("Test playlist URL must use HTTP or HTTPS")
+        val current=Uri.parse(resolved);val names=current.queryParameterNames
+        val user=if(names.any{it.equals("username",true)||it.equals("user",true)})"" else pageCredential(html,"username").orEmpty()
+        val pass=if(names.any{it.equals("password",true)||it.equals("pass",true)})"" else pageCredential(html,"password").orEmpty()
+        if((user.isNotBlank()&&pass.isBlank())||(pass.isNotBlank()&&user.isBlank()))throw IOException("Test playlist credentials were incomplete")
+        val builder=current.buildUpon()
+        if(user.isNotBlank())builder.appendQueryParameter("username",user)
+        if(pass.isNotBlank())builder.appendQueryParameter("password",pass)
+        return builder.build().toString()
+    }
+    private fun parseM3u(raw:String,source:M3uSource):List<JaLiveChannel> {
+        if(!raw.trimStart().startsWith("#EXTM3U"))throw IOException("${source.id.uppercase(Locale.ROOT)} playlist was not valid M3U")
+        val rows=mutableListOf<M3uEntry>();var current:Triple<String,String,String>?=null
+        for(rawLine in raw.lineSequence()){
+            val line=rawLine.trim();if(line.isEmpty())continue
+            if(line.startsWith("#EXTINF:",true)){
+                val comma=line.lastIndexOf(',')
+                val name=if(comma>=0)decodeHtml(line.substring(comma+1)) else htmlAttribute(line,"tvg-name")
+                current=Triple(htmlAttribute(line,"tvg-id"),name,htmlAttribute(line,"tvg-logo")+"\u0000"+htmlAttribute(line,"group-title"))
+            }else if(current!=null&&!line.startsWith("#")){
+                if(webUrl(line)){
+                    val bits=current!!;val metadata=bits.third.split('\u0000',limit=2)
+                    rows.add(M3uEntry(bits.first,bits.second,metadata[0],metadata.getOrElse(1){""},line))
+                }
+                current=null
+            }
+        }
+        if(rows.isEmpty())throw IOException("${source.id.uppercase(Locale.ROOT)} playlist contained no channels")
+        val merged=linkedMapOf<String,JaLiveChannel>()
+        for(row in rows){
+            val name=row.name.ifBlank{row.id.ifBlank{"Unnamed channel"}}
+            val tvgId=row.id.trim()
+            val key=if(tvgId.isNotBlank())"${if(source.testPage)"test:" else "id:"}${tvgId.lowercase(Locale.ROOT)}"
+                else "${source.id}:name:${slug(name)}"
+            val stableId=if(tvgId.isNotBlank())(if(source.testPage)"test-$tvgId" else tvgId) else "${source.id}-${slug(name)}"
+            val groups=row.groups.split(Regex("[|;]" )).map{slug(decodeHtml(it))}.filter{it.isNotBlank()
+                &&it !in setOf("us","usa","united-states","uk","gb","united-kingdom")}
+            val categories=(groups+source.category).toSet()
+            val old=merged[key]
+            merged[key]=if(old==null)JaLiveChannel(stableId,name,row.logo,listOf(row.url),categories=categories)
+                else old.copy(name=old.name.ifBlank{ name },logo=old.logo.ifBlank{row.logo},urls=(old.urls+row.url).distinct(),categories=old.categories+categories)
+        }
+        return merged.values.toList()
+    }
+    private fun slug(value:String):String=value.trim().lowercase(Locale.ROOT).replace("&"," and ")
+        .replace(Regex("[^a-z0-9]+"),"-").trim('-')
+    private fun mergeM3uChannels(feeds:List<List<JaLiveChannel>>):List<JaLiveChannel> = feeds.flatten()
+        .groupBy{it.id}.values.map{same->
+            same.drop(1).fold(same.first()){base,next->base.copy(urls=(base.urls+next.urls).distinct(),
+                categories=base.categories+next.categories,logo=base.logo.ifBlank{next.logo})}
+        }.sortedBy{it.name.lowercase(Locale.ROOT)}
+    private fun catalogJson(channels:List<JaLiveChannel>):String {
+        val entries=JSONArray();val counts=JSONObject()
+        for(channel in channels){
+            val streams=JSONArray();channel.urls.forEach{streams.put(JSONObject().put("url",it))}
+            val groups=JSONArray();channel.categories.sorted().forEach{groups.put(it);counts.put(it,counts.optInt(it)+1)}
+            entries.put(JSONObject().put("id",channel.id).put("name",channel.name).put("logo",channel.logo)
+                .put("categories",groups).put("streams",streams))
+        }
+        return JSONObject().put("schema",1).put("generatedAt",Instant.now().toString()).put("channels",entries)
+            .put("counts",JSONObject().put("categories",counts)).toString()
+    }
     private fun parseCatalog(raw:String,saved:Boolean):JaLiveChannels {
         val doc=JSONObject(raw)
         require(doc.getInt("schema")==1)
@@ -85,7 +228,9 @@ internal class JaLiveTvRepository(private val context:Context) {
                 }
             }.distinct()
             val groups=c.optJSONArray("categories")
-            val categories=if(groups==null)emptySet() else (0 until groups.length()).map{groups.optString(it)}.filter{it.isNotBlank()}.toSet()
+            val categories=if(groups==null)mutableSetOf<String>() else (0 until groups.length()).map{groups.optString(it)}.filter{it.isNotBlank()}.toMutableSet()
+            // Older cached catalogs were US-only and did not carry an explicit source-country tag.
+            if("country-us" !in categories&&"country-uk" !in categories&&"test" !in categories)categories.add("country-us")
             if(urls.isEmpty())null else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers,categories)
         }.distinctBy{it.id}.sortedBy{it.name.lowercase()}
         require(channels.isNotEmpty())
