@@ -112,6 +112,7 @@ private fun jaAllowedSourceChoices(registered: List<PlaybackChoice>): List<Playb
 class MainActivity : ComponentActivity() {
     private var explicitExit = false
     private var musicOpenRequest by mutableIntStateOf(0)
+    private var authCallbackUri by mutableStateOf<String?>(null)
 
     private fun handleMusicVoiceSearch(intent: Intent) {
         if (intent.action == "android.media.action.MEDIA_PLAY_FROM_SEARCH") {
@@ -123,9 +124,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        intent.dataString?.let { authCallbackUri = it }
         if (intent.getBooleanExtra(JaMusicService.OPEN_MUSIC, false)) musicOpenRequest++
         handleMusicVoiceSearch(intent)
     }
+
+    fun consumeAuthCallback() { authCallbackUri = null }
 
     fun closeFromDoubleBack() {
         if (explicitExit) return
@@ -150,8 +154,9 @@ class MainActivity : ComponentActivity() {
         JaLiveTvUpdates.schedule(applicationContext)
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()
         if (intent.getBooleanExtra(JaMusicService.OPEN_MUSIC, false)) musicOpenRequest++
+        intent.dataString?.let { authCallbackUri = it }
         handleMusicVoiceSearch(intent)
-        setContent { MaterialTheme(colorScheme = darkColorScheme(primary = accent, background = bg, surface = Color(0xFF202832), onBackground = Color.White, onSurface = Color.White, onSurfaceVariant = Color.LightGray)) { StreamingApp(db.dao(), musicOpenRequest) } }
+        setContent { MaterialTheme(colorScheme = darkColorScheme(primary = accent, background = bg, surface = Color(0xFF202832), onBackground = Color.White, onSurface = Color.White, onSurfaceVariant = Color.LightGray)) { StreamingApp(db.dao(), musicOpenRequest, authCallbackUri) } }
         // Start extension setup as soon as JA opens, rather than waiting for the
         // first Play press. Posting lets Compose draw the initial screen first.
         window.decorView.post {
@@ -167,14 +172,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable fun StreamingApp(dao: WatchDao, openMusicRequest: Int = 0) {
+@Composable fun StreamingApp(dao: WatchDao, openMusicRequest: Int = 0, authCallbackUri: String? = null) {
     val appContext = LocalContext.current.applicationContext
+    val mainActivity = LocalContext.current as? MainActivity
     val account = remember { JaAccountSync(appContext, dao) }
     var signedIn by remember { mutableStateOf(account.session() != null) }
     if (signedIn) {
         StreamingAppContent(dao, openMusicRequest, onSignedOut = { signedIn = false })
     } else {
-        JaRequiredAccountGate(dao, onAuthenticated = { signedIn = true })
+        JaRequiredAccountGate(dao, authCallbackUri, onConsumeAuthCallback = { mainActivity?.consumeAuthCallback() }, onAuthenticated = { signedIn = true })
     }
 }
 

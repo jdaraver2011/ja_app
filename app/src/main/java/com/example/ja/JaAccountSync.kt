@@ -14,6 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
 import java.security.MessageDigest
+import java.net.URLEncoder
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -23,6 +24,7 @@ internal data class JaAccountSession(val email: String, val accessToken: String,
 
 /** Supabase Auth and one RLS-protected JSON row per JA account. The publishable key is not a secret. */
 internal class JaAccountSync(private val context: Context, private val dao: WatchDao) {
+    companion object { const val AUTH_REDIRECT = "ja://auth/callback" }
     private val prefs = context.getSharedPreferences("ja_account_session", Context.MODE_PRIVATE)
     private val http = OkHttpClient()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
@@ -58,7 +60,8 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
     }
 
     suspend fun signUp(email: String, password: String): String = withContext(Dispatchers.IO) {
-        val response = request("POST", "$baseUrl/auth/v1/signup", body = JSONObject().put("email", email).put("password", password))
+        val redirect = URLEncoder.encode(AUTH_REDIRECT, "UTF-8")
+        val response = request("POST", "$baseUrl/auth/v1/signup?redirect_to=$redirect", body = JSONObject().put("email", email).put("password", password))
         if (response.optString("access_token").isBlank()) {
             "Account created. Verify your email, then wait for a JA administrator to approve the account before signing in."
         } else {
@@ -67,6 +70,49 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
             else { saveSession(created); "Account created and approved." }
         }
     }
+
+    suspend fun sendPasswordReset(email: String): String = withContext(Dispatchers.IO) {
+        check(email.contains("@")) { "Enter the account email first." }
+        check(baseUrl.startsWith("https://") && apiKey.isNotBlank()) { "Supabase settings are not configured in this test build." }
+        val redirect = URLEncoder.encode(AUTH_REDIRECT, "UTF-8")
+        request("POST", "$baseUrl/auth/v1/recover?redirect_to=$redirect", body = JSONObject().put("email", email))
+        prefs.edit().putString("recovery_email", email).apply()
+        "If that email has a JA account, Supabase will send a password reset link. Open it on this device with JA installed."
+    }
+
+    suspend fun completePasswordReset(accessToken: String, refreshToken: String, newPassword: String): String = withContext(Dispatchers.IO) {
+        check(newPassword.length >= 6) { "Use a password with at least 6 characters." }
+        val claims = jwtClaims(accessToken)
+        val updated = request("PUT", "$baseUrl/auth/v1/user", token = accessToken, body = JSONObject().put("password", newPassword))
+        val userId = updated.optString("id").ifBlank { claims.optString("sub") }
+        val email = updated.optString("email").ifBlank { claims.optString("email").ifBlank { prefs.getString("recovery_email", "").orEmpty() } }
+        check(userId.isNotBlank() && email.isNotBlank()) { "Password changed, but JA could not read the account details. Sign in again." }
+        val next = JaAccountSession(email, accessToken, refreshToken, userId)
+        prefs.edit().remove("recovery_email").apply()
+        if (!isApproved(next)) {
+            prefs.edit().remove("session").apply()
+            return@withContext "Password updated. Your JA account still needs administrator approval before you can enter."
+        }
+        saveSession(next)
+        "Password updated. You can continue into JA."
+    }
+
+    suspend fun acceptEmailConfirmation(accessToken: String, refreshToken: String): String = withContext(Dispatchers.IO) {
+        val claims = jwtClaims(accessToken)
+        val email = claims.optString("email").ifBlank { prefs.getString("recovery_email", "").orEmpty() }
+        val userId = claims.optString("sub")
+        check(email.isNotBlank() && userId.isNotBlank()) { "The confirmation link is incomplete. Return to JA and sign in." }
+        val next = JaAccountSession(email, accessToken, refreshToken, userId)
+        if (!isApproved(next)) return@withContext "Email verified. A JA administrator must approve your account before you can continue."
+        saveSession(next)
+        prefs.edit().remove("recovery_email").apply()
+        "Email verified. You can continue into JA."
+    }
+
+    private fun jwtClaims(accessToken: String): JSONObject = runCatching {
+        val part = accessToken.split('.')[1]
+        JSONObject(String(Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING), Charsets.UTF_8))
+    }.getOrElse { error("Supabase returned an invalid recovery token.") }
 
     suspend fun signIn(email: String, password: String) = withContext(Dispatchers.IO) {
         val response = request("POST", "$baseUrl/auth/v1/token?grant_type=password", body = JSONObject().put("email", email).put("password", password))

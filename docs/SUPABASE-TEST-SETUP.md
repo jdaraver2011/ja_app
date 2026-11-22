@@ -12,19 +12,27 @@ Create your administrator/owner account in JA and verify its email. In Supabase,
 
 For each future registration, verify the person is the intended user, then change their row's `approved` value to `true` in `ja_user_access`. Until then, JA stays at the sign-in screen and the sync table's row-level security blocks access. Approval is manual; this test build does not send an administrator notification or provide an in-app admin panel.
 
-## 3. Add build variables in GitHub
+## 3. Configure email links in Supabase
 
-In the private `jdaraver2011/ja_app` repository, open **Settings → Secrets and variables → Actions → Variables** and add:
+Open **Authentication → URL Configuration** and add this exact value to **Redirect URLs**:
 
-| Variable | Value |
+`ja://auth/callback`
+
+The JA test build explicitly requests this callback for email confirmation and password recovery. The current Site URL can remain unchanged. When sending a recovery email from Supabase's dashboard, that dashboard action may use the Site URL; use **Forgot password?** in JA so the email is sent with JA's callback. Existing email links keep the redirect they were created with, so request a fresh email after installing the callback-enabled build.
+
+## 4. Build variables in GitHub
+
+In `jdaraver2011/ja_app`, open **Settings → Secrets and variables → Actions → Secrets** and add these repository secrets (the workflow reads from `secrets.*`):
+
+| Secret | Value |
 | --- | --- |
 | `SUPABASE_URL` | The Project URL from Supabase **Settings → API** |
 | `SUPABASE_PUBLISHABLE_KEY` | The `sb_publishable_…` key from Supabase **Settings → API Keys** |
 
-These are client-side connection values. Do not add a Supabase secret or `service_role` key to the app or GitHub Actions variables.
+These are client-side connection values. Do not add a Supabase secret or `service_role` key to the app or GitHub Actions.
 
-## 4. Build the test APK
+## 5. Build the test APK
 
-Open **Actions → Build JA APK → Run workflow**, select branch `v2.6.0-supabase-test`, leave **Run automated tests and lint** off for the requested one-build smoke run, and leave **Publish this version as a public device update** off. Download artifact `JA-2.6.0-supabase-test-debug` and install the APK directly.
+Open **Actions → Build JA APK → Run workflow**, select branch `v2.6.0-supabase-test`, leave **Run automated tests and lint** off for this one-build smoke run, and leave **Publish this version as a public device update** off. Download artifact `JA-2.6.1-supabase-test-debug` and install the APK directly.
 
 Email verification remains enabled. A new user must verify the email address and receive admin approval before JA opens. Initial sync uploads this device's saved data if no cloud row exists. If cloud data already exists and this device also has saved data, JA asks whether to download or upload to prevent accidental replacement.
