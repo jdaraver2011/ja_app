@@ -167,14 +167,14 @@ fun TitleDetailsScreen(
         Modifier.fillMaxSize().background(detailsBg).verticalScroll(detailsScrollState),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Text(if(item.type == "movie") "Movie" else "TV Show", color=detailsMuted,fontSize=13.sp,lineHeight=16.sp)
-        }
         // This background belongs to the scrolling upper section only.
         // matchParentSize lets content determine height without a banner spacer.
         Box(Modifier.fillMaxWidth().clipToBounds()) {
             DetailsBackdrop(backdropUrl)
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                    Text(if(item.type == "movie") "Movie" else "TV Show", color=detailsMuted,fontSize=13.sp,lineHeight=16.sp)
+                }
                 // Keep the compact poster/title/actions and overview layout intact.
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val compact = jaContentBaseWidth(maxWidth) < 620.dp
