@@ -115,8 +115,11 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
             groupOrders[group]=if(group=="Favorites"&&stored.isEmpty())favoriteOrder else stored
         }
     }
-    fun order(group:String,available:List<String>):List<String> = JaLiveTvMoveSession.displayed(
-        if(movingId!=null&&movingGroup==group)draftOrder else groupOrders[group].orEmpty(),available)
+    fun order(group:String,available:List<String>):List<String> {
+        val stored=groupOrders.getOrPut(group){runCatching{val a=org.json.JSONArray(prefs.getString("group-order:$group","[]"));
+            (0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList())}
+        return JaLiveTvMoveSession.displayed(if(movingId!=null&&movingGroup==group)draftOrder else stored,available)
+    }
     fun beginMove(id:String,visible:List<String>,remote:Boolean){
         if(movingId!=null)return
         moveSession.begin(visible,id)
@@ -251,7 +254,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
     val channelMap=remember(available){available.associateBy{it.id}}
     val visibleIds=state.order(state.view,available.map{it.id})
     val visible=remember(channelMap,visibleIds){visibleIds.mapNotNull{channelMap[it]}}
-    val groups=remember{JaLiveTvRules.views()}
+    val groups=remember(state.channels){JaLiveTvRules.views(state.channels.flatMap{it.categories}.toSet())}
     fun focusPlaying(){
         val id=state.playingChannelId?:state.previewChannel?.id?:JA_WEATHER_CHANNEL
         if(id !in channelMap){state.query="";state.view=if(id==JA_WEATHER_CHANNEL)"Favorites" else "United States"}
