@@ -61,13 +61,16 @@ public final class JaLiveTvRules {
         String[][] values={{"News","news"},{"Sports","sports"},{"Movies","movies"},{"Series","series"},
             {"Entertainment","entertainment"},{"Documentaries","documentary"},{"Kids","kids"},{"Animation","animation"},
             {"Comedy","comedy"},{"Music","music"},{"Cooking","cooking"},{"Travel","travel"},{"Science","science"},
-            {"Education","education"},{"Business","business"},{"Weather","weather"},{"Classic TV","classic"},{"Auto and Motoring","auto"}};
+            {"Education","education"},{"Business","business"},{"Weather","weather"},{"Classic TV","classic"},{"Auto and Motoring","auto"},
+            {"Test","test"}};
         for(String[] value:values)map.put(value[0],value[1]);
         CATEGORIES=Collections.unmodifiableMap(map);
     }
     public static List<String> views() {
         List<String> result=new ArrayList<>();result.add("Favorites");result.add("With EPG");result.add("United States");
-        result.addAll(CATEGORIES.keySet());return result;
+        result.add("Test");
+        for(String category:CATEGORIES.keySet())if(!category.equals("Test"))result.add(category);
+        return result;
     }
     public static String category(String view){return CATEGORIES.getOrDefault(view,"");}
     public static boolean categoryMatches(String view,Set<String> categories) {
@@ -82,7 +85,7 @@ public final class JaLiveTvRules {
         if(!Double.isFinite(lat)||!Double.isFinite(lon)||!Double.isFinite(targetLat)||!Double.isFinite(targetLon)
             ||Math.abs(lat)>90||Math.abs(targetLat)>90||Math.abs(lon)>180||Math.abs(targetLon)>180)return Double.POSITIVE_INFINITY;
         double a=Math.pow(Math.sin(Math.toRadians(targetLat-lat)/2),2)
-            +Math.cos(Math.toRadians(lat))*Math.cos(Math.toRadians(targetLat))*Math.pow(Math.sin(Math.toRadians(targetLon-lon)/2),2);
+            +Math.cos(Math.toRadians(lat))*Math.cos(Math.toRadians(targetLon))*Math.pow(Math.sin(Math.toRadians(lon-targetLon)/2),2);
         return 6371.0088*2*Math.asin(Math.sqrt(Math.min(1,a)));
     }
     public static boolean fresh(long fetched,long now,long ttl){return fetched>0&&now>=fetched&&now-fetched<ttl;}
