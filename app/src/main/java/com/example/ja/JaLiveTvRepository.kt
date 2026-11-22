@@ -3,10 +3,12 @@ package com.example.ja
 import android.content.Context
 import android.net.Uri
 import android.text.Html
+import android.util.Log
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -57,6 +59,9 @@ internal class JaLiveTvRepository(private val context:Context) {
     }
     suspend fun channels(force:Boolean=false):JaLiveChannels = withContext(Dispatchers.IO) { catalogLock.withLock {
         val now=System.currentTimeMillis()
+        val zone=ZoneId.systemDefault()
+        val localDate=Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val todaySix=localDate.atTime(6,0).atZone(zone).toInstant().toEpochMilli()
         val file=File(root,"direct-catalog.json")
         val legacy=File(root,"verified-us.json")
         val cachedRecord=listOf(file,legacy).mapNotNull{candidate->
@@ -67,8 +72,15 @@ internal class JaLiveTvRepository(private val context:Context) {
         val cachedAt=cachedFile?.lastModified()?:0L
         // The prior cache came from a remotely checked catalog; fetch the new direct sources once after upgrade.
         val due=cached==null||cachedFile!=file||refreshDueAfterSix(cachedAt,now)
-        memoryCatalog?.takeIf{cached!=null&&!due}?.let{return@withContext it.first}
-        if(cached!=null&&!due)return@withContext cached.also{memoryCatalog=it to cachedAt}
+        val prefs=context.getSharedPreferences("ja_live_tv_refresh",Context.MODE_PRIVATE)
+        val attemptedToday=prefs.getString("automatic_attempt_date","")==localDate.toString()
+        val shouldRefresh=force||(due&&!attemptedToday)
+        memoryCatalog?.takeIf{cached!=null&&!shouldRefresh}?.let{return@withContext it.first}
+        if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
+        if(cached==null&&!shouldRefresh)throw IOException("No catalog cache is available; automatic refresh was already attempted today")
+        // Record the daily attempt before starting the request so failed network calls do not repeat on every app open.
+        // A manual refresh after 6:00 AM counts as today's attempt; one before 6:00 AM does not.
+        if(now>=todaySix)prefs.edit().putString("automatic_attempt_date",localDate.toString()).apply()
         try {
             val raw=downloadDirectCatalog()
             val parsed=parseCatalog(raw,false)
@@ -84,15 +96,22 @@ internal class JaLiveTvRepository(private val context:Context) {
     }
     private data class M3uEntry(val id:String,val name:String,val logo:String,val groups:String,val url:String)
     private data class M3uSource(val id:String,val category:String,val url:String,val testPage:Boolean=false)
-    private suspend fun downloadDirectCatalog():String = coroutineScope {
+    private suspend fun downloadDirectCatalog():String = supervisorScope {
         val sources=listOf(
             M3uSource("us","country-us","https://iptv-org.github.io/iptv/countries/us.m3u"),
             M3uSource("uk","country-uk","https://iptv-org.github.io/iptv/countries/uk.m3u"),
             M3uSource("test","test","https://freeiptv2023-d.ottc.xyz/?action=view",true)
         )
-        val loaded=sources.map{source->async{downloadSource(source)}}.map{it.await()}
+        val results=sources.map{source->async {
+            try{source to downloadSource(source)}
+            catch(e:CancellationException){throw e}
+            catch(e:Exception){Log.w("JA_LIVE_TV","CATALOG_SOURCE_FAILED source=${source.id} error=${e.message}",e);null}
+        }}.awaitAll()
+        val loaded=results.filterNotNull().map{it.second}
         val channels=mergeM3uChannels(loaded)
-        require(channels.isNotEmpty()){"All source playlists were empty"}
+        if(channels.isEmpty())throw IOException("No live TV sources could be loaded")
+        val failed=sources.filterIndexed{index,_->results[index]==null}.joinToString(","){it.id}
+        if(failed.isNotBlank())Log.w("JA_LIVE_TV","CATALOG_PARTIAL sources=${loaded.size} failed=$failed channels=${channels.size}")
         catalogJson(channels)
     }
     private fun downloadSource(source:M3uSource):List<JaLiveChannel> {
