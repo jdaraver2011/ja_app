@@ -40,7 +40,7 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
 
     override fun onFocusChanged(gainFocus: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
-        Log.i("JA_DEEZER_REMOTE", "WEBVIEW_FOCUS gained=$gainFocus direction=$direction window=$hasWindowFocus")
+        Log.i("JA_DEEZER_REMOTE", "WEBVIEW_FOCUS gained=$gainFocus direction=$direction window=${hasWindowFocus()}")
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -49,7 +49,7 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_SPACE
         )
         if (event.keyCode !in confirmKeys) return super.dispatchKeyEvent(event)
-        Log.i("JA_DEEZER_REMOTE", "KEY action=${event.action} code=${event.keyCode} repeat=${event.repeatCount} focused=$hasFocus window=$hasWindowFocus")
+        Log.i("JA_DEEZER_REMOTE", "KEY action=${event.action} code=${event.keyCode} repeat=${event.repeatCount} focused=${hasFocus()} window=${hasWindowFocus()}")
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) confirmDown = true
