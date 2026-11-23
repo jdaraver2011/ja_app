@@ -12,7 +12,7 @@ on:
       - 'settings.gradle.kts'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   test-build:
     uses: ./.github/workflows/build-apk.yml
