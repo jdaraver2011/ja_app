@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.android.legacy-kapt")
+    id("androidx.baselineprofile")
 }
 val local = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -18,8 +19,8 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 20609
-        versionName = "2.6.9"
+        versionCode = 20700
+        versionName = "2.7.0-performance-test"
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
         require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
         buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")
@@ -41,13 +42,16 @@ android {
             keyPassword = System.getenv("JA_KEY_PASSWORD") ?: error("Missing JA_KEY_PASSWORD")
         }
         buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("updates")
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("updates")
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
 dependencies {
+    baselineProfile(project(":baselineprofile"))
     implementation("androidx.browser:browser:1.8.0")
     implementation("org.mozilla.geckoview:geckoview:160.0.20261104181552")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.material3:material3")
