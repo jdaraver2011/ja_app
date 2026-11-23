@@ -272,7 +272,7 @@ class MainActivity : ComponentActivity() {
         val syncPrefs = listOf(
             "ja_music_library", "ja_live_favorites", "ja_favorite_display_order_v1", "ja_watched_v1",
             "ja_player_controls", "ja_weather", "ja_playback_server_history_v1",
-            JaSearchHistory.PREFS, "ja_music_lab_session"
+            "ja_source_preferences_reset", JaSearchHistory.PREFS, "ja_music_lab_session"
         )
         val registered = mutableListOf<Pair<android.content.SharedPreferences, android.content.SharedPreferences.OnSharedPreferenceChangeListener>>()
         syncPrefs.forEach { name ->
