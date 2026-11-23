@@ -302,10 +302,8 @@ jobs:
             set +e
             gradle --no-daemon --stacktrace :app:generateBaselineProfile
             result=$?
-            if [ "$result" -ne 0 ]; then
-              mkdir -p test-results
-              adb logcat -d > test-results/baselineprofile-logcat.txt 2>&1 || true
-            fi
+            mkdir -p test-results
+            adb logcat -d > test-results/baselineprofile-logcat.txt 2>&1 || true
             exit "$result"
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
