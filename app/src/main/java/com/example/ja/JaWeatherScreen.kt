@@ -144,7 +144,7 @@ internal fun JaHeaderClock(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun JaWeatherSettings(state: JaWeatherState) {
-    var entry by rememberSaveable { mutableStateOf(state.zip) }
+    var entry by rememberSaveable(state.zip) { mutableStateOf(state.zip) }
     var message by remember { mutableStateOf<String?>(null) }
     Text("Weather", style = MaterialTheme.typography.titleLarge, color = Color.White)
     TvSettingsToggle("Use WeatherStar 4000+ card and dashboard",state.weatherStar){
