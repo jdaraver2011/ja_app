@@ -94,7 +94,6 @@ internal class MusicWaveBridge {
     BackHandler(onBack = onBack)
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().padding(bottom = 64.dp))
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xDD101923)).padding(8.dp).horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
             VisualizerIconButton(R.drawable.ja_music_back, "Back to player", onBack)
