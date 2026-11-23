@@ -23,7 +23,7 @@ baselineProfile {
 }
 
 dependencies {
-    implementation("androidx.benchmark:benchmark-macro-junit4:1.5.0")
+    implementation("androidx.benchmark:benchmark-macro-junit4:1.6.0-alpha02")
     implementation("androidx.test.ext:junit:1.2.1")
     implementation("androidx.test:runner:1.6.2")
     implementation("androidx.test.uiautomator:uiautomator:2.3.0")
