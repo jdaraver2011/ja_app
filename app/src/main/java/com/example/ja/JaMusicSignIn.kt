@@ -1,6 +1,9 @@
 package com.example.ja
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -16,6 +19,51 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
+
+/** Routes TV-center/Enter to the focused Deezer web control and opens the IME for focused fields. */
+private class DeezerSignInWebView(context: Context) : WebView(context) {
+    private var confirmDown = false
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode !in setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER))
+            return super.dispatchKeyEvent(event)
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount == 0) confirmDown = true
+                return true
+            }
+            KeyEvent.ACTION_UP -> {
+                if (confirmDown) activateFocusedControl()
+                confirmDown = false
+                return true
+            }
+        }
+        return true
+    }
+
+    private fun activateFocusedControl() {
+        requestFocus()
+        val script = """(() => {
+            const el = document.activeElement;
+            if (!el) return "none";
+            const tag = (el.tagName || "").toLowerCase();
+            const type = (el.type || "").toLowerCase();
+            const editable = el.isContentEditable || tag === "textarea" ||
+                (tag === "input" && !["button","submit","reset","checkbox","radio","file","image"].includes(type));
+            if (editable) { el.focus(); el.click(); return "input"; }
+            if (el.matches("button,a,[role='button'],input[type='button'],input[type='submit'],[tabindex]")) {
+                el.click(); return "click";
+            }
+            return "none";
+        })()"""
+        evaluateJavascript(script) { result ->
+            if (result?.trim('"') == "input") post {
+                val input = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                input?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+    }
+}
 
 /** Official provider sign-in. No password field, JavaScript bridge or credential logging in JA. */
 @SuppressLint("SetJavaScriptEnabled")
@@ -48,7 +96,7 @@ internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
             }
             Text(message, color = Color.White)
             AndroidView(modifier = Modifier.fillMaxWidth().weight(1f), factory = {
-                WebView(context).apply {
+                DeezerSignInWebView(context).apply {
                     view = this
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true

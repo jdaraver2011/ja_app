@@ -217,6 +217,11 @@ private fun time(value:Long):String=liveTimeFormat.withZone(ZoneId.systemDefault
 
 @Composable
 internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,modifier:Modifier=Modifier) {
+    JaScaledUi { JaLiveTvScreenContent(state,weather,onMainMenu,modifier) }
+}
+
+@Composable
+private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,modifier:Modifier) {
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
@@ -229,6 +234,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
     var menuChannel by remember{mutableStateOf<JaLiveChannel?>(null)}
     val menuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
     val searchFocus=remember{FocusRequester()}
+    val jaButtonFocus=remember{FocusRequester()}
     val returnFocus=remember{FocusRequester()}
     DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)}
         owner.lifecycle.addObserver(observer);onDispose{owner.lifecycle.removeObserver(observer)}}
@@ -276,6 +282,9 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
             withFrameNanos{};withFrameNanos{};runCatching{state.groupFocus.requestFocus()}
         }
     }
+    fun focusJaButton(){
+        scope.launch{withFrameNanos{};runCatching{jaButtonFocus.requestFocus()}}
+    }
     fun openMenu(channel:JaLiveChannel,remote:Boolean){
         state.finishMove(false);menuGuard.open(remote);menuChannel=channel
     }
@@ -301,7 +310,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
     Column(modifier.fillMaxSize().background(Color(0xFF101923)).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp),
         verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            TvFocusButton(onClick=onMainMenu,
+            TvFocusButton(onClick=onMainMenu,modifier=Modifier.focusRequester(jaButtonFocus),
                 colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF233747),contentColor=Color.White)) {
                 Text("‹ JA")
             }
@@ -382,7 +391,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
                         .focusRequester(state.previewFocus).onFocusChanged { previewFocused=it.isFocused }.border(if(previewFocused)2.dp else 0.dp,Color.White).onPreviewKeyEvent{event->
                             when(event.nativeKeyEvent.keyCode){
                                 KeyEvent.KEYCODE_DPAD_DOWN->{if(event.nativeKeyEvent.action==KeyEvent.ACTION_DOWN)focusPlaying();true}
-                                KeyEvent.KEYCODE_DPAD_UP->{if(event.nativeKeyEvent.action==KeyEvent.ACTION_DOWN)onMainMenu();true}
+                                KeyEvent.KEYCODE_DPAD_UP->{if(event.nativeKeyEvent.action==KeyEvent.ACTION_DOWN)focusJaButton();true}
                                 KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER->{if(event.nativeKeyEvent.action==KeyEvent.ACTION_UP)state.fullscreen=true;true}
                                 else->false
                             }

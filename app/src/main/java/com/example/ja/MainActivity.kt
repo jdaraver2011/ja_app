@@ -356,7 +356,6 @@ class MainActivity : ComponentActivity() {
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreJumpStates = remember { mutableMapOf<String, JaRowJumpState>() }
-    var continueView by remember { mutableStateOf("Movies") }
     val continueMovieGridState = rememberLazyGridState()
     val continueTvGridState = rememberLazyGridState()
     var genreRows by remember { mutableStateOf(emptyList<GenreRow>()) }
@@ -399,7 +398,6 @@ class MainActivity : ComponentActivity() {
     var tvPopularStartupResetDone by remember { mutableStateOf(false) }
     // Favorites are one existing database collection, presented by media type.
     // Remember each subsection's scroll offset while browsing title details.
-    var favoritesView by remember { mutableStateOf("Movies") }
     val favoriteMovieGridState = rememberLazyGridState()
     val favoriteTvGridState = rememberLazyGridState()
     var movieFavoriteIds by remember { mutableStateOf(emptyList<Int>()) }
@@ -414,7 +412,7 @@ class MainActivity : ComponentActivity() {
     LaunchedEffect(tab){if(tab != "IPTV"){liveTv.fullscreen=false;liveTv.finishMove(false)}}
     val weather = rememberJaWeather(active = playback == null && (!liveTv.fullscreen || liveTv.previewChannel?.id==JA_WEATHER_CHANNEL) && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val mainRequesters = remember { listOf("Movies","TV","IPTV","Music","Search","Favorites","Continue","Settings").associateWith { FocusRequester() } }
+    val mainRequesters = remember { listOf("Movies","TV","IPTV","Music","Search","Settings").associateWith { FocusRequester() } }
     val subRequester = remember { FocusRequester() }
     var navigationLevel by remember { mutableIntStateOf(0) }
     fun focusMain() { exitGate.reset(); scope.launch {
@@ -1227,7 +1225,7 @@ class MainActivity : ComponentActivity() {
                         .then(if(t=="IPTV") Modifier.focusRequester(liveTv.mainFocus) else if(t=="Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings=it.boundsInRoot() } else Modifier)
                         .onFocusChanged { if(it.isFocused) navigationLevel=0 }
                         .onPreviewKeyEvent { event ->
-                            if(event.key==Key.DirectionDown && selected==null && selectedPerson==null && (tab in listOf("Movies","TV","IPTV","Search","Favorites","Continue"))) {
+                            if(event.key==Key.DirectionDown && selected==null && selectedPerson==null && (tab in listOf("Movies","TV","IPTV","Search"))) {
                                 if(event.type==KeyEventType.KeyDown) { if(tab=="IPTV") liveTv.focusPreview() else focusSub() }; true
                             } else false
                         },
@@ -1562,8 +1560,8 @@ class MainActivity : ComponentActivity() {
                 val isMovieTab = tab == "Movies"
                 val activeView = if (isMovieTab) moviesView else tvView
                 JaUnscaledTopBar {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks")).forEach { view ->
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ((if (isMovieTab) listOf("Popular", "Genres", "Other") else listOf("Popular", "Genres", "Networks")) + listOf("Favorites", "Continue")).forEach { view ->
                             TvSecondaryButton(
                                 text = view,
                                 modifier = Modifier.then(if(activeView==view) Modifier.focusRequester(subRequester) else Modifier)
@@ -1575,7 +1573,72 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                if (!isMovieTab && activeView == "Networks") {
+                if (activeView == "Favorites") {
+                    val favoriteType = if (isMovieTab) "movie" else "tv"
+                    val orderedIds = if (favoriteType == "movie") movieFavoriteIds else tvFavoriteIds
+                    val favoriteById = history.asSequence()
+                        .filter { it.favorite && it.mediaType == favoriteType }
+                        .distinctBy { it.mediaId }
+                        .associateBy { it.mediaId }
+                    val favoriteTitles = orderedIds.mapNotNull { favoriteById[it] }
+                        .map { TitleItem(it.mediaId, it.title, "", it.poster, null, it.mediaType) }
+                    Text(if (isMovieTab) "Favorite Movies" else "Favorite TV", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                    Spacer(Modifier.height(14.dp))
+                    if (favoriteTitles.isEmpty()) {
+                        Text("No favorite ${if (favoriteType == "movie") "movies" else "TV shows"} yet.", color = Color.LightGray)
+                    } else {
+                        val gridState = if (favoriteType == "movie") favoriteMovieGridState else favoriteTvGridState
+                        Box(Modifier.fillMaxWidth().weight(1f)) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 152.dp),
+                                state = gridState,
+                                modifier = Modifier.fillMaxSize().onFocusChanged { if(it.hasFocus) navigationLevel=2 }.focusGroup(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                contentPadding = PaddingValues(bottom = 24.dp)
+                            ) {
+                                gridItems(favoriteTitles, key = { "favorite-${it.type}-${it.id}" }, contentType = { "poster" }) { item ->
+                                    JaSearchTitleCard(marked(item), returnFocus = titleReturnFocus,
+                                        returnKey = "$tab:Favorites:${item.type}:${item.id}") { open(item) }
+                                }
+                            }
+                        }
+                    }
+                } else if (activeView == "Continue") {
+                    val continueType = if (isMovieTab) "movie" else "tv"
+                    val continueItems = remember(history, continueType) {
+                        history.filter { it.mediaType == continueType && it.positionMs > 0 &&
+                            (continueType == "movie" || it.episode > 0) }
+                            .sortedByDescending { it.updatedAt }
+                            .distinctBy { it.mediaId }
+                    }
+                    Text(if (isMovieTab) "Continue Movies" else "Continue TV", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                    Spacer(Modifier.height(14.dp))
+                    if (continueItems.isEmpty()) {
+                        Text("No ${if (continueType == "movie") "movies" else "TV shows"} to continue yet.", color = Color.LightGray)
+                    } else {
+                        val gridState = if (continueType == "movie") continueMovieGridState else continueTvGridState
+                        Box(Modifier.fillMaxWidth().weight(1f)) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 152.dp), state = gridState,
+                                modifier = Modifier.fillMaxSize().onFocusChanged { if(it.hasFocus) navigationLevel=2 }.focusGroup(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                contentPadding = PaddingValues(bottom = 24.dp)
+                            ) {
+                                gridItems(continueItems, key = { "continue-${it.mediaType}-${it.mediaId}" }, contentType = { "poster" }) { saved ->
+                                    val title = TitleItem(saved.mediaId, saved.title, "", saved.poster, null, saved.mediaType)
+                                    JaSearchTitleCard(marked(title),
+                                        badge = JaResumeLabels.continueLabel(saved.mediaType, saved.season,
+                                            saved.episode, saved.positionMs),
+                                        returnFocus = titleReturnFocus,
+                                        returnKey = "$tab:Continue:${title.type}:${title.id}"
+                                    ) { open(title) }
+                                }
+                            }
+                        }
+                    }
+                } else if (!isMovieTab && activeView == "Networks") {
                     JaNetworksScreen(
                         repo = networksRepo, state = networksState, returnFocus = titleReturnFocus,
                         marked = { marked(it) }, onOpen = { open(it) },
@@ -1666,104 +1729,6 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxWidth().weight(1f).onFocusChanged { if(it.hasFocus) navigationLevel=2 }.focusGroup()
                     )
                 }
-            } else if (tab == "Favorites") {
-                LaunchedEffect(favoritesView) {
-                    Log.i("JA_FAVORITES", "GRID_V115O_VERTICAL view=$favoritesView")
-                }
-                JaUnscaledTopBar {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Movies", "TV").forEach { view ->
-                            TvSecondaryButton(
-                                text = view,
-                                selected = favoritesView == view,
-                                modifier = if(favoritesView==view) Modifier.focusRequester(subRequester) else Modifier,
-                                onClick = { favoritesView = view }
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                // The favorite flag is stored in WatchItem. The display order
-                // is independent of WatchItem.updatedAt, which also tracks
-                // recently watched titles. New favorites append to the end.
-                val favoriteType = if (favoritesView == "Movies") "movie" else "tv"
-                val orderedIds = if (favoriteType == "movie") movieFavoriteIds else tvFavoriteIds
-                val favoriteById = history.asSequence()
-                    .filter { it.favorite && it.mediaType == favoriteType }
-                    .distinctBy { it.mediaId }
-                    .associateBy { it.mediaId }
-                val favoriteTitles = orderedIds.mapNotNull { favoriteById[it] }
-                    .map { TitleItem(it.mediaId, it.title, "", it.poster, null, it.mediaType) }
-                Text("Favorite $favoritesView", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Spacer(Modifier.height(14.dp))
-                if (favoriteTitles.isEmpty()) {
-                    Text("No favorite ${if (favoriteType == "movie") "movies" else "TV shows"} yet.", color = Color.LightGray)
-                } else {
-                    val gridState = if (favoriteType == "movie") favoriteMovieGridState else favoriteTvGridState
-                    // Match Popular's adaptive cells, card size, and gaps on phones and TV.
-                    Box(Modifier.fillMaxWidth().weight(1f)) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 152.dp),
-                            state = gridState,
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(bottom = 24.dp)
-                        ) {
-                            gridItems(favoriteTitles, key = { "favorite-${it.type}-${it.id}" }, contentType = { "poster" }) { item ->
-                                JaSearchTitleCard(marked(item), returnFocus = titleReturnFocus,
-                                    returnKey = "Favorites:$favoritesView:${item.type}:${item.id}") { open(item) }
-                            }
-                        }
-                    }
-                }
-            } else if (tab == "Continue") {
-                JaUnscaledTopBar {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Movies", "TV").forEach { view ->
-                            TvSecondaryButton(text = view, selected = continueView == view,
-                                modifier = if(continueView==view) Modifier.focusRequester(subRequester) else Modifier,
-                                onClick = { continueView = view })
-                        }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                val continueType = if (continueView == "Movies") "movie" else "tv"
-                // Most recent resumable episode per series; derive from live history,
-                // so returning from playback refreshes both order and labels.
-                val continueItems = remember(history, continueType) {
-                    history.filter { it.mediaType == continueType && it.positionMs > 0 &&
-                        (continueType == "movie" || it.episode > 0) }
-                        .sortedByDescending { it.updatedAt }
-                        .distinctBy { it.mediaId }
-                }
-                Text("Continue $continueView", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Spacer(Modifier.height(14.dp))
-                if (continueItems.isEmpty()) {
-                    Text("No ${if (continueType == "movie") "movies" else "TV shows"} to continue yet.",
-                        color = Color.LightGray)
-                } else {
-                    val gridState = if (continueType == "movie") continueMovieGridState else continueTvGridState
-                    Box(Modifier.fillMaxWidth().weight(1f)) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 152.dp), state = gridState,
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(bottom = 24.dp)
-                        ) {
-                            gridItems(continueItems, key = { "continue-${it.mediaType}-${it.mediaId}" }, contentType = { "poster" }) { saved ->
-                                val title = TitleItem(saved.mediaId, saved.title, "", saved.poster, null, saved.mediaType)
-                                JaSearchTitleCard(marked(title),
-                                    badge = JaResumeLabels.continueLabel(saved.mediaType, saved.season,
-                                        saved.episode, saved.positionMs),
-                                    returnFocus = titleReturnFocus,
-                                    returnKey = "Continue:$continueView:${title.type}:${title.id}"
-                                ) { open(title) }
-                            }
-                        }
-                    }
-                }
             }
         }
         }
@@ -1772,9 +1737,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Compact second-level navigation uses a much smaller visual footprint than
-// the primary Movies / TV / Search / Favorites top row. Do not shrink the
-// primary row or the Load More / Back / player buttons.
+// Compact second-level navigation for Movies/TV catalog, Favorites, and Continue views.
 @Composable
 private fun TvSecondaryButton(
     text: String,
@@ -2090,7 +2053,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
 /** Persist player overlay preferences between JA launches. */
 private fun jaMainTabNames(showIptv: Boolean, showMusic: Boolean): List<String> =
     listOf("Movies", "TV") + (if (showIptv) listOf("IPTV") else emptyList()) +
-        (if (showMusic) listOf("Music") else emptyList()) + listOf("Search", "Favorites", "Continue", "Settings")
+        (if (showMusic) listOf("Music") else emptyList()) + listOf("Search", "Settings")
 
 internal class PlayerControlSettings(context: Context) {
     private val prefs = context.getSharedPreferences("ja_player_controls", Context.MODE_PRIVATE)

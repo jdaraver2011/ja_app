@@ -46,6 +46,11 @@ private data class MusicShelf(val title: String, val page: JaMusicCatalog.Page, 
 /** Full-screen phone/TV browse UI; Android Auto retains its host-rendered audio templates. */
 @Composable
 internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit = {}) {
+    JaScaledUi { JaMusicLabScreenContent(modifier,onExit) }
+}
+
+@Composable
+private fun JaMusicLabScreenContent(modifier: Modifier, onExit: () -> Unit) {
     val context = LocalContext.current
     val state by JaMusicLabService.state.collectAsState()
     val library = remember { JaMusicLibrary(context) }
