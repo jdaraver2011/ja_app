@@ -258,7 +258,14 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         val music = JSONObject().put("values", prefsJson(musicPrefs.all))
         val iptvPrefs = context.getSharedPreferences("ja_live_favorites", Context.MODE_PRIVATE)
         val iptv = JSONObject().put("values", prefsJson(iptvPrefs.all.filterKeys { it == "ids" || it == "order" || it.startsWith("group-order:") }))
-        return JSONObject().put("schema", 1).put("media", media).put("music", music).put("iptv", iptv)
+        val search = JSONObject().put("values", prefsJson(context.getSharedPreferences(JaSearchHistory.PREFS, Context.MODE_PRIVATE).all))
+        val playerControls = prefsJson(context.getSharedPreferences("ja_player_controls", Context.MODE_PRIVATE).all)
+        val weather = prefsJson(context.getSharedPreferences("ja_weather", Context.MODE_PRIVATE).all.filterKeys { it in weatherSettingKeys })
+        val playbackSources = prefsJson(context.getSharedPreferences("ja_playback_server_history_v1", Context.MODE_PRIVATE).all)
+        val settings = JSONObject().put("player_controls", playerControls).put("weather", weather).put("playback_sources", playbackSources)
+        val credentials = JSONObject().put("deezer_arl", JaMusicLabVault(context).read() ?: JSONObject.NULL)
+        return JSONObject().put("schema", 2).put("media", media).put("music", music).put("iptv", iptv)
+            .put("search", search).put("settings", settings).put("credentials", credentials)
     }
 
     private fun prefsJson(values: Map<String, *>): JSONObject = JSONObject().apply {
@@ -288,15 +295,36 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
             .putString("movie-ids", orders.optString("movie", "")).putString("tv-ids", orders.optString("tv", "")).commit()
         applyPrefs("ja_music_library", state.optJSONObject("music")?.optJSONObject("values"), stringSets = false)
         applyPrefs("ja_live_favorites", state.optJSONObject("iptv")?.optJSONObject("values"), stringSets = true)
+        state.optJSONObject("search")?.optJSONObject("values")?.let {
+            applyPrefs(JaSearchHistory.PREFS, it, stringSets = false)
+        }
+        state.optJSONObject("settings")?.let { settings ->
+            settings.optJSONObject("player_controls")?.let {
+                applyPrefs("ja_player_controls", it, stringSets = false)
+            }
+            settings.optJSONObject("weather")?.let {
+                applyPrefs("ja_weather", it, stringSets = false, keyFilter = { key -> key in weatherSettingKeys })
+            }
+            settings.optJSONObject("playback_sources")?.let {
+                applyPrefs("ja_playback_server_history_v1", it, stringSets = false)
+            }
+        }
+        val credentials = state.optJSONObject("credentials")
+        if (credentials?.has("deezer_arl") == true && !credentials.isNull("deezer_arl")) {
+            val arl = credentials.optString("deezer_arl").takeIf { it.isNotBlank() && it != "null" }
+            if (arl == null) JaMusicLabVault(context).clear() else JaMusicLabVault(context).save(arl)
+        }
+        cloudAppliedGeneration.value++
     }
 
-    private fun applyPrefs(name: String, values: JSONObject?, stringSets: Boolean) {
+    private fun applyPrefs(name: String, values: JSONObject?, stringSets: Boolean, keyFilter: (String) -> Boolean = { true }) {
         val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
-        val syncedKey = { key: String -> !stringSets || key == "ids" || key == "order" || key.startsWith("group-order:") }
+        val syncedKey = { key: String -> keyFilter(key) && (!stringSets || key == "ids" || key == "order" || key.startsWith("group-order:")) }
         val edit = prefs.edit()
         prefs.all.keys.filter(syncedKey).forEach(edit::remove)
         if (values != null) for (i in 0 until values.length()) {
             val key = values.names()?.optString(i) ?: continue
+            if (!syncedKey(key)) continue
             when (val v = values.get(key)) {
                 is JSONArray -> if (stringSets && key == "ids") edit.putStringSet(key, (0 until v.length()).map { v.getString(it) }.toSet()) else edit.putString(key, v.toString())
                 is String -> edit.putString(key, v)
