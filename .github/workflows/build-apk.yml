@@ -283,6 +283,9 @@ jobs:
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
           PUBLISH_UPDATE: ${{ inputs.publish_update || false }}
         run: python3 scripts/restore_update_signing.py
+      - name: Enable KVM for Baseline Profile generation
+        if: ${{ inputs.generate_baseline_profile }}
+        run: sudo chmod 666 /dev/kvm
       - name: Generate JA Baseline Profile on Android 35
         if: ${{ inputs.generate_baseline_profile }}
         uses: reactivecircus/android-emulator-runner@v2
