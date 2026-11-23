@@ -18,8 +18,6 @@ android {
 
 baselineProfile {
     useConnectedDevices = true
-    mergeIntoMain = true
-    saveInSrc = true
 }
 
 dependencies {
