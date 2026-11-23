@@ -48,9 +48,11 @@
       last = now - ((now - last) % frameInterval);
       try {
         if (window.JaWave && typeof window.JaWave.samples !== 'function') throw {name:'PCM_BRIDGE_MISSING'};
-        const data = window.JaWave ? JSON.parse(window.JaWave.samples()) : new Array(1024).fill(128);
-        const samples = Uint8Array.from(data);
-        visual.render({audioLevels:{timeByteArray:samples,timeByteArrayL:samples,timeByteArrayR:samples}});
+        const data = window.JaWave ? JSON.parse(window.JaWave.samples()) : {mix:new Array(1024).fill(128), left:new Array(1024).fill(128), right:new Array(1024).fill(128)};
+        const samples = Uint8Array.from(data.mix);
+        const left = Uint8Array.from(data.left);
+        const right = Uint8Array.from(data.right);
+        visual.render({audioLevels:{timeByteArray:samples,timeByteArrayL:left,timeByteArrayR:right}});
         // Copy in this callback, before the browser can discard the WebGL drawing buffer.
         // Render at transfer resolution and perform one readback/copy, without a second resize canvas.
         presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);

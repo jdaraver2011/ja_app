@@ -77,7 +77,7 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
         val safe = code.take(60).replace(Regex("[^A-Za-z0-9_:-]"), "_")
         android.util.Log.i("JA_MUSIC_VIS", "WEB_$safe frames=$frames jsPeak=$peak ${JaMusicVisualization.pcm.diagnostic(now)}")
     }
-    @JavascriptInterface fun samples(): String = JaMusicVisualization.pcm.snapshot(SystemClock.elapsedRealtime())
+    @JavascriptInterface fun samples(): String = JaMusicVisualization.pcm.snapshotStereo(SystemClock.elapsedRealtime())
     @JavascriptInterface fun isPlaying(): Boolean = JaMusicLabService.state.value.playing
 }
 @SuppressLint("SetJavaScriptEnabled")

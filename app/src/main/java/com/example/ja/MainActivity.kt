@@ -1263,9 +1263,9 @@ class MainActivity : ComponentActivity() {
                         Text("Settings", style = MaterialTheme.typography.headlineSmall, color = Color.White)
                         settingsGroups.forEach { group ->
                             TvFocusButton(onClick = { settingsReturnSection = group; settingsSection = group },
-                                modifier = Modifier.fillMaxWidth().height(48.dp).focusRequester(settingsGroupFocus.getValue(group)),
+                                modifier = Modifier.width(220.dp).height(40.dp).focusRequester(settingsGroupFocus.getValue(group)),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)) {
-                                Text(group, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                                Text(group, textAlign = TextAlign.Center, maxLines = 1)
                             }
                         }
                     }
@@ -1279,9 +1279,9 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.Center
                     ) {
                     TvFocusButton(onClick = { settingsReturnSection = settingsSection; settingsSection = null },
-                        modifier = Modifier.fillMaxWidth().height(48.dp).focusRequester(settingsBackFocus),
+                        modifier = Modifier.width(220.dp).height(40.dp).focusRequester(settingsBackFocus),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)) {
-                        Text("← Settings", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                        Text("← Settings", textAlign = TextAlign.Center, maxLines = 1)
                     }
                     Text(settingsSection.orEmpty(), modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),
                         style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)

@@ -72,7 +72,6 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
     var signIn by remember { mutableStateOf(false) }
     var manual by remember { mutableStateOf(false) }
     var arl by remember { mutableStateOf("") }
-    var trackLink by remember { mutableStateOf("") }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     fun notifications() {
         if (Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context,
@@ -207,9 +206,6 @@ internal fun JaMusicLabScreen(modifier: Modifier = Modifier, onExit: () -> Unit 
                 MusicButton("Check Session", { JaMusicLabService.restore(context) })
                 MusicButton("Use ARL", { manual = true })
                 MusicButton("Sign Out", { JaMusicLabService.logout(context) })
-                JaEntryField(trackLink, { trackLink = it }, Modifier.fillMaxWidth(), label = { Text("Deezer track URL or ID") })
-                MusicButton("Play Track", { notifications(); JaMusicLabService.playTrack(context, trackLink) }, enabled = trackLink.isNotBlank())
-                Text("Audio cache: 64 MB, automatically evicted. Visualizer: Butterchurn, a MilkDrop-compatible renderer (MIT).", color = Color.LightGray)
             }
         } else {
             if (route.title == "Search") {

@@ -298,7 +298,16 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
     }
     BackHandler(state.movingId!=null){state.finishMove(false)}
     val scroll=state.timeline
-    BoxWithConstraints(modifier.onPreviewKeyEvent{event->
+    Column(modifier.fillMaxSize().background(Color(0xFF101923)).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp),
+        verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            TvFocusButton(onClick=onMainMenu,
+                colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF233747),contentColor=Color.White)) {
+                Text("‹ JA")
+            }
+            Text("JA IPTV", color=ColorGold, style=MaterialTheme.typography.titleLarge, modifier=Modifier.weight(1f))
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).onPreviewKeyEvent{event->
         val key=event.nativeKeyEvent
         if(state.movingId==null)false else when(key.keyCode){
             KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(key.action==KeyEvent.ACTION_DOWN)state.moveChannel(if(key.keyCode==KeyEvent.KEYCODE_DPAD_UP)-1 else 1);true}
@@ -445,6 +454,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
                     }
                 }
             }
+        }
         }
     }
     if(searchOpen)AlertDialog(onDismissRequest={searchOpen=false;focusGroups()},title={Text("Search channels")},
