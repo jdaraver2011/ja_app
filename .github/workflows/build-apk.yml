@@ -8,6 +8,12 @@ on:
       publish_update:
         type: boolean
         default: false
+      build_variant:
+        type: string
+        default: debug
+      generate_baseline_profile:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       run_checks:
@@ -16,6 +22,15 @@ on:
         default: true
       publish_update:
         description: Publish this version as a public device update
+        type: boolean
+        default: false
+      build_variant:
+        description: APK build variant
+        type: choice
+        options: [debug, release]
+        default: debug
+      generate_baseline_profile:
+        description: Generate and package a Baseline Profile
         type: boolean
         default: false
   push:
@@ -268,12 +283,36 @@ jobs:
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
           PUBLISH_UPDATE: ${{ inputs.publish_update || false }}
         run: python3 scripts/restore_update_signing.py
-      - name: Build debug APK
+      - name: Generate JA Baseline Profile on Android 35
+        if: ${{ inputs.generate_baseline_profile }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: gradle --no-daemon --stacktrace :app:generateBaselineProfile
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
-        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Build installable APK
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant || 'debug' }}
+          JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
+          JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
+          JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
+        run: |
+          case "$BUILD_VARIANT" in
+            debug) gradle_task=assembleDebug ;;
+            release) gradle_task=assembleRelease ;;
+            *) echo "Unsupported APK build variant: $BUILD_VARIANT"; exit 1 ;;
+          esac
+          gradle --no-daemon --stacktrace ":app:$gradle_task"
       - name: Report Android lint findings
         if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
         continue-on-error: false
@@ -317,8 +356,8 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-${{ github.ref_name }}-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: JA-${{ github.ref_name }}-${{ inputs.build_variant || 'debug' }}
+          path: app/build/outputs/apk/${{ inputs.build_variant || 'debug' }}/*.apk
           if-no-files-found: error
           retention-days: 30
       - name: Upload lint report
