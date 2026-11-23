@@ -33,6 +33,57 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
         post { requestFocus() }
     }
 
+
+    /** When Deezer switches from phone sign-in to its email form, focus the first login field. */
+    fun focusLoginFields() {
+        val script = """(() => {
+            if (window.__jaLoginFieldFocusInstalled) return "observer-installed";
+            window.__jaLoginFieldFocusInstalled = true;
+            const visible = el => {
+                const r = el.getBoundingClientRect();
+                const s = getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && s.display !== "none" &&
+                    s.visibility !== "hidden" && Number(s.opacity || 1) > 0 && !el.disabled;
+            };
+            const focusLogin = () => {
+                const fields = Array.from(document.querySelectorAll("input,textarea,[contenteditable='true']"))
+                    .filter(visible);
+                const password = fields.find(el => el.tagName === "INPUT" && el.type === "password");
+                if (!password) return "no-email-login-form";
+                const email = fields.find(el => el.tagName === "INPUT" &&
+                    (el.type === "email" || /email|username|user-name/i.test(
+                        (el.autocomplete || "") + " " + (el.name || "") + " " + (el.id || "")
+                    ))) || fields.find(el => el !== password && el.tagName === "INPUT" &&
+                        (!el.type || el.type === "text") && (!password.form || el.form === password.form));
+                const target = email || password;
+                const active = document.activeElement;
+                if (fields.includes(active)) return "login-field-already-focused";
+                target.focus({preventScroll:true});
+                return email ? "focused-email" : "focused-password";
+            };
+            const result = focusLogin();
+            new MutationObserver(() => focusLogin()).observe(document.documentElement,
+                {childList:true, subtree:true});
+            return result;
+        })()"""
+        evaluateJavascript(script) { result ->
+            val status = result?.trim('"')?.take(60) ?: "no-result"
+            Log.i("JA_DEEZER_REMOTE", "LOGIN_FIELD_FOCUS status=$status")
+        }
+    }
+
+    fun routePopupIntoThisWindow(resultMsg: android.os.Message?): Boolean {
+        val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+        transport.webView = this
+        resultMsg.sendToTarget()
+        post {
+            requestFocus()
+            focusWebContentOnce()
+            focusLoginFields()
+        }
+        return true
+    }
+
     fun focusConsentControls() {
         val script = """(() => {
             if (window.__jaConsentFocusInstalled) return "observer-installed";
@@ -101,8 +152,7 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
                 return true
             }
             KeyEvent.ACTION_UP -> {
-                if (confirmDown && !nativeHandled) activateFocusedControl(event.keyCode)
-                else if (confirmDown) Log.i("JA_DEEZER_REMOTE", "SELECT handledByWebView=true")
+                if (confirmDown) activateFocusedControl(event.keyCode, clickIfNeeded = !nativeHandled)
                 confirmDown = false
                 return true
             }
@@ -110,7 +160,7 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
         return nativeHandled
     }
 
-    private fun activateFocusedControl(keyCode: Int) {
+    private fun activateFocusedControl(keyCode: Int, clickIfNeeded: Boolean) {
         requestFocus()
         val script = """(() => {
             const deepActive = (doc) => {
@@ -137,8 +187,8 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
             const clickable = el.matches("button,a,[role='button'],[role='link'],input[type='button'],input[type='submit'],input[type='checkbox'],input[type='radio'],select,[tabindex]");
             if (clickable) {
                 el.focus({preventScroll:true});
-                el.click();
-                return "click:" + tag + ":" + type;
+                if (clickIfNeeded) { el.click(); return "click:" + tag + ":" + type; }
+                return "focused-control:" + tag + ":" + type;
             }
             return "no-control:" + tag + ":" + type;
         })()"""
@@ -148,6 +198,7 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
             if (target.startsWith("input:")) post {
                 requestFocus()
                 val input = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                requestFocusFromTouch()
                 input?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
                 Log.i("JA_DEEZER_REMOTE", "IME_REQUESTED")
             }
@@ -193,6 +244,14 @@ internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.setSupportMultipleWindows(true)
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onCreateWindow(
+                            view: WebView?, isDialog: Boolean, isUserGesture: Boolean,
+                            resultMsg: android.os.Message?
+                        ): Boolean = (view as? DeezerSignInWebView)?.routePopupIntoThisWindow(resultMsg) ?: false
+                    }
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                     webViewClient = object : WebViewClient() {
@@ -202,6 +261,9 @@ internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
                             (v as? DeezerSignInWebView)?.apply {
                                 focusWebContentOnce()
                                 focusConsentControls()
+                                focusLoginFields()
+                                postDelayed({ focusLoginFields() }, 600)
+                                postDelayed({ focusLoginFields() }, 1600)
                             }
                         }
                         override fun shouldOverrideUrlLoading(v: WebView?, request: WebResourceRequest): Boolean {

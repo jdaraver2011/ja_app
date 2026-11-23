@@ -1,81 +1,88 @@
-/* JA's offline MilkDrop-compatible presentation. Audio comes only from the native PCM bridge. */
+/* JA's offline MilkDrop-compatible presentation. Butterchurn draws directly to the WebView canvas. */
 (() => {
   const canvas = document.getElementById('visual');
   const status = document.getElementById('status');
-  // Keep WebGL offscreen. Present a CPU-backed 2D bitmap instead of a WebGL compositor layer.
-  const renderCanvas = document.createElement('canvas');
-  const presenter = canvas.getContext('2d', {alpha:false, willReadFrequently:true});
   let frames = 0;
-  const report = (code, peak = 0) => { try { if (window.JaWave && window.JaWave.report) window.JaWave.report(code, frames, peak); } catch (_) {} };
+  const report = (code, peak = 0) => {
+    try { if (window.JaWave && window.JaWave.report) window.JaWave.report(code, frames, peak); } catch (_) {}
+  };
   const fail = (error) => {
     const code = String(error && error.name || 'RENDER_ERROR');
     document.getElementById('error').textContent = 'Visualizer stopped (' + code + '). Music continues. Use Back to return to the player.';
-    canvas.dataset.error = code; report('ERROR_' + code);
+    canvas.dataset.error = code;
+    report('ERROR_' + code);
   };
   addEventListener('error', event => fail(event.error || {name:'SCRIPT_ERROR'}));
-  renderCanvas.addEventListener('webglcontextlost', event => { event.preventDefault(); fail({name:'CONTEXT_LOST'}); });
+  canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); fail({name:'CONTEXT_LOST'}); });
   try {
-    if (!presenter) throw {name:'PRESENTATION_UNAVAILABLE'};
     const engine = (window.butterchurn.default || window.butterchurn);
     const presetApi = (window.butterchurnPresets.default || window.butterchurnPresets);
     const presets = presetApi.getPresets();
     const names = Object.keys(presets);
     if (!names.length) throw Error('No presets');
-    const nativePresentation = window.JaWave && typeof window.JaWave.present === 'function';
-    const renderLimitWidth = nativePresentation ? 960 : 1280;
-    const renderLimitHeight = nativePresentation ? 540 : 720;
-    const size = () => { const scale = Math.min(1, renderLimitWidth / innerWidth, renderLimitHeight / innerHeight); return [Math.max(64, Math.round(innerWidth * scale)), Math.max(64, Math.round(innerHeight * scale))]; };
+    const nativeAudio = window.JaWave && typeof window.JaWave.samples === 'function';
+    // Keep the shader workload modest on TV hardware; WebView scales this canvas to the full screen.
+    const renderLimitWidth = 800;
+    const renderLimitHeight = 450;
+    const size = () => {
+      const scale = Math.min(1, renderLimitWidth / innerWidth, renderLimitHeight / innerHeight);
+      return [Math.max(64, Math.round(innerWidth * scale)), Math.max(64, Math.round(innerHeight * scale))];
+    };
     const [w,h] = size();
-    // Butterchurn sets viewport/texture sizes, but does not resize the supplied canvas.
-    canvas.width = renderCanvas.width = w; canvas.height = renderCanvas.height = h;
-    const visual = engine.createVisualizer(null, renderCanvas, {width:w, height:h, meshWidth:32, meshHeight:24, pixelRatio:1});
+    canvas.width = w;
+    canvas.height = h;
+    const visual = engine.createVisualizer(null, canvas, {
+      width:w, height:h, meshWidth:32, meshHeight:24, pixelRatio:1
+    });
     let index = Math.max(0, names.indexOf('Flexi - mindblob mix'));
-    window.nextPreset = () => { index = (index + 1) % names.length; pixelChecked = false; visual.loadPreset(presets[names[index]], 1.5); status.textContent = names[index]; };
-    visual.loadPreset(presets[names[index]], 0); status.textContent = names[index];
-    addEventListener('resize', () => { const [width,height] = size(); canvas.width = renderCanvas.width = width; canvas.height = renderCanvas.height = height; visual.setRendererSize(width,height); });
-    let heartbeat = 0;
+    window.nextPreset = () => {
+      index = (index + 1) % names.length;
+      visual.loadPreset(presets[names[index]], 1.5);
+      status.textContent = names[index];
+    };
+    visual.loadPreset(presets[names[index]], 0);
+    status.textContent = names[index];
+    addEventListener('resize', () => {
+      const [width,height] = size();
+      canvas.width = width;
+      canvas.height = height;
+      visual.setRendererSize(width,height);
+    });
 
-    let pixelChecked = false;
-    report("READY");
+    const audioLevels = {
+      timeByteArray:new Uint8Array(1024).fill(128),
+      timeByteArrayL:new Uint8Array(1024).fill(128),
+      timeByteArrayR:new Uint8Array(1024).fill(128)
+    };
+    let lastAudioSample = 0;
+    let lastHeartbeat = 0;
+    let heartbeatFrames = 0;
+    report('DIRECT_WEBGL_' + w + 'x' + h);
+
     function render(now) {
       if (canvas.dataset.error) return;
       requestAnimationFrame(render);
-      // Keep the last frame on screen while the native player is paused or stopped.
-      if (document.hidden || (nativePresentation && !window.JaWave.isPlaying())) return;
-      if (nativePresentation && typeof window.JaWave.ready === 'function' && !window.JaWave.ready()) return;
+      if (document.hidden || (nativeAudio && !window.JaWave.isPlaying())) return;
       try {
-        if (window.JaWave && typeof window.JaWave.samples !== 'function') throw {name:'PCM_BRIDGE_MISSING'};
-        const data = window.JaWave ? JSON.parse(window.JaWave.samples()) : {mix:new Array(1024).fill(128), left:new Array(1024).fill(128), right:new Array(1024).fill(128)};
-        const samples = Uint8Array.from(data.mix);
-        const left = Uint8Array.from(data.left);
-        const right = Uint8Array.from(data.right);
-        visual.render({audioLevels:{timeByteArray:samples,timeByteArrayL:left,timeByteArrayR:right}});
-        // Copy in this callback, before the browser can discard the WebGL drawing buffer.
-        // Render at transfer resolution and perform one readback/copy, without a second resize canvas.
-        presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);
-        if (nativePresentation) {
-          window.JaWave.present(canvas.toDataURL('image/jpeg', 0.55), names[index]);
+        // Audio crosses the native bridge at 30 Hz; Butterchurn renders on every display vsync.
+        if (nativeAudio && now - lastAudioSample >= 1000 / 30) {
+          const data = JSON.parse(window.JaWave.samples());
+          audioLevels.timeByteArray.set(data.mix);
+          audioLevels.timeByteArrayL.set(data.left);
+          audioLevels.timeByteArrayR.set(data.right);
+          lastAudioSample = now;
         }
-        canvas.dataset.frames = String(++frames);
-        if (!pixelChecked && frames >= 40) {
-          pixelChecked = true;
-          const gl = renderCanvas.getContext('webgl2');
-          const pixel = new Uint8Array(4); let gpuPeak = 0; let outputPeak = 0;
-          for (const x of [0.2,0.4,0.6,0.8]) for (const y of [0.2,0.4,0.6,0.8]) {
-            gl.readPixels(Math.floor(canvas.width*x),Math.floor(canvas.height*y),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
-            gpuPeak = Math.max(gpuPeak,pixel[0],pixel[1],pixel[2]);
-            const displayed = presenter.getImageData(Math.floor(canvas.width*x),Math.floor(canvas.height*y),1,1).data;
-            outputPeak = Math.max(outputPeak,displayed[0],displayed[1],displayed[2]);
-          }
-          canvas.dataset.outputPeak = String(outputPeak);
-          canvas.dataset.bufferSize = canvas.width + 'x' + canvas.height;
-          report('GPU_' + renderCanvas.width + 'x' + renderCanvas.height + '_GL' + gl.getError(), gpuPeak);
-          report('PRESENT_2D_' + canvas.width + 'x' + canvas.height, outputPeak);
-        }
-        if (now - heartbeat > 5000) {
-          heartbeat = now;
-          let peak = 0; for (const sample of samples) peak = Math.max(peak, Math.abs(sample - 128));
-          report('FRAME_' + canvas.width + 'x' + canvas.height, peak);
+        visual.render({audioLevels});
+        frames++;
+        canvas.dataset.frames = String(frames);
+        if (now - lastHeartbeat >= 5000) {
+          const elapsed = now - lastHeartbeat;
+          const fps = lastHeartbeat === 0 ? 0 : Math.round((frames - heartbeatFrames) * 1000 / elapsed);
+          let peak = 0;
+          for (const sample of audioLevels.timeByteArray) peak = Math.max(peak, Math.abs(sample - 128));
+          if (lastHeartbeat !== 0) report('DIRECT_WEBGL_FPS_' + fps + '_' + canvas.width + 'x' + canvas.height, peak);
+          lastHeartbeat = now;
+          heartbeatFrames = frames;
         }
       } catch (error) { fail(error); }
     }
@@ -83,6 +90,7 @@
   } catch (error) {
     document.getElementById('error').textContent = 'MilkDrop visualizer needs WebGL 2 support on this device. Music continues playing. Use Back to return to the player.';
     status.textContent = 'Visualizer unavailable';
-    canvas.dataset.error = String(error && error.name || 'START_ERROR'); report('START_ERROR');
+    canvas.dataset.error = String(error && error.name || 'START_ERROR');
+    report('START_ERROR');
   }
 })();
