@@ -1199,6 +1199,12 @@ class MainActivity : ComponentActivity() {
         }
         return
     }
+    if (showIptvTab && tab == "IPTV" && selected == null && selectedPerson == null) {
+        JaLiveTvScreen(liveTv, weather,
+            onMainMenu = { tab = "Movies"; navigationLevel = 0; focusMain() },
+            modifier = Modifier.fillMaxSize())
+        return
+    }
     if (showMusicTab && tab == "Music" && selected == null && selectedPerson == null) {
         JaMusicLabScreen(Modifier.fillMaxSize(), onExit = { tab = "Movies"; navigationLevel = 0 })
         return
@@ -1257,8 +1263,8 @@ class MainActivity : ComponentActivity() {
                         Text("Settings", style = MaterialTheme.typography.headlineSmall, color = Color.White)
                         settingsGroups.forEach { group ->
                             TvFocusButton(onClick = { settingsReturnSection = group; settingsSection = group },
-                                modifier = Modifier.fillMaxWidth().focusRequester(settingsGroupFocus.getValue(group)),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF263747))) {
+                                modifier = Modifier.fillMaxWidth().height(48.dp).focusRequester(settingsGroupFocus.getValue(group)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)) {
                                 Text(group, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                             }
                         }
@@ -1273,8 +1279,8 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.Center
                     ) {
                     TvFocusButton(onClick = { settingsReturnSection = settingsSection; settingsSection = null },
-                        modifier = Modifier.fillMaxWidth().focusRequester(settingsBackFocus),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF263747))) {
+                        modifier = Modifier.fillMaxWidth().height(48.dp).focusRequester(settingsBackFocus),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)) {
                         Text("← Settings", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                     }
                     Text(settingsSection.orEmpty(), modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),

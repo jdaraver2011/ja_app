@@ -12,8 +12,8 @@ public final class JaLiveTvGuideRules {
     public static int groupKey(int key,int index,int count,boolean header){
         if(key==21)return STAY; // Left stays inside Groups.
         if(key==22)return GUIDE;
-        if(header){if(key==19)return STAY;if(key==20)return FIRST_GROUP;}
-        if(!header&&key==19&&index<=0)return SEARCH;
+        if(key==19&&(header||index<=0))return GUIDE; // Up closes the Groups drawer at its top edge.
+        if(header&&key==20)return FIRST_GROUP;
         if(!header&&key==20&&index>=count-1)return STAY;
         return DEFAULT;
     }
