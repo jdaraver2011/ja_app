@@ -15,6 +15,9 @@ import org.json.JSONObject
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.net.URLEncoder
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -24,7 +27,13 @@ internal data class JaAccountSession(val email: String, val accessToken: String,
 
 /** Supabase Auth and one RLS-protected JSON row per JA account. The publishable key is not a secret. */
 internal class JaAccountSync(private val context: Context, private val dao: WatchDao) {
-    companion object { const val AUTH_REDIRECT = "ja://auth/callback" }
+    companion object {
+        const val AUTH_REDIRECT = "ja://auth/callback"
+        internal val cloudAppliedGeneration = MutableStateFlow(0)
+        private val syncMutex = Mutex()
+        private val weatherSettingKeys = setOf("weatherstar", "weatherstar-sound", "weatherstar-volume",
+            "music-choice", "custom-music", "zip")
+    }
     private val prefs = context.getSharedPreferences("ja_account_session", Context.MODE_PRIVATE)
     private val http = OkHttpClient()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
@@ -157,7 +166,8 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         return rows?.optJSONObject(0)?.optBoolean("approved", false) == true
     }
 
-    suspend fun sync(): String = withContext(Dispatchers.IO) {
+    suspend fun sync(): String = syncMutex.withLock {
+        withContext(Dispatchers.IO) {
         check(baseUrl.startsWith("https://") && apiKey.isNotBlank()) { "Supabase settings are not configured in this test build." }
         val account = validSession()
         val local = snapshot()
@@ -195,9 +205,11 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
             authPrefs.edit().putString("last_local_hash", localHash).putString("last_remote_hash", localHash).apply()
             "JA data is synced with your account."
         }
+        }
     }
 
-    suspend fun chooseSync(direction: String): String = withContext(Dispatchers.IO) {
+    suspend fun chooseSync(direction: String): String = syncMutex.withLock {
+        withContext(Dispatchers.IO) {
         val account = validSession()
         if (direction == "upload") {
             val local = snapshot(); upload(account, local); val hash = stateHash(local)
@@ -210,11 +222,13 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
             authPrefs.edit().putString("last_local_hash", hash).putString("last_remote_hash", stateHash(remote)).apply()
             "Cloud data was downloaded to this device."
         }
+        }
     }
 
     private suspend fun upload(account: JaAccountSession, state: JSONObject) {
         request("POST", "$baseUrl/rest/v1/ja_user_state?on_conflict=user_id", token = account.accessToken,
-            body = JSONObject().put("user_id", account.userId).put("state", state), prefer = "resolution=merge-duplicates,return=minimal")
+            body = JSONObject().put("user_id", account.userId).put("state", state)
+                .put("updated_at", java.time.Instant.now().toString()), prefer = "resolution=merge-duplicates,return=minimal")
     }
 
     private suspend fun request(method: String, url: String, token: String? = null, body: JSONObject? = null,
