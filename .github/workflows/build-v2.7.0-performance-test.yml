@@ -1,0 +1,24 @@
+name: Build JA 2.7.0 Performance Test
+on:
+  push:
+    branches: [v2.7.0-performance-test]
+    paths:
+      - '.github/workflows/build-v2.7.0-performance-test.yml'
+      - '.github/workflows/build-apk.yml'
+      - 'app/src/**'
+      - 'app/build.gradle.kts'
+      - 'baselineprofile/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      run_checks: false
+      publish_update: false
+      build_variant: release
+      generate_baseline_profile: true
+    secrets: inherit
