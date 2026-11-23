@@ -2,6 +2,8 @@ package com.example.ja
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Rect
+import android.util.Log
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
@@ -20,20 +22,41 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 
-/** Routes TV-center/Enter to the focused Deezer web control and opens the IME for focused fields. */
+/** Routes Android TV select keys into the active Deezer DOM control and captures safe focus diagnostics. */
 private class DeezerSignInWebView(context: Context) : WebView(context) {
     private var confirmDown = false
+    private var initialPageFocusRequested = false
+
+    fun focusWebContentOnce() {
+        if (initialPageFocusRequested) return
+        initialPageFocusRequested = true
+        post { requestFocus() }
+    }
+
+    init {
+        isFocusable = true
+        isFocusableInTouchMode = true
+    }
+
+    override fun onFocusChanged(gainFocus: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
+        super.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
+        Log.i("JA_DEEZER_REMOTE", "WEBVIEW_FOCUS gained=$gainFocus direction=$direction window=$hasWindowFocus")
+    }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode !in setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER))
-            return super.dispatchKeyEvent(event)
+        val confirmKeys = setOf(
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_SPACE
+        )
+        if (event.keyCode !in confirmKeys) return super.dispatchKeyEvent(event)
+        Log.i("JA_DEEZER_REMOTE", "KEY action=${event.action} code=${event.keyCode} repeat=${event.repeatCount} focused=$hasFocus window=$hasWindowFocus")
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) confirmDown = true
                 return true
             }
             KeyEvent.ACTION_UP -> {
-                if (confirmDown) activateFocusedControl()
+                if (confirmDown) activateFocusedControl(event.keyCode)
                 confirmDown = false
                 return true
             }
@@ -41,25 +64,46 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
         return true
     }
 
-    private fun activateFocusedControl() {
+    private fun activateFocusedControl(keyCode: Int) {
         requestFocus()
         val script = """(() => {
-            const el = document.activeElement;
+            const deepActive = (doc) => {
+                let el = doc && (doc.activeElement || doc.querySelector(':focus'));
+                for (let depth = 0; el && depth < 8; depth++) {
+                    if (el.shadowRoot && el.shadowRoot.activeElement) { el = el.shadowRoot.activeElement; continue; }
+                    if (el.tagName === 'IFRAME') {
+                        try { const nested = el.contentDocument && (el.contentDocument.activeElement || el.contentDocument.querySelector(':focus')); if (nested) { el = nested; continue; } } catch (_) {}
+                    }
+                    break;
+                }
+                return el;
+            };
+            const el = deepActive(document);
             if (!el) return "none";
             const tag = (el.tagName || "").toLowerCase();
             const type = (el.type || "").toLowerCase();
             const editable = el.isContentEditable || tag === "textarea" ||
-                (tag === "input" && !["button","submit","reset","checkbox","radio","file","image"].includes(type));
-            if (editable) { el.focus(); el.click(); return "input"; }
-            if (el.matches("button,a,[role='button'],input[type='button'],input[type='submit'],[tabindex]")) {
-                el.click(); return "click";
+                (tag === "input" && !["button","submit","reset","checkbox","radio","file","image","hidden"].includes(type));
+            if (editable) {
+                el.focus({preventScroll:true});
+                return "input:" + tag + ":" + type;
             }
-            return "none";
+            const clickable = el.matches("button,a,[role='button'],[role='link'],input[type='button'],input[type='submit'],input[type='checkbox'],input[type='radio'],select,[tabindex]");
+            if (clickable) {
+                el.focus({preventScroll:true});
+                el.click();
+                return "click:" + tag + ":" + type;
+            }
+            return "no-control:" + tag + ":" + type;
         })()"""
         evaluateJavascript(script) { result ->
-            if (result?.trim('"') == "input") post {
+            val target = result?.trim('"')?.take(80) ?: "no-result"
+            Log.i("JA_DEEZER_REMOTE", "ACTIVATE key=$keyCode target=$target")
+            if (target.startsWith("input:")) post {
+                requestFocus()
                 val input = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
                 input?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+                Log.i("JA_DEEZER_REMOTE", "IME_REQUESTED")
             }
         }
     }
@@ -106,7 +150,11 @@ internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                     webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(v: WebView?, url: String?) { cookies() }
+                        override fun onPageFinished(v: WebView?, url: String?) {
+                            cookies()
+                            Log.i("JA_DEEZER_REMOTE", "PAGE_READY host=${android.net.Uri.parse(url.orEmpty()).host ?: "unknown"}")
+                            (v as? DeezerSignInWebView)?.focusWebContentOnce()
+                        }
                         override fun shouldOverrideUrlLoading(v: WebView?, request: WebResourceRequest): Boolean {
                             val uri = request.url
                             if (uri.scheme == "deezer" && uri.host == "autolog") {
