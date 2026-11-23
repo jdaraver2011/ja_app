@@ -39,6 +39,9 @@ fun JaSearchScreen(
     returnFocus: JaTitleReturnFocus? = null,
     subRowFocus: FocusRequester? = null,
     query: String,
+    recentSearches: List<JaSearchHistory.Entry> = emptyList(),
+    onRunRecentSearch: (JaSearchHistory.Entry) -> Unit = {},
+    onClearRecentSearches: () -> Unit = {},
     gridState: LazyGridState,
     onQueryChange: (String) -> Unit,
     mode: JaSearchMode,
@@ -130,6 +133,22 @@ fun JaSearchScreen(
                     highlighted = true,
                     onClick = onSearch
                 )
+            }
+        }
+        if (query.isBlank() && selectedGenre == null && recentSearches.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "search-recent-history") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Recent searches", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        JaSearchButton("Clear", false, onClearRecentSearches, compact = true)
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(recentSearches, key = { "recent-${it.mode.name}-${it.query.lowercase()}" }) { entry ->
+                            JaSearchButton("${entry.query} · ${entry.mode.label}", false,
+                                onClick = { onRunRecentSearch(entry) }, compact = true)
+                        }
+                    }
+                }
             }
         }
         if (loading || genreLoading) {
