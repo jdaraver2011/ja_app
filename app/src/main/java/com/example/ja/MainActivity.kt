@@ -1434,7 +1434,7 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
-        }
+        } else if (selectedPerson != null) {
             val activePerson = selectedPerson!!
             key("person:${activePerson.id}") {
             TmdbPersonScreen(
