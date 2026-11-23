@@ -119,7 +119,7 @@ internal fun JaAccountSyncSettings(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (showIntro) {
             Text("JA account sync", fontWeight = FontWeight.SemiBold)
-            Text("Sign in with email and password to sync Movies/TV watch history and favorites, JA Music saved items and playlists, and IPTV channel favorites and order. JA syncs on sign-in and when the app opens; tap Sync now after changes if you want them uploaded immediately. Playback/display settings, provider credentials, and temporary caches stay on this device.", color = Color(0xFFCBD5DE))
+            Text("JA syncs movie and TV favorites, resume positions, watch history, main and Music search history, Music favorites and playlists, IPTV favorites and ordering, saved preferences, playback source choices, and your Deezer session. Changes are queued for sync while JA is open and again when it moves to the background. Signing in on a fresh device restores your account data. Deezer credentials are stored with Supabase-managed encryption at rest; the JA account session and temporary weather/catalog caches stay on this device.", color = Color(0xFFCBD5DE))
         }
         if (session == null) {
             OutlinedTextField(value = email, onValueChange = { email = it.trim() }, modifier = Modifier.fillMaxWidth(),
