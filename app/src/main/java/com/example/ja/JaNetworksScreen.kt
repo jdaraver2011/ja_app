@@ -134,7 +134,7 @@ private fun JaNetworkRow(
         } else {
             LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                items(current.titles, key = { it.id }) { title ->
+                items(current.titles, key = { it.id }, contentType = { "poster" }) { title ->
                     PosterTile(marked(title), returnFocus, titleKey(title),
                         modifier = if (title == current.titles.firstOrNull())
                             Modifier.jaRowJumpFirstTitle(state.jump, network.id.toString()) else Modifier
