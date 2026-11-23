@@ -1,6 +1,7 @@
 package com.example.ja
 
 import androidx.room.*
+import kotlinx.coroutines.flow.Flow
 
 @androidx.compose.runtime.Immutable
 data class TitleItem(val id: Int, val title: String, val overview: String, val poster: String?, val backdrop: String?, val type: String, val rating: Double = 0.0, val watched: Boolean = false) {
@@ -15,6 +16,7 @@ data class WatchItem(val mediaId: Int, val mediaType: String, val season: Int = 
 
 @Dao interface WatchDao {
     @Query("SELECT * FROM watch_items ORDER BY updatedAt DESC") suspend fun all(): List<WatchItem>
+    @Query("SELECT * FROM watch_items ORDER BY updatedAt DESC") fun observeAll(): Flow<List<WatchItem>>
     @Query("DELETE FROM watch_items") suspend fun clearAll()
     @Query("UPDATE watch_items SET positionMs=:position, updatedAt=:updated WHERE mediaId=:id AND mediaType=:type AND season=:season AND episode=:episode")
     suspend fun updateProgress(id: Int, type: String, season: Int, episode: Int, position: Long, updated: Long)
