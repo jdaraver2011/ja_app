@@ -100,7 +100,7 @@ internal fun JaSearchScreen(
         item(span = { GridItemSpan(maxLineSpan) }, key = "search-filters") {
             JaUnscaledTopBar {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowItems(JaSearchMode.entries) { candidate ->
+                    rowItems(JaSearchMode.entries, contentType = { "search-mode" }) { candidate ->
                         JaSearchButton(
                             text = candidate.label,
                             modifier = if(candidate==mode && subRowFocus!=null) Modifier.focusRequester(subRowFocus) else Modifier,
@@ -143,7 +143,7 @@ internal fun JaSearchScreen(
                         JaSearchButton("Clear", false, onClearRecentSearches, compact = true)
                     }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        rowItems(recentSearches, key = { "recent-${it.mode.name}-${it.query.lowercase()}" }) { entry ->
+                        rowItems(recentSearches, key = { "recent-${it.mode.name}-${it.query.lowercase()}" }, contentType = { "recent-search" }) { entry ->
                             JaSearchButton("${entry.query} · ${entry.mode.label}", false,
                                 onClick = { onRunRecentSearch(entry) }, compact = true)
                         }
@@ -176,7 +176,7 @@ internal fun JaSearchScreen(
                 }
             }
             // Keep existing titles visible during additional-page requests.
-            items(genreTitles, key = { "genre-title-${it.type}-${it.id}" }) { title ->
+            items(genreTitles, key = { "genre-title-${it.type}-${it.id}" }, contentType = { "poster" }) { title ->
                 JaSearchTitleCard(title,
                     returnFocus = returnFocus, returnKey = "Search:Genre:${selectedGenre.type}:${selectedGenre.id}:${title.type}:${title.id}",
                     restoreFocus = genreFocusId == title.id,
@@ -220,7 +220,7 @@ internal fun JaSearchScreen(
                 item(span = { GridItemSpan(maxLineSpan) }, key = "movie-section") {
                     JaSearchSection("Movies", movieResults.size)
                 }
-                items(movieResults, key = { "movie-${it.id}" }) { title ->
+                items(movieResults, key = { "movie-${it.id}" }, contentType = { "poster" }) { title ->
                     JaSearchTitleCard(title, returnFocus = returnFocus, returnKey = "Search:Result:${title.type}:${title.id}") { onOpenTitle(title) }
                 }
             }
@@ -228,7 +228,7 @@ internal fun JaSearchScreen(
                 item(span = { GridItemSpan(maxLineSpan) }, key = "tv-section") {
                     JaSearchSection("TV Shows", tvResults.size)
                 }
-                items(tvResults, key = { "tv-${it.id}" }) { title ->
+                items(tvResults, key = { "tv-${it.id}" }, contentType = { "poster" }) { title ->
                     JaSearchTitleCard(title, returnFocus = returnFocus, returnKey = "Search:Result:${title.type}:${title.id}") { onOpenTitle(title) }
                 }
             }
@@ -243,7 +243,7 @@ internal fun JaSearchScreen(
                         results.people.size
                     )
                 }
-                items(results.people, key = { "person-${it.credit.id}" }) { person ->
+                items(results.people, key = { "person-${it.credit.id}" }, contentType = { "person" }) { person ->
                     JaSearchPersonCard(person, returnFocus) { onOpenPerson(person.credit) }
                 }
             }
@@ -256,7 +256,7 @@ internal fun JaSearchScreen(
                     item(span = { GridItemSpan(maxLineSpan) }, key = "genres-section") {
                         JaSearchSection("Genres", results.genres.size)
                     }
-                    items(results.genres, key = { "genre-${it.type}-${it.id}" }) { genre ->
+                    items(results.genres, key = { "genre-${it.type}-${it.id}" }, contentType = { "genre" }) { genre ->
                         JaSearchButton(
                             "${genre.name} · ${genre.displayType}", false,
                             onClick = { onOpenGenre(genre) },
