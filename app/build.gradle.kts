@@ -47,6 +47,10 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
+baselineProfile {
+    mergeIntoMain = true
+    saveInSrc = true
+}
 dependencies {
     baselineProfile(project(":baselineprofile"))
     implementation("androidx.browser:browser:1.8.0")
