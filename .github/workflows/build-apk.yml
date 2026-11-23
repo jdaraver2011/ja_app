@@ -298,13 +298,8 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: |
-            set +e
-            gradle --no-daemon --stacktrace :app:generateBaselineProfile
-            result=$?
-            mkdir -p test-results
-            adb logcat -d > test-results/baselineprofile-logcat.txt 2>&1 || true
-            exit "$result"
+          script: >-
+            gradle --no-daemon --stacktrace :app:generateBaselineProfile; result=$?; mkdir -p test-results; adb logcat -d > test-results/baselineprofile-logcat.txt 2>&1 || true; exit "$result"
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
