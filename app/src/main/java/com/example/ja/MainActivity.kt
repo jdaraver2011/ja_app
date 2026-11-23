@@ -1201,7 +1201,7 @@ class MainActivity : ComponentActivity() {
             .onGloballyPositioned { weatherHeader.navigation = it.boundsInRoot() },
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             items(listOf("Movies", "TV", "IPTV") + (if (showMusicTab) listOf("Music") else emptyList()) +
-                listOf("Search", "Favorites", "Continue", "Settings"), key = { it }) { t ->
+                listOf("Search", "Favorites", "Continue", "Settings"), key = { it }, contentType = { "navigation-tab" }) { t ->
                 TvFocusButton(
                     modifier = Modifier.focusRequester(mainRequesters.getValue(t))
                         .then(if(t=="IPTV") Modifier.focusRequester(liveTv.mainFocus) else if(t=="Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings=it.boundsInRoot() } else Modifier)
@@ -1702,7 +1702,7 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             contentPadding = PaddingValues(bottom = 24.dp)
                         ) {
-                            gridItems(favoriteTitles, key = { "favorite-${it.type}-${it.id}" }) { item ->
+                            gridItems(favoriteTitles, key = { "favorite-${it.type}-${it.id}" }, contentType = { "poster" }) { item ->
                                 JaSearchTitleCard(marked(item), returnFocus = titleReturnFocus,
                                     returnKey = "Favorites:$favoritesView:${item.type}:${item.id}") { open(item) }
                             }
@@ -1744,7 +1744,7 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             contentPadding = PaddingValues(bottom = 24.dp)
                         ) {
-                            gridItems(continueItems, key = { "continue-${it.mediaType}-${it.mediaId}" }) { saved ->
+                            gridItems(continueItems, key = { "continue-${it.mediaType}-${it.mediaId}" }, contentType = { "poster" }) { saved ->
                                 val title = TitleItem(saved.mediaId, saved.title, "", saved.poster, null, saved.mediaType)
                                 JaSearchTitleCard(marked(title),
                                     badge = JaResumeLabels.continueLabel(saved.mediaType, saved.season,
