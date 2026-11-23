@@ -31,6 +31,10 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         const val AUTH_REDIRECT = "ja://auth/callback"
         internal val cloudAppliedGeneration = MutableStateFlow(0)
         private val syncMutex = Mutex()
+        @Volatile private var applyingCloudSnapshot = false
+        @Volatile private var suppressLocalEventsUntilMs = 0L
+        internal fun shouldSuppressAutoSync(): Boolean = applyingCloudSnapshot ||
+            android.os.SystemClock.elapsedRealtime() < suppressLocalEventsUntilMs
         private val weatherSettingKeys = setOf("weatherstar", "weatherstar-sound", "weatherstar-volume",
             "music-choice", "custom-music", "zip")
     }
@@ -284,43 +288,50 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
     }
 
     private suspend fun applySnapshot(state: JSONObject) {
-        val media = state.optJSONObject("media") ?: JSONObject()
-        dao.clearAll()
-        val rows = media.optJSONArray("watch_items") ?: JSONArray()
-        for (i in 0 until rows.length()) runCatching {
-            val row = rows.getJSONObject(i)
-            dao.save(WatchItem(row.getInt("mediaId"), row.getString("mediaType"), row.optInt("season"), row.optInt("episode"),
-                row.optString("title"), row.optString("poster").takeIf { it != "null" }, row.optBoolean("favorite"), row.optLong("positionMs"), row.optLong("updatedAt")))
-        }
-        val watchedRows = media.optJSONArray("watched") ?: JSONArray()
-        val watched = (0 until watchedRows.length()).map { watchedRows.getString(it) }.toSet()
-        context.getSharedPreferences("ja_watched_v1", Context.MODE_PRIVATE).edit().putStringSet("watched", watched).commit()
-        WatchedStore.replaceAll(context, watched)
-        val orders = media.optJSONObject("favorite_order") ?: JSONObject()
-        context.getSharedPreferences("ja_favorite_display_order_v1", Context.MODE_PRIVATE).edit()
-            .putString("movie-ids", orders.optString("movie", "")).putString("tv-ids", orders.optString("tv", "")).commit()
-        applyPrefs("ja_music_library", state.optJSONObject("music")?.optJSONObject("values"), stringSets = false)
-        applyPrefs("ja_live_favorites", state.optJSONObject("iptv")?.optJSONObject("values"), stringSets = true)
-        state.optJSONObject("search")?.optJSONObject("values")?.let {
-            applyPrefs(JaSearchHistory.PREFS, it, stringSets = false)
-        }
-        state.optJSONObject("settings")?.let { settings ->
-            settings.optJSONObject("player_controls")?.let {
-                applyPrefs("ja_player_controls", it, stringSets = false)
+        applyingCloudSnapshot = true
+        suppressLocalEventsUntilMs = android.os.SystemClock.elapsedRealtime() + 3000L
+        try {
+            val media = state.optJSONObject("media") ?: JSONObject()
+            dao.clearAll()
+            val rows = media.optJSONArray("watch_items") ?: JSONArray()
+            for (i in 0 until rows.length()) runCatching {
+                val row = rows.getJSONObject(i)
+                dao.save(WatchItem(row.getInt("mediaId"), row.getString("mediaType"), row.optInt("season"), row.optInt("episode"),
+                    row.optString("title"), row.optString("poster").takeIf { it != "null" }, row.optBoolean("favorite"), row.optLong("positionMs"), row.optLong("updatedAt")))
             }
-            settings.optJSONObject("weather")?.let {
-                applyPrefs("ja_weather", it, stringSets = false, keyFilter = { key -> key in weatherSettingKeys })
+            val watchedRows = media.optJSONArray("watched") ?: JSONArray()
+            val watched = (0 until watchedRows.length()).map { watchedRows.getString(it) }.toSet()
+            context.getSharedPreferences("ja_watched_v1", Context.MODE_PRIVATE).edit().putStringSet("watched", watched).commit()
+            WatchedStore.replaceAll(context, watched)
+            val orders = media.optJSONObject("favorite_order") ?: JSONObject()
+            context.getSharedPreferences("ja_favorite_display_order_v1", Context.MODE_PRIVATE).edit()
+                .putString("movie-ids", orders.optString("movie", "")).putString("tv-ids", orders.optString("tv", "")).commit()
+            applyPrefs("ja_music_library", state.optJSONObject("music")?.optJSONObject("values"), stringSets = false)
+            applyPrefs("ja_live_favorites", state.optJSONObject("iptv")?.optJSONObject("values"), stringSets = true)
+            state.optJSONObject("search")?.optJSONObject("values")?.let {
+                applyPrefs(JaSearchHistory.PREFS, it, stringSets = false)
             }
-            settings.optJSONObject("playback_sources")?.let {
-                applyPrefs("ja_playback_server_history_v1", it, stringSets = false)
+            state.optJSONObject("settings")?.let { settings ->
+                settings.optJSONObject("player_controls")?.let {
+                    applyPrefs("ja_player_controls", it, stringSets = false)
+                }
+                settings.optJSONObject("weather")?.let {
+                    applyPrefs("ja_weather", it, stringSets = false, keyFilter = { key -> key in weatherSettingKeys })
+                }
+                settings.optJSONObject("playback_sources")?.let {
+                    applyPrefs("ja_playback_server_history_v1", it, stringSets = false)
+                }
             }
+            val credentials = state.optJSONObject("credentials")
+            if (credentials?.has("deezer_arl") == true && !credentials.isNull("deezer_arl")) {
+                val arl = credentials.optString("deezer_arl").takeIf { it.isNotBlank() && it != "null" }
+                if (arl == null) JaMusicLabVault(context).clear() else JaMusicLabVault(context).save(arl)
+            }
+            cloudAppliedGeneration.value++
+
+        } finally {
+            applyingCloudSnapshot = false
         }
-        val credentials = state.optJSONObject("credentials")
-        if (credentials?.has("deezer_arl") == true && !credentials.isNull("deezer_arl")) {
-            val arl = credentials.optString("deezer_arl").takeIf { it.isNotBlank() && it != "null" }
-            if (arl == null) JaMusicLabVault(context).clear() else JaMusicLabVault(context).save(arl)
-        }
-        cloudAppliedGeneration.value++
     }
 
     private fun applyPrefs(name: String, values: JSONObject?, stringSets: Boolean, keyFilter: (String) -> Boolean = { true }) {
