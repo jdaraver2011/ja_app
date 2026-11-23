@@ -47,6 +47,7 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
+// The profile output settings belong to the app target extension.
 baselineProfile {
     mergeIntoMain = true
     saveInSrc = true
