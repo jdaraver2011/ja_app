@@ -320,6 +320,7 @@ class MainActivity : ComponentActivity() {
     // watch-history timestamp, which changes whenever an episode is played.
     val favoritesOrder = remember { FavoritesDisplayOrder(appContext) }
     var showMusicTab by remember { mutableStateOf(settings.showMusicTab) }
+    var showIptvTab by remember { mutableStateOf(settings.showIptvTab) }
     var musicDesktopMode by remember { mutableStateOf(settings.musicDesktopMode) }
     var showBack by remember { mutableStateOf(settings.showBack) }
     var delayTvEpisodes by remember { mutableStateOf(settings.delayTvEpisodes) }
@@ -337,7 +338,20 @@ class MainActivity : ComponentActivity() {
     var confirmPreferredSourceReset by remember { mutableStateOf(false) }
     var preferredSourceResetStatus by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf("Movies") }
-    LaunchedEffect(showMusicTab) { if (!showMusicTab && tab == "Music") tab = "Movies" }
+    var settingsSection by remember { mutableStateOf<String?>(null) }
+    var settingsReturnSection by remember { mutableStateOf<String?>(null) }
+    val settingsGroups = remember { listOf("Account", "Ad Blocking", "Player", "Tabs", "Sources") }
+    val settingsGroupFocus = remember { settingsGroups.associateWith { FocusRequester() } }
+    val settingsBackFocus = remember { FocusRequester() }
+    val mainTabs = remember(showIptvTab, showMusicTab) { jaMainTabNames(showIptvTab, showMusicTab) }
+    LaunchedEffect(showMusicTab, showIptvTab) { if ((!showMusicTab && tab == "Music") || (!showIptvTab && tab == "IPTV")) tab = "Movies" }
+    LaunchedEffect(settingsSection) {
+        withFrameNanos { }
+        if (settingsSection == null) {
+            settingsReturnSection?.let { section -> runCatching { settingsGroupFocus[section]?.requestFocus() } }
+            settingsReturnSection = null
+        } else runCatching { settingsBackFocus.requestFocus() }
+    }
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val genreScrollStates = remember { mutableMapOf<String, LazyListState>() }
@@ -404,14 +418,14 @@ class MainActivity : ComponentActivity() {
     val subRequester = remember { FocusRequester() }
     var navigationLevel by remember { mutableIntStateOf(0) }
     fun focusMain() { exitGate.reset(); scope.launch {
-        val index = (listOf("Movies","TV","IPTV") + (if(showMusicTab) listOf("Music") else emptyList()) + listOf("Search","Favorites","Continue","Settings")).indexOf(tab)
+        val index = mainTabs.indexOf(tab)
         navigationRowState.animateScrollToItem(index.coerceAtLeast(0)); withFrameNanos { }
         runCatching { mainRequesters[tab]?.requestFocus() }
     } }
     SideEffect {
         weather.returnToNavigation = {
             scope.launch {
-                navigationRowState.scrollToItem(if (showMusicTab) 7 else 6)
+                navigationRowState.scrollToItem(mainTabs.indexOf("Settings").coerceAtLeast(0))
                 withFrameNanos { }; withFrameNanos { }
                 weather.navigationFocus.requestFocus()
             }
@@ -1064,6 +1078,7 @@ class MainActivity : ComponentActivity() {
     BackHandler {
         if (exiting) return@BackHandler
         when {
+            tab == "Settings" && settingsSection != null -> { settingsReturnSection = settingsSection; settingsSection = null }
             tab == "IPTV" && liveTv.fullscreen -> { liveTv.fullscreen = false }
             weatherOpen -> { weatherOpen = false; weatherReturnFocus = true }
             playback != null -> {
@@ -1096,7 +1111,7 @@ class MainActivity : ComponentActivity() {
     }
     if (weatherOpen) {
         JaWeatherPage(weather, onClose = { weatherOpen = false; weatherReturnFocus = true },
-            onSettings = { weatherOpen = false; tab = "Settings"; selected = null; selectedPerson = null; detailsBackStack.clear() },
+            onSettings = { weatherOpen = false; tab = "Settings"; settingsSection = "Tabs"; selected = null; selectedPerson = null; detailsBackStack.clear() },
             onWeatherChannel = { weatherOpen=false;tab="IPTV";selected=null;selectedPerson=null;detailsBackStack.clear();liveTv.tune(jaWeatherChannel(),true) })
         return
     }
@@ -1200,8 +1215,7 @@ class MainActivity : ComponentActivity() {
         LazyRow(state = navigationRowState, modifier = Modifier.fillMaxWidth()
             .onGloballyPositioned { weatherHeader.navigation = it.boundsInRoot() },
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            items(listOf("Movies", "TV", "IPTV") + (if (showMusicTab) listOf("Music") else emptyList()) +
-                listOf("Search", "Favorites", "Continue", "Settings"), key = { it }, contentType = { "navigation-tab" }) { t ->
+            items(mainTabs, key = { it }, contentType = { "navigation-tab" }) { t ->
                 TvFocusButton(
                     modifier = Modifier.focusRequester(mainRequesters.getValue(t))
                         .then(if(t=="IPTV") Modifier.focusRequester(liveTv.mainFocus) else if(t=="Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings=it.boundsInRoot() } else Modifier)
@@ -1211,7 +1225,7 @@ class MainActivity : ComponentActivity() {
                                 if(event.type==KeyEventType.KeyDown) { if(tab=="IPTV") liveTv.focusPreview() else focusSub() }; true
                             } else false
                         },
-                    onClick = { titleReturnFocus.clear(); exitGate.reset(); tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null },
+                    onClick = { titleReturnFocus.clear(); exitGate.reset(); if (t == "Settings") settingsSection = null; tab = t; selected = null; selectedPerson = null; detailsBackStack.clear(); playback = null },
                     colors = ButtonDefaults.buttonColors(containerColor = if (tab == t) accent else Color.DarkGray)
                 ) { Text(t, color = Color.Black) }
             }
@@ -1235,204 +1249,192 @@ class MainActivity : ComponentActivity() {
             }
         }
         if (tab == "Settings" && selected == null) {
-            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-                JaAccountSyncSettings(dao, onCloudDataApplied = {
-                    liveTv.reloadPersonalFavorites()
-                    refreshHistory()
-                    JaMusicLibrary.notifyCloudRestore()
-                    recentSearches = searchHistoryStore.all()
-                    weather.reloadPreferences()
-                }, onSignedOut = onSignedOut)
-                Spacer(Modifier.height(16.dp))
-                JaUpdateSettings()
-                JaWeatherSettings(weather)
-                Text("This product uses the TMDB API but is not endorsed or certified by TMDB.", color=Color.LightGray,style=MaterialTheme.typography.bodySmall)
-                Text("Music", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                TvSettingsToggle("Show Music tab", showMusicTab) {
-                    showMusicTab = it; settings.showMusicTab = it
-                    Log.i("JA_MUSIC", "TAB_VISIBILITY visible=$it")
-                }
-                Text("Hiding the tab does not stop active music. You can stop it below or from the music notification.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-                TvSettingsToggle("Use desktop site for Music", musicDesktopMode) {
-                    musicDesktopMode = it; settings.musicDesktopMode = it
-                    Log.i("JA_MUSIC", "DESKTOP_SITE_PREFERENCE enabled=$it")
-                }
-                Text("Requests Deezer's desktop website. After changing this, Stop Music and reopen it. " +
-                    "Saved Deezer login data is kept. Playback still depends on Deezer's account and regional availability.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-                JaMusicDiagnosticsSettings()
-                Spacer(Modifier.height(16.dp))
-                Text("VidSrc catalogue downloads", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                TvSettingsToggle("Download VidSrc ID lists daily", dailyVidSrcDownloads) {
-                    JaVidSrcCatalog.setDailyDownloads(it)
-                }
-                Text(
-                    "When off, JA keeps using the saved IDs and skips automatic downloads on launch or return. " +
-                        "Movie availability can become outdated. CAM metadata checks remain enabled. " +
-                        "Turning this on checks whether the lists are overdue.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall
-                )
-                if (!vidSrcSnapshot.ready && !dailyVidSrcDownloads) Text(
-                    "No saved ID lists. Download once below to populate available movie listings.",
-                    color = Color(0xFFFFC48A), style = MaterialTheme.typography.bodySmall
-                )
-                TvFocusButton(onClick = { JaVidSrcCatalog.refreshOverdue(force = true) }, enabled = !vidSrcSnapshot.busy) {
-                    Text("Download ID lists now")
-                }
-                Spacer(Modifier.height(16.dp))
-                Text("TV episode release dates", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                TvSettingsToggle("Show TV episodes one day after release", delayTvEpisodes) {
-                    delayTvEpisodes = it; settings.delayTvEpisodes = it
-                }
-                Text("When enabled, only episodes dated yesterday or earlier appear. Today's, future and missing dates are hidden. Uses this device's local calendar date. Turn off to show all episodes.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(16.dp))
-                Text("Player controls", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Text("Choose which controls appear over GeckoView. Android's system Back action still exits playback.", color = Color.LightGray)
-                TvSettingsToggle("Show Back button", showBack) { showBack = it; settings.showBack = it }
-                TvSettingsToggle("Show Restore Episode button", showRestore) { showRestore = it; settings.showRestore = it }
-                Spacer(Modifier.height(16.dp))
-                Text("Player diagnostics", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                TvSettingsToggle("Show player diagnostics overlay", showPlayerDiagnostics) {
-                    showPlayerDiagnostics = it; settings.showPlayerDiagnostics = it
-                }
-                Text(
-                    "Shows provider, loading, media and navigation diagnostics over GeckoView. " +
-                        "The normal player controls are unchanged.",
-                    color = Color.LightGray,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(Modifier.height(16.dp))
-                Text("Android TV display performance", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                TvSettingsToggle("Match TV frame rate during playback", matchTvFrameRate) {
-                    matchTvFrameRate = it; settings.matchTvFrameRate = it
-                }
-                Text(
-                    "Enabled by default on Android TV; disabled on phones. JA measures video frames to " +
-                        "request a compatible display refresh rate. A mode change may briefly blank the screen. " +
-                        "Your previous display preference is restored when playback closes.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall
-                )
-                TvSettingsToggle("Match TV output resolution to video (experimental)",
-                    matchTvResolution, enabled = matchTvFrameRate) {
-                    matchTvResolution = it; settings.matchTvResolution = it
-                }
-                Text(
-                    "Enabled by default on Android TV: a 1080-class video can request 1080p at its matching frame rate " +
-                        "instead of keeping the TV's 4K output. Frame-rate matching takes priority. " +
-                        "You can turn resolution matching off if needed for your display. " +
-                        "The prior display preference is restored on exit.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall
-                )
-                TvSettingsToggle("Match stream quality to TV output (experimental)",
-                    matchStreamQuality, enabled = matchTvFrameRate && matchTvResolution) {
-                    matchStreamQuality = it; settings.matchStreamQuality = it
-                }
-                Text("Selects matching quality on supported players after the TV mode is applied. " +
-                    "Uses the best available quality below the output resolution when an exact match is missing. " +
-                    "Restart playback after changing this setting.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(16.dp))
-                Text("Embedded player ad blocking", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Text(
-                    "Choose ONE Firefox ad blocker. GeckoView initializes it when JA opens, and downloads the Mozilla-signed add-on only if needed. " +
-                         "For a white-screen test, select Off to disable both uBlock and AdGuard. Popup windows and JS prompts remain blocked. Restart playback after changing this setting.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        JaGeckoAdBlockers.UBLOCK to "uBlock Origin",
-                        JaGeckoAdBlockers.ADGUARD to "AdGuard",
-                        JaGeckoAdBlockers.OFF to "Off"
-                    ).forEach { (mode, name) ->
-                        TvFocusButton(
-                            onClick = {
-                                adBlockerMode = mode
-                                settings.adBlockerMode = mode
-                                // Apply the new filter choice while in Settings.
-                                prewarmPlayerAdBlocker(appContext, mode)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (adBlockerMode == mode) accent else Color.DarkGray
-                            )
-                        ) { Text(name, color = Color.Black) }
+            if (settingsSection == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(Modifier.widthIn(max = 620.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
+                        Text("Settings", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                        settingsGroups.forEach { group ->
+                            TvFocusButton(onClick = { settingsReturnSection = group; settingsSection = group },
+                                modifier = Modifier.fillMaxWidth().focusRequester(settingsGroupFocus.getValue(group)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF263747))) {
+                                Text(group, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                            }
+                        }
                     }
                 }
-                Text("Status: ${blockerStatus.message}", color =
-                    if (blockerStatus.phase == JaGeckoAdBlockers.Phase.FAILED ||
-                        blockerStatus.phase == JaGeckoAdBlockers.Phase.WARNING) Color(0xFFFFC48A) else Color.LightGray,
-                    style = MaterialTheme.typography.bodySmall)
-                Text("Enabled means Gecko started the extension; it does not verify its filter engine. " +
-                    "Switching to Off waits for both filtering extensions to be disabled.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-                if (adBlockerMode == JaGeckoAdBlockers.UBLOCK) {
-                    TvFocusButton(onClick = {
-                        blockerToolsError = null
-                        JaGeckoAdBlockers.managementPages(appContext) { pages, problem ->
-                            blockerTools = pages
-                            blockerToolsError = problem
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.widthIn(max = 900.dp).fillMaxWidth().fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                    TvFocusButton(onClick = { settingsReturnSection = settingsSection; settingsSection = null },
+                        modifier = Modifier.fillMaxWidth().focusRequester(settingsBackFocus),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF263747))) {
+                        Text("← Settings", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                    }
+                    Text(settingsSection.orEmpty(), modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),
+                        style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
+                    Column(Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        when (settingsSection) {
+                            "Account" -> {
+                                JaAccountSyncSettings(dao, onCloudDataApplied = {
+                                    liveTv.reloadPersonalFavorites()
+                                    refreshHistory()
+                                    JaMusicLibrary.notifyCloudRestore()
+                                    recentSearches = searchHistoryStore.all()
+                                    weather.reloadPreferences()
+                                }, onSignedOut = onSignedOut)
+                                JaUpdateSettings()
+                                Text("This product uses the TMDB API but is not endorsed or certified by TMDB.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            }
+                            "Ad Blocking" -> {
+                                Text("Embedded player ad blocking", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                Text("Choose one Firefox ad blocker. GeckoView initializes it when JA opens, and downloads the Mozilla-signed add-on only if needed. For a white-screen test, select Off to disable both uBlock and AdGuard. Popup windows and JS prompts remain blocked. Restart playback after changing this setting.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                                    listOf(JaGeckoAdBlockers.UBLOCK to "uBlock Origin", JaGeckoAdBlockers.ADGUARD to "AdGuard",
+                                        JaGeckoAdBlockers.OFF to "Off").forEach { (mode, name) ->
+                                        TvFocusButton(onClick = {
+                                            adBlockerMode = mode; settings.adBlockerMode = mode
+                                            prewarmPlayerAdBlocker(appContext, mode)
+                                        }, colors = ButtonDefaults.buttonColors(containerColor = if (adBlockerMode == mode) accent else Color.DarkGray)) {
+                                            Text(name, color = Color.Black)
+                                        }
+                                    }
+                                }
+                                Text("Status: ${blockerStatus.message}", color =
+                                    if (blockerStatus.phase == JaGeckoAdBlockers.Phase.FAILED ||
+                                        blockerStatus.phase == JaGeckoAdBlockers.Phase.WARNING) Color(0xFFFFC48A) else Color.LightGray,
+                                    style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                Text("Enabled means Gecko started the extension; it does not verify its filter engine. Switching to Off waits for both filtering extensions to be disabled.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                if (adBlockerMode == JaGeckoAdBlockers.UBLOCK) {
+                                    TvFocusButton(onClick = {
+                                        blockerToolsError = null
+                                        JaGeckoAdBlockers.managementPages(appContext) { pages, problem ->
+                                            blockerTools = pages; blockerToolsError = problem
+                                        }
+                                    }, enabled = blockerStatus.mode == JaGeckoAdBlockers.UBLOCK &&
+                                        blockerStatus.phase != JaGeckoAdBlockers.Phase.STARTING) { Text("Open uBlock dashboard / logger") }
+                                }
+                                blockerToolsError?.let { Text(it, color = Color(0xFFFFC48A), textAlign = TextAlign.Center) }
+                            }
+                            "Player" -> {
+                                Text("Player controls", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                Text("Choose which controls appear over GeckoView. Android's system Back action still exits playback.",
+                                    color = Color.LightGray, textAlign = TextAlign.Center)
+                                TvSettingsToggle("Show Back button", showBack) { showBack = it; settings.showBack = it }
+                                TvSettingsToggle("Show Restore Episode button", showRestore) { showRestore = it; settings.showRestore = it }
+                                Text("Player diagnostics", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                TvSettingsToggle("Show player diagnostics overlay", showPlayerDiagnostics) {
+                                    showPlayerDiagnostics = it; settings.showPlayerDiagnostics = it
+                                }
+                                Text("Shows provider, loading, media and navigation diagnostics over GeckoView. The normal player controls are unchanged.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                Text("Android TV display performance", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                TvSettingsToggle("Match TV frame rate during playback", matchTvFrameRate) {
+                                    matchTvFrameRate = it; settings.matchTvFrameRate = it
+                                }
+                                Text("Enabled by default on Android TV; disabled on phones. JA measures video frames to request a compatible display refresh rate. A mode change may briefly blank the screen. Your previous display preference is restored when playback closes.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                TvSettingsToggle("Match TV output resolution to video (experimental)", matchTvResolution,
+                                    enabled = matchTvFrameRate) { matchTvResolution = it; settings.matchTvResolution = it }
+                                Text("A 1080-class video can request 1080p at its matching frame rate instead of keeping the TV's 4K output. Frame-rate matching takes priority. The prior display preference is restored on exit.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                TvSettingsToggle("Match stream quality to TV output (experimental)", matchStreamQuality,
+                                    enabled = matchTvFrameRate && matchTvResolution) { matchStreamQuality = it; settings.matchStreamQuality = it }
+                                Text("Selects matching quality on supported players after the TV mode is applied. Uses the best available quality below the output resolution when an exact match is missing. Restart playback after changing this setting.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            }
+                            "Tabs" -> {
+                                Text("Tabs and dashboard", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                TvSettingsToggle("Show IPTV tab", showIptvTab) {
+                                    showIptvTab = it; settings.showIptvTab = it
+                                    if (!it && tab == "IPTV") tab = "Movies"
+                                }
+                                TvSettingsToggle("Show Music tab", showMusicTab) {
+                                    showMusicTab = it; settings.showMusicTab = it
+                                    Log.i("JA_MUSIC", "TAB_VISIBILITY visible=$it")
+                                }
+                                Text("Hiding a tab does not stop active playback or music.", color = Color.LightGray,
+                                    style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                Text("Music", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                TvSettingsToggle("Use desktop site for Music", musicDesktopMode) {
+                                    musicDesktopMode = it; settings.musicDesktopMode = it
+                                    Log.i("JA_MUSIC", "DESKTOP_SITE_PREFERENCE enabled=$it")
+                                }
+                                Text("Requests Deezer's desktop website. After changing this, Stop Music and reopen it. Saved Deezer login data is kept.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                JaMusicDiagnosticsSettings()
+                                Spacer(Modifier.height(8.dp))
+                                JaWeatherSettings(weather)
+                            }
+                            "Sources" -> {
+                                Text("Preferred playback sources", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                Text("Default source order: 1. VidSrc (vidsrc.sh), 2. VidFast (vidfast.vc), 3. ScottsMedia, 4. Movy (movy.sx), 5. 7Movies (7movies.ac), 6. CineJoy (cinejoy.pk). TV episodes first try the last working source for that same series and season. Movies retain the default order. Each TV season learns independently. Reset clears saved season preferences. Watch progress stays intact.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                TvFocusButton(onClick = { confirmPreferredSourceReset = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) { Text("Reset preferred sources", color = Color.White) }
+                                preferredSourceResetStatus?.let { Text(it, color = Color.LightGray, textAlign = TextAlign.Center) }
+                                Spacer(Modifier.height(8.dp))
+                                Text("VidSrc catalogue downloads", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                TvSettingsToggle("Download VidSrc ID lists daily", dailyVidSrcDownloads) { JaVidSrcCatalog.setDailyDownloads(it) }
+                                Text("When off, JA keeps using saved IDs and skips automatic downloads on launch or return. Turning this on checks whether the lists are overdue.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                if (vidSrcSnapshot.busy || (!vidSrcSnapshot.ready && dailyVidSrcDownloads)) Text(
+                                    if (vidSrcSnapshot.ready) "Updating VidSrc catalogue…" else "Preparing VidSrc catalogue…",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                vidSrcSnapshot.error?.let {
+                                    Text(it, color = Color(0xFFFFA8A8), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                    if (!vidSrcSnapshot.busy) TvFocusButton(onClick = { JaVidSrcCatalog.refreshOverdue(force = true) }) { Text("Retry source refresh") }
+                                }
+                                if (!vidSrcSnapshot.ready && !dailyVidSrcDownloads) Text(
+                                    "No saved ID lists. Download once below to populate available movie listings.",
+                                    color = Color(0xFFFFC48A), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                TvFocusButton(onClick = { JaVidSrcCatalog.refreshOverdue(force = true) },
+                                    enabled = !vidSrcSnapshot.busy) { Text("Download ID lists now") }
+                                Spacer(Modifier.height(8.dp))
+                                Text("TV episode release dates", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                TvSettingsToggle("Show TV episodes one day after release", delayTvEpisodes) {
+                                    delayTvEpisodes = it; settings.delayTvEpisodes = it
+                                }
+                                Text("When enabled, only episodes dated yesterday or earlier appear. Today's, future and missing dates are hidden. Uses this device's local calendar date. Turn off to show all episodes.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                Text("Settings and source preferences are saved on this device.", color = Color.LightGray,
+                                    style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            }
                         }
-                    }, enabled = blockerStatus.mode == JaGeckoAdBlockers.UBLOCK &&
-                        blockerStatus.phase != JaGeckoAdBlockers.Phase.STARTING) {
-                        Text("Open uBlock dashboard / logger")
+                        Text("The TMDB API provides metadata; JA is not endorsed or certified by TMDB.",
+                            color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                    }
                     }
                 }
-                blockerToolsError?.let { Text(it, color = Color(0xFFFFC48A)) }
-                Spacer(Modifier.height(16.dp))
-                Text("Preferred playback sources", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Text(
-                    "Default source order: " +
-                        "1. VidSrc (vidsrc.sh), 2. VidFast (vidfast.vc), " +
-                        "3. ScottsMedia, 4. Movy (movy.sx), 5. 7Movies (7movies.ac), 6. CineJoy (cinejoy.pk). " +
-                        "TV episodes first try the last working source for that same series and season. " +
-                        "Movies retain the default order. Each TV season learns independently. " +
-                        "Reset clears saved season preferences. Watch progress stays intact.",
-                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall
+                if (confirmPreferredSourceReset) AlertDialog(
+                    onDismissRequest = { confirmPreferredSourceReset = false },
+                    title = { Text("Reset preferred sources?") },
+                    text = { Text("All titles will start with VidSrc, then VidFast, ScottsMedia, Movy, 7Movies and CineJoy. Saved TV-season preferences will be cleared. Watch progress is preserved.") },
+                    confirmButton = {
+                        TvFocusButton(onClick = {
+                            val saved = preferredSourceReset.resetAll()
+                            preferredSourceResetStatus = if (saved) "Season preferences cleared. Default order: VidSrc, VidFast, ScottsMedia, Movy, 7Movies, CineJoy."
+                                else "Reset could not be saved. Please retry."
+                            confirmPreferredSourceReset = false
+                        }, colors = ButtonDefaults.buttonColors(containerColor = accent)) { Text("Reset all titles", color = Color.Black) }
+                    },
+                    dismissButton = {
+                        TvFocusButton(onClick = { confirmPreferredSourceReset = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) { Text("Cancel", color = Color.White) }
+                    }
                 )
-                Spacer(Modifier.height(8.dp))
-                TvFocusButton(
-                    onClick = { confirmPreferredSourceReset = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                ) { Text("Reset preferred sources", color = Color.White) }
-                preferredSourceResetStatus?.let {
-                    Text(it, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("Settings are saved on this device.", color = Color.LightGray)
-                if (confirmPreferredSourceReset) {
-                    AlertDialog(
-                        onDismissRequest = { confirmPreferredSourceReset = false },
-                        title = { Text("Reset preferred sources?") },
-                        text = { Text(
-                            "All titles will start with VidSrc (vidsrc.sh), followed by " +
-                                "VidFast (vidfast.vc), ScottsMedia, Movy, 7Movies, then CineJoy (cinejoy.pk). " +
-                                 "Saved TV-season preferences and other learned choices will be cleared. " +
-                                "Each season learns again when an episode starts playing. " +
-                                "Watch progress is preserved."
-                        ) },
-                        confirmButton = {
-                            TvFocusButton(
-                                onClick = {
-                                    val saved = preferredSourceReset.resetAll()
-                                    preferredSourceResetStatus = if (saved)
-                                        "Season preferences cleared. Default order: VidSrc, VidFast, ScottsMedia, Movy, 7Movies, CineJoy."
-                                    else "Reset could not be saved. Please retry."
-                                    confirmPreferredSourceReset = false
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = accent)
-                            ) { Text("Reset all titles", color = Color.Black) }
-                        },
-                        dismissButton = {
-                            TvFocusButton(
-                                onClick = { confirmPreferredSourceReset = false },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                            ) { Text("Cancel", color = Color.White) }
-                        }
-                    )
-                }
             }
-        } else if (selectedPerson != null) {
+        }
             val activePerson = selectedPerson!!
             key("person:${activePerson.id}") {
             TmdbPersonScreen(
@@ -2080,6 +2082,10 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
 
 
 /** Persist player overlay preferences between JA launches. */
+private fun jaMainTabNames(showIptv: Boolean, showMusic: Boolean): List<String> =
+    listOf("Movies", "TV") + (if (showIptv) listOf("IPTV") else emptyList()) +
+        (if (showMusic) listOf("Music") else emptyList()) + listOf("Search", "Favorites", "Continue", "Settings")
+
 internal class PlayerControlSettings(context: Context) {
     private val prefs = context.getSharedPreferences("ja_player_controls", Context.MODE_PRIVATE)
     private val isTelevision =
@@ -2094,6 +2100,9 @@ internal class PlayerControlSettings(context: Context) {
     var showMusicTab: Boolean
         get() = prefs.getBoolean("show_music_tab", false)
         set(value) { prefs.edit().putBoolean("show_music_tab", value).apply() }
+    var showIptvTab: Boolean
+        get() = prefs.getBoolean("show_iptv_tab", true)
+        set(value) { prefs.edit().putBoolean("show_iptv_tab", value).apply() }
     var showBack: Boolean
         get() = prefs.getBoolean("back", false)
         set(value) { prefs.edit().putBoolean("back", value).apply() }

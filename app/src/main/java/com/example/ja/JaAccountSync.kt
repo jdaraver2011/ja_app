@@ -172,49 +172,43 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
 
     suspend fun sync(): String = syncMutex.withLock {
         withContext(Dispatchers.IO) {
-        check(baseUrl.startsWith("https://") && apiKey.isNotBlank()) { "Supabase settings are not configured in this test build." }
-        val account = validSession()
-        val local = snapshot()
-        val localHash = stateHash(local)
-        val fetched = request("GET", "$baseUrl/rest/v1/ja_user_state?select=state&user_id=eq.${account.userId}", token = account.accessToken, acceptArray = true)
-        val remote = fetched.optJSONArray("data")?.optJSONObject(0)?.optJSONObject("state")
-        val oldLocalHash = authPrefs.getString("last_local_hash", null)
-        val oldRemoteHash = authPrefs.getString("last_remote_hash", null)
-        if (remote == null) {
-            upload(account, local)
-            authPrefs.edit().putString("last_local_hash", localHash).putString("last_remote_hash", localHash).apply()
-            return@withContext "This device's JA data was uploaded to your account."
-        }
-        val remoteHash = stateHash(remote)
-        if (isPristineLocal(local)) {
-            applySnapshot(remote)
-            val applied = stateHash(snapshot())
-            authPrefs.edit().putString("last_local_hash", applied).putString("last_remote_hash", remoteHash).apply()
-            return@withContext "Downloaded your saved data from your account."
-        }
-        if (oldLocalHash == null && oldRemoteHash == null) {
-            if (stateHash(local) != stateHash(emptySnapshot())) {
-                error("Cloud data already exists for this account. Choose Download cloud data or Upload this device before the first sync.")
+            check(baseUrl.startsWith("https://") && apiKey.isNotBlank()) {
+                "Supabase settings are not configured in this test build."
             }
-            applySnapshot(remote)
-            val applied = stateHash(snapshot())
-            authPrefs.edit().putString("last_local_hash", applied).putString("last_remote_hash", remoteHash).apply()
-            return@withContext "Downloaded your saved data from your account."
-        }
-        val localChanged = oldLocalHash != null && oldLocalHash != localHash
-        val remoteChanged = oldRemoteHash != null && oldRemoteHash != remoteHash
-        if (remoteChanged && !localChanged) {
-            applySnapshot(remote)
-            val applied = stateHash(snapshot())
-            authPrefs.edit().putString("last_local_hash", applied).putString("last_remote_hash", remoteHash).apply()
-            "Downloaded your latest saved data from your account."
-        } else if (localChanged && remoteChanged && localHash != remoteHash) {
-            error("Both this device and the cloud changed since the previous sync. Choose Upload this device or Download cloud data.")
-        } else {
-            if (localChanged || oldLocalHash == null) upload(account, local)
-            authPrefs.edit().putString("last_local_hash", localHash).putString("last_remote_hash", localHash).apply()
-            "JA data is synced with your account."
-        }
+            val account = validSession()
+            val local = snapshot()
+            val localHash = stateHash(local)
+            val fetched = request(
+                "GET",
+                "$baseUrl/rest/v1/ja_user_state?select=state&user_id=eq.${account.userId}",
+                token = account.accessToken,
+                acceptArray = true
+            )
+            val remote = fetched.optJSONArray("data")?.optJSONObject(0)?.optJSONObject("state")
+            if (remote == null) {
+                upload(account, local)
+                authPrefs.edit().putString("last_local_hash", localHash)
+                    .putString("last_remote_hash", localHash).apply()
+                return@withContext "This device's JA data was uploaded to your account."
+            }
+
+            // Keep data from both places on first sign-in and on every later sync.
+            // The merge is additive for collections and uses this device's value for
+            // scalar preference conflicts, so account sign-in cannot erase local data.
+            val merged = mergeSnapshots(local, remote)
+            if (stateHash(merged) != localHash) applySnapshot(merged)
+            val applied = snapshot()
+            val appliedHash = stateHash(applied)
+            val remoteHash = stateHash(remote)
+            if (remoteHash != appliedHash) upload(account, applied)
+            authPrefs.edit().putString("last_local_hash", appliedHash)
+                .putString("last_remote_hash", appliedHash).apply()
+
+            if (appliedHash != localHash || remoteHash != appliedHash) {
+                "Merged this device's saved data with your JA account; existing data was kept."
+            } else {
+                "JA data is synced with your account."
+            }
         }
     }
 
@@ -287,6 +281,118 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
             is Boolean -> put(name, value)
             is Number -> put(name, value)
         } }
+    }
+
+    private fun mergeSnapshots(local: JSONObject, cloud: JSONObject): JSONObject {
+        val merged = mergeJsonObjects(local, cloud)
+        val localMedia = local.optJSONObject("media") ?: JSONObject()
+        val cloudMedia = cloud.optJSONObject("media") ?: JSONObject()
+        val media = mergeJsonObjects(localMedia, cloudMedia)
+        media.put("watch_items", mergeWatchItems(
+            localMedia.optJSONArray("watch_items") ?: JSONArray(),
+            cloudMedia.optJSONArray("watch_items") ?: JSONArray()
+        ))
+        media.put("watched", unionArrays(
+            localMedia.optJSONArray("watched") ?: JSONArray(),
+            cloudMedia.optJSONArray("watched") ?: JSONArray()
+        ))
+        val localOrder = localMedia.optJSONObject("favorite_order") ?: JSONObject()
+        val cloudOrder = cloudMedia.optJSONObject("favorite_order") ?: JSONObject()
+        media.put("favorite_order", JSONObject()
+            .put("movie", mergeOrderedValues(localOrder.optString("movie"), cloudOrder.optString("movie")))
+            .put("tv", mergeOrderedValues(localOrder.optString("tv"), cloudOrder.optString("tv"))))
+        merged.put("media", media)
+        return merged
+    }
+
+    private fun mergeJsonObjects(local: JSONObject, cloud: JSONObject): JSONObject {
+        val merged = JSONObject(cloud.toString())
+        val keys = local.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val localValue = local.opt(key)
+            if (!cloud.has(key)) {
+                merged.put(key, localValue)
+                continue
+            }
+            val cloudValue = cloud.opt(key)
+            val value = when {
+                localValue is JSONObject && cloudValue is JSONObject ->
+                    mergeJsonObjects(localValue, cloudValue)
+                localValue is JSONArray && cloudValue is JSONArray ->
+                    if (key == "watch_items") mergeWatchItems(localValue, cloudValue)
+                    else unionArrays(localValue, cloudValue)
+                localValue is String && cloudValue is String ->
+                    mergeStoredStrings(key, localValue, cloudValue)
+                localValue == JSONObject.NULL || localValue == null -> cloudValue
+                else -> localValue
+            }
+            merged.put(key, value)
+        }
+        return merged
+    }
+
+    private fun mergeStoredStrings(key: String, local: String, cloud: String): String {
+        if (local.isBlank()) return cloud
+        if (cloud.isBlank()) return local
+        if (key == "order" || key.startsWith("group-order:")) return mergeOrderedValues(local, cloud)
+        val localArray = runCatching { JSONArray(local) }.getOrNull()
+        val cloudArray = runCatching { JSONArray(cloud) }.getOrNull()
+        if (localArray != null && cloudArray != null) return unionArrays(localArray, cloudArray).toString()
+        val localObject = runCatching { JSONObject(local) }.getOrNull()
+        val cloudObject = runCatching { JSONObject(cloud) }.getOrNull()
+        if (localObject != null && cloudObject != null) return mergeJsonObjects(localObject, cloudObject).toString()
+        return local
+    }
+
+    private fun mergeOrderedValues(local: String, cloud: String): String {
+        val values = linkedSetOf<String>()
+        (local.split(',') + cloud.split(',')).map(String::trim).filter(String::isNotEmpty).forEach(values::add)
+        return values.joinToString(",")
+    }
+
+    private fun unionArrays(local: JSONArray, cloud: JSONArray): JSONArray {
+        val seen = linkedSetOf<String>()
+        val result = JSONArray()
+        for (array in listOf(local, cloud)) for (index in 0 until array.length()) {
+            val value = array.opt(index) ?: continue
+            val identity = canonical(value)
+            if (seen.add(identity)) result.put(value)
+        }
+        return result
+    }
+
+    private fun mergeWatchItems(local: JSONArray, cloud: JSONArray): JSONArray {
+        val rows = linkedMapOf<String, JSONObject>()
+        fun add(array: JSONArray) {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val key = listOf("mediaId", "mediaType", "season", "episode")
+                    .joinToString(":") { item.optString(it, "0") }
+                val previous = rows[key]
+                rows[key] = if (previous == null) JSONObject(item.toString()) else mergeWatchItem(previous, item)
+            }
+        }
+        add(local)
+        add(cloud)
+        return JSONArray().apply { rows.values.forEach { put(it) } }
+    }
+
+    private fun mergeWatchItem(local: JSONObject, cloud: JSONObject): JSONObject {
+        val merged = mergeJsonObjects(local, cloud)
+        val localUpdated = local.optLong("updatedAt")
+        val cloudUpdated = cloud.optLong("updatedAt")
+        val latest = if (cloudUpdated > localUpdated) cloud else local
+        merged.put("positionMs", latest.optLong("positionMs"))
+        merged.put("updatedAt", maxOf(localUpdated, cloudUpdated))
+        merged.put("favorite", local.optBoolean("favorite") || cloud.optBoolean("favorite"))
+        val title = local.optString("title").takeIf(String::isNotBlank)
+            ?: cloud.optString("title")
+        if (title.isNotBlank()) merged.put("title", title)
+        val poster = local.optString("poster").takeIf { it.isNotBlank() && it != "null" }
+            ?: cloud.optString("poster").takeIf { it.isNotBlank() && it != "null" }
+        if (poster != null) merged.put("poster", poster)
+        return merged
     }
 
     private suspend fun applySnapshot(state: JSONObject) {

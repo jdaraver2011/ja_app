@@ -280,7 +280,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
         state.finishMove(false);menuGuard.open(remote);menuChannel=channel
     }
     fun closeMenu(){val channel=menuChannel;menuChannel=null;state.returnChannel=channel?.id}
-    fun play(channel:JaLiveChannel){state.tune(channel,true)}
+    fun play(channel:JaLiveChannel){state.tune(channel, state.previewChannel?.id == channel.id)}
     LaunchedEffect(state.view){if(state.appliedView!=state.view){
         if(state.returnChannel==null)state.list.scrollToItem(0);state.appliedView=state.view
     }}

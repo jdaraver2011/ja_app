@@ -23,6 +23,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +43,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+
+@Composable
+private fun jaAccountFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    focusedBorderColor = Color.White,
+    unfocusedBorderColor = Color(0xFF718096),
+    focusedLabelColor = Color.White,
+    unfocusedLabelColor = Color.LightGray,
+    cursorColor = Color(0xFFE5A43B)
+)
 
 private data class JaAuthCallback(val type: String, val accessToken: String, val refreshToken: String, val error: String = "")
 
@@ -80,6 +92,7 @@ internal fun JaAccountSyncSettings(
     var recoveryToken by remember { mutableStateOf<Pair<String, String>?>(null) }
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var confirmSyncChoice by remember { mutableStateOf<String?>(null) }
     fun runTask(task: suspend () -> String) {
         if (busy) return
         busy = true
@@ -88,7 +101,7 @@ internal fun JaAccountSyncSettings(
             var completed = false
             message = try { task().also {
                 completed = true
-                if (it.startsWith("Downloaded")) onCloudDataApplied()
+                if (it.startsWith("Downloaded") || it.startsWith("Merged")) onCloudDataApplied()
             } }
             catch (e: Exception) { e.message ?: "Account request failed." }
             session = account.session()
@@ -116,53 +129,90 @@ internal fun JaAccountSyncSettings(
         }
         onConsumeAuthCallback()
     }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (showIntro) {
             Text("JA account sync", fontWeight = FontWeight.SemiBold)
-            Text("JA syncs movie and TV favorites, resume positions, watch history, main and Music search history, Music favorites and playlists, IPTV favorites and ordering, saved preferences, playback source choices, and your Deezer session. Changes are queued for sync while JA is open and again when it moves to the background. Signing in on a fresh device restores your account data. Deezer credentials are stored with Supabase-managed encryption at rest; the JA account session and temporary weather/catalog caches stay on this device.", color = Color(0xFFCBD5DE))
+            Text("JA syncs movie and TV favorites, resume positions, watch history, search history, Music favorites and playlists, IPTV favorites and ordering, saved preferences, playback source choices, and your Deezer session. Signing in merges this device with your account so existing data on either side is kept. Changes sync while JA is open and when it moves to the background. Deezer credentials use Supabase-managed encryption at rest; the JA account session and temporary weather/catalog caches stay on this device.", color = Color(0xFFCBD5DE), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
         if (session == null) {
             OutlinedTextField(value = email, onValueChange = { email = it.trim() }, modifier = Modifier.fillMaxWidth(),
-                label = { Text("Email") }, singleLine = true)
+                label = { Text("Email") }, singleLine = true,
+                colors = jaAccountFieldColors())
             if (recoveryToken != null) {
                 OutlinedTextField(value = password, onValueChange = { password = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("New password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                    label = { Text("New password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                    colors = jaAccountFieldColors())
                 OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Confirm new password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
-                Button(enabled = !busy && password.length >= 6 && password == confirmPassword, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820)), onClick = {
-                    val tokens = recoveryToken ?: return@Button
-                    runTask { account.completePasswordReset(tokens.first, tokens.second, password).also { password = ""; confirmPassword = ""; recoveryToken = null } }
-                }) { Text("Set password") }
+                    label = { Text("Confirm new password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                    colors = jaAccountFieldColors())
+                TvFocusButton(enabled = !busy && password.length >= 6 && password == confirmPassword,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820)),
+                    onClick = {
+                        val tokens = recoveryToken
+                        if (tokens != null) runTask {
+                            account.completePasswordReset(tokens.first, tokens.second, password)
+                                .also { password = ""; confirmPassword = ""; recoveryToken = null }
+                        }
+                    }) { Text("Set password") }
             } else {
                 OutlinedTextField(value = password, onValueChange = { password = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = !busy && email.contains("@") && password.length >= 6, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820)), onClick = {
-                        runTask { account.signUp(email, password).also { password = "" } }
-                    }) { Text("Create account") }
-                    Button(enabled = !busy && email.contains("@") && password.isNotEmpty(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820)), onClick = {
-                        runTask { account.signIn(email, password); password = ""; session = account.session(); account.sync() }
-                    }) { Text("Sign in") }
+                    label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                    colors = jaAccountFieldColors())
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                    TvFocusButton(enabled = !busy && email.contains("@") && password.length >= 6,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820)),
+                        onClick = { runTask { account.signUp(email, password).also {
+                            password = ""
+                            if (account.session() != null) account.sync()
+                        } } }) {
+                        Text("Create account")
+                    }
+                    TvFocusButton(enabled = !busy && email.contains("@") && password.isNotEmpty(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820)),
+                        onClick = { runTask { account.signIn(email, password); password = ""; session = account.session(); account.sync() } }) {
+                        Text("Sign in")
+                    }
                 }
-                Button(enabled = !busy && email.contains("@"), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A4052), contentColor = Color.White), onClick = {
-                    runTask { account.sendPasswordReset(email) }
-                }) { Text("Forgot password?") }
+                TvFocusButton(enabled = !busy && email.contains("@"),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A4052), contentColor = Color.White),
+                    onClick = { runTask { account.sendPasswordReset(email) } }) { Text("Forgot password?") }
             }
         } else {
-            Text("Signed in as ${session?.email}")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = !busy, onClick = { runTask { account.sync() } }) { Text("Sync now") }
-                Button(enabled = !busy, onClick = { runTask { account.signOut().let { "Signed out. This device's saved data remains here." } } }) { Text("Sign out") }
+            Text("Signed in as ${session?.email}", textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            TvFocusButton(enabled = !busy, onClick = { runTask { account.sync() } }) { Text("Sync now") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                TvFocusButton(enabled = !busy, onClick = { confirmSyncChoice = "download" }) { Text("Download cloud data") }
+                TvFocusButton(enabled = !busy, onClick = { confirmSyncChoice = "upload" }) { Text("Upload this device") }
             }
-            if (message.contains("Choose Download cloud data or Upload this device") || message.contains("Both this device and the cloud changed")) {
-                Text("Pick which copy should replace the other for this first/conflicting sync.")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = !busy, onClick = { runTask { account.chooseSync("download") } }) { Text("Download cloud data") }
-                    Button(enabled = !busy, onClick = { runTask { account.chooseSync("upload") } }) { Text("Upload this device") }
-                }
-            }
+            TvFocusButton(enabled = !busy, onClick = {
+                runTask { account.signOut().let { "Signed out. This device's saved data remains here." } }
+            }) { Text("Sign out") }
+            Text("Automatic sync merges saved items and preserves data from both this device and your JA account.",
+                color = Color(0xFFCBD5DE), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
-        if (message.isNotBlank()) Text(message)
+        if (message.isNotBlank()) Text(message, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        confirmSyncChoice?.let { direction ->
+            val isDownload = direction == "download"
+            AlertDialog(
+                onDismissRequest = { confirmSyncChoice = null },
+                title = { Text(if (isDownload) "Replace device data?" else "Replace cloud data?") },
+                text = { Text(if (isDownload)
+                    "This replaces saved JA data on this device with the cloud copy. Use Sync now to merge both copies."
+                else "This replaces the saved cloud copy with this device's data. Use Sync now to merge both copies.") },
+                confirmButton = {
+                    TvFocusButton(onClick = {
+                        confirmSyncChoice = null
+                        runTask { account.chooseSync(direction) }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820))) {
+                        Text(if (isDownload) "Replace device data" else "Replace cloud data")
+                    }
+                },
+                dismissButton = {
+                    TvFocusButton(onClick = { confirmSyncChoice = null },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) { Text("Cancel", color = Color.White) }
+                }
+            )
+        }
         Spacer(Modifier.height(4.dp))
     }
 }
@@ -214,19 +264,19 @@ internal fun JaRequiredAccountGate(
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Enter the test unlock code to continue without signing in.")
                         OutlinedTextField(value = unlockCode, onValueChange = { unlockCode = it; unlockError = "" },
-                            label = { Text("Unlock code") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                            label = { Text("Unlock code") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), colors = jaAccountFieldColors())
                         if (unlockError.isNotBlank()) Text(unlockError, color = Color(0xFFFF8A80))
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    TvFocusButton(onClick = {
                         if (unlockCode == "192168") {
                             showUnlockPrompt = false
                             onTestUnlock()
                         } else unlockError = "That code is not correct."
-                    }) { Text("Unlock", color = Color(0xFFE5A43B)) }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A43B), contentColor = Color(0xFF101820))) { Text("Unlock", color = Color(0xFF101820)) }
                 },
-                dismissButton = { TextButton(onClick = { showUnlockPrompt = false }) { Text("Cancel") } }
+                dismissButton = { TvFocusButton(onClick = { showUnlockPrompt = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) { Text("Cancel", color = Color.White) } }
             )
         }
     }
