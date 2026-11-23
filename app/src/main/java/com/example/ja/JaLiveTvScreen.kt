@@ -356,7 +356,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
                     }
                 }
                 LazyColumn(state=state.groupList,modifier=Modifier.fillMaxWidth().weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(6.dp)){
-                    items(groups,key={it}){group->
+                    items(groups, key = { it }, contentType = { "channel-group" }){group->
                         TvFocusButton(onClick={selectGroup(group)},modifier=Modifier.fillMaxWidth()
                             .then(if(state.view==group)Modifier.focusRequester(state.groupFocus) else Modifier)
                             .onFocusChanged{if(it.isFocused){focusedGroup=groups.indexOf(group);searchFocused=false;selectGroup(group)}},
@@ -413,7 +413,7 @@ internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMen
                     }
                 }
                 LazyColumn(Modifier.fillMaxWidth().weight(1f),state=state.list,verticalArrangement=Arrangement.spacedBy(2.dp),contentPadding=PaddingValues(bottom=8.dp)){
-                    items(visible,key={it.id}){channel->
+                    items(visible, key = { it.id }, contentType = { "live-channel" }){channel->
                         val visibleStart=start+(firstMinute-15).coerceAtLeast(0)*60_000L
                         val visibleEnd=(start+(firstMinute+JaLiveTvGuideRules.WINDOW_MINUTES+15)*60_000L).coerceAtMost(finish)
                         val channelPrograms=programs[channel.id].orEmpty()
