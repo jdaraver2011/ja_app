@@ -273,7 +273,7 @@ fun TitleDetailsScreen(
                     Text(episodesError ?: if (episodesLoading) "Loading seasons…" else "No seasons available", color = detailsMuted, fontSize = 13.sp)
                 } else {
                     LazyRow(state = seasonRow, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(seasons, key = { it }) { candidate ->
+                        items(seasons, key = { it }, contentType = { "season" }) { candidate ->
                             DetailsActionButton(
                                 "Season $candidate", primary = candidate == season,
                                 onClick = { onSeasonSelected(candidate) }
@@ -287,7 +287,7 @@ fun TitleDetailsScreen(
                 }
                 if (episodes.isNotEmpty()) {
                     LazyRow(state = episodeRow, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(episodes, key = { "${it.season}:${it.episode}" }) { ep ->
+                        items(episodes, key = { "${it.season}:${it.episode}" }, contentType = { "episode" }) { ep ->
                             val watched = WatchedStore.key(item.id, "tv", ep.season, ep.episode) in watchedKeys
                             DetailsEpisodeCard(ep, watched,
                                 resumePositionMs = episodeResumePositions[ep.season to ep.episode] ?: 0L,
@@ -303,7 +303,7 @@ fun TitleDetailsScreen(
         if (!details?.cast.isNullOrEmpty()) {
             DetailsHeading("Cast & Crew")
             LazyRow(state = castRow, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(details!!.cast, key = { it.id }) { person ->
+                items(details!!.cast, key = { it.id }, contentType = { "cast" }) { person ->
                     var focused by remember { mutableStateOf(false) }
                     Column(
                         Modifier.width(100.dp)
@@ -351,7 +351,7 @@ fun TitleDetailsScreen(
         if (!details?.recommendations.isNullOrEmpty()) {
             DetailsHeading("More Like This")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(details!!.recommendations, key = { it.id }) { suggested ->
+                items(details!!.recommendations, key = { it.id }, contentType = { "poster" }) { suggested ->
                     var focused by remember { mutableStateOf(false) }
                     Column(
                         Modifier.width(118.dp)
