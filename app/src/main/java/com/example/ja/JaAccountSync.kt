@@ -272,7 +272,9 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         val playerControls = prefsJson(context.getSharedPreferences("ja_player_controls", Context.MODE_PRIVATE).all)
         val weather = prefsJson(context.getSharedPreferences("ja_weather", Context.MODE_PRIVATE).all.filterKeys { it in weatherSettingKeys })
         val playbackSources = prefsJson(context.getSharedPreferences("ja_playback_server_history_v1", Context.MODE_PRIVATE).all)
-        val settings = JSONObject().put("player_controls", playerControls).put("weather", weather).put("playback_sources", playbackSources)
+        val sourcePreferences = prefsJson(context.getSharedPreferences("ja_source_preferences_reset", Context.MODE_PRIVATE).all)
+        val settings = JSONObject().put("player_controls", playerControls).put("weather", weather)
+            .put("playback_sources", playbackSources).put("source_preferences", sourcePreferences)
         val credentials = JSONObject().put("deezer_arl", JaMusicLabVault(context).read() ?: JSONObject.NULL)
         return JSONObject().put("schema", 2).put("media", media).put("music", music).put("iptv", iptv)
             .put("search", search).put("settings", settings).put("credentials", credentials)
@@ -320,6 +322,9 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
                 }
                 settings.optJSONObject("playback_sources")?.let {
                     applyPrefs("ja_playback_server_history_v1", it, stringSets = false)
+                }
+                settings.optJSONObject("source_preferences")?.let {
+                    applyPrefs("ja_source_preferences_reset", it, stringSets = false)
                 }
             }
             val credentials = state.optJSONObject("credentials")
@@ -374,7 +379,7 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         if ((state.optJSONObject("music")?.optJSONObject("values")?.length() ?: 0) > 0) return false
         if ((state.optJSONObject("search")?.optJSONObject("values")?.length() ?: 0) > 0) return false
         val settings = state.optJSONObject("settings") ?: JSONObject()
-        if (listOf("player_controls", "weather", "playback_sources").any { (settings.optJSONObject(it)?.length() ?: 0) > 0 }) return false
+        if (listOf("player_controls", "weather", "playback_sources", "source_preferences").any { (settings.optJSONObject(it)?.length() ?: 0) > 0 }) return false
         val iptv = state.optJSONObject("iptv")?.optJSONObject("values") ?: JSONObject()
         for (key in iptv.keys()) {
             val value = iptv.get(key)
@@ -396,6 +401,6 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         .put("iptv", JSONObject().put("values", JSONObject()))
         .put("search", JSONObject().put("values", JSONObject()))
         .put("settings", JSONObject().put("player_controls", JSONObject()).put("weather", JSONObject())
-            .put("playback_sources", JSONObject()))
+            .put("playback_sources", JSONObject()).put("source_preferences", JSONObject()))
         .put("credentials", JSONObject().put("deezer_arl", JSONObject.NULL))
 }
