@@ -35,7 +35,7 @@ private val searchMuted = Color(0xFFB5BEC6)
 
 /** Search results are hoisted by MainActivity so returning from a title/person retains the query. */
 @Composable
-fun JaSearchScreen(
+internal fun JaSearchScreen(
     returnFocus: JaTitleReturnFocus? = null,
     subRowFocus: FocusRequester? = null,
     query: String,
@@ -143,7 +143,7 @@ fun JaSearchScreen(
                         JaSearchButton("Clear", false, onClearRecentSearches, compact = true)
                     }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(recentSearches, key = { "recent-${it.mode.name}-${it.query.lowercase()}" }) { entry ->
+                        rowItems(recentSearches, key = { "recent-${it.mode.name}-${it.query.lowercase()}" }) { entry ->
                             JaSearchButton("${entry.query} · ${entry.mode.label}", false,
                                 onClick = { onRunRecentSearch(entry) }, compact = true)
                         }
