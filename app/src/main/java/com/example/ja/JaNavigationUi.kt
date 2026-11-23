@@ -16,53 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Lives above details routes; each occurrence has a tab/section-specific key. */
-@Stable
-class JaTitleReturnFocus {
-    private var origin: String? = null
-    var pending by mutableStateOf<String?>(null)
-        private set
-    fun opened(key: String) { origin = key; pending = null }
-    fun returned() { pending = origin }
-    fun focus(key: String) { pending = key }
-    fun restored(key: String) { if (pending == key) pending = null }
-    fun clear() { origin = null; pending = null }
-}
-
-@Composable
-internal fun rememberTitleReturnRequester(state: JaTitleReturnFocus?, key: String?): FocusRequester {
-    val requester = remember(key) { FocusRequester() }
-    val pending = state?.pending == key && key != null
-    LaunchedEffect(pending) {
-        if (pending) {
-            // Allow retained lazy-list positions and Search's bookmark to settle.
-            withFrameNanos { }
-            withFrameNanos { }
-            requester.requestFocus()
-        }
-    }
-    return requester
-}
-
-internal fun jaButtonFocusBorder(focused: Boolean): BorderStroke? =
-    if (focused) BorderStroke(2.dp, Color.White) else null
-
-/** Same dimensions, padding and typography as Favorites' Movies/TV selectors. */
-@Composable
-internal fun JaCompactBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    var focused by remember { mutableStateOf(false) }
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(26.dp)
-            .onFocusChanged { focused = it.isFocused },
-        border = jaButtonFocusBorder(focused),
-        shape = RoundedCornerShape(18.dp),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)
-    ) { Text("← Back", fontSize = 11.sp, maxLines = 1) }
-}
-
-
+/** Reduces the complete Compose layout and typography by the requested proportion. */
 @Composable
 internal fun JaScaledUi(scale: Float = 0.85f, content: @Composable () -> Unit) {
     val baseDensity = androidx.compose.ui.platform.LocalDensity.current
