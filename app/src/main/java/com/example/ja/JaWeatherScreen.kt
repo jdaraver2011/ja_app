@@ -69,6 +69,21 @@ internal class JaWeatherState(val repository: JaWeatherRepository) {
     var error by mutableStateOf<String?>(null)
     var revision by mutableIntStateOf(0)
     var completedRevision = 0
+    fun reloadPreferences() {
+        val nextZip = repository.savedZip()
+        val zipChanged = nextZip != zip
+        weatherStar = repository.weatherStar()
+        sound = repository.sound()
+        volume = repository.volume()
+        musicChoice = repository.musicChoice()
+        customMusic = repository.customMusic()
+        zip = nextZip
+        if (zipChanged) {
+            data = null
+            error = null
+            revision++
+        }
+    }
     val cardFocus = FocusRequester()
     val navigationFocus = FocusRequester()
     var returnToNavigation: (() -> Unit)? = null
