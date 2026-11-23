@@ -12,8 +12,13 @@ internal class JaMusicLibrary(context: Context) {
     data class SearchEntry(val query: String, val kind: String, val id: String, val title: String,
         val subtitle: String, val art: String)
     private val prefs = context.applicationContext.getSharedPreferences("ja_music_library", Context.MODE_PRIVATE)
-    val changes = MutableStateFlow(0)
-    private fun notifyChange() { changes.value++ }
+    val changes: MutableStateFlow<Int> get() = sharedChanges
+    private fun notifyChange() { sharedChanges.value++ }
+
+    companion object {
+        private val sharedChanges = MutableStateFlow(0)
+        fun notifyCloudRestore() { sharedChanges.value++ }
+    }
     private fun encode(t: JaMusicCatalog.Track) = JSONObject().put("id", t.id).put("title", t.title).put("artist", t.artist)
         .put("album", t.album).put("art", t.art).put("seconds", t.seconds).put("artistId", t.artistId).put("albumId", t.albumId)
     private fun decode(o: JSONObject) = JaMusicCatalog.Track(o.getString("id"), o.optString("title"), o.optString("artist"), o.optString("album"),
