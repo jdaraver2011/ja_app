@@ -21,12 +21,15 @@
     const names = Object.keys(presets);
     if (!names.length) throw Error('No presets');
     const nativeAudio = window.JaWave && typeof window.JaWave.samples === 'function';
-    // Keep the shader workload modest on TV hardware; WebView scales this canvas to the full screen.
-    const renderLimitWidth = 800;
-    const renderLimitHeight = 450;
+    // Match render detail to this display while capping the GPU workload at 720p.
+    const renderLimitWidth = 1280;
+    const renderLimitHeight = 720;
     const size = () => {
-      const scale = Math.min(1, renderLimitWidth / innerWidth, renderLimitHeight / innerHeight);
-      return [Math.max(64, Math.round(innerWidth * scale)), Math.max(64, Math.round(innerHeight * scale))];
+      const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+      const screenWidth = Math.max(64, Math.round(innerWidth * pixelRatio));
+      const screenHeight = Math.max(64, Math.round(innerHeight * pixelRatio));
+      const scale = Math.min(1, renderLimitWidth / screenWidth, renderLimitHeight / screenHeight);
+      return [Math.max(64, Math.round(screenWidth * scale)), Math.max(64, Math.round(screenHeight * scale))];
     };
     const [w,h] = size();
     canvas.width = w;
