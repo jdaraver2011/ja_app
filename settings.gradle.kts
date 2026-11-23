@@ -8,4 +8,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "JA"
-include(":app")
+include(":app", ":baselineprofile")
