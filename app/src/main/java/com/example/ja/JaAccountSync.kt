@@ -182,6 +182,12 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
             return@withContext "This device's JA data was uploaded to your account."
         }
         val remoteHash = stateHash(remote)
+        if (isPristineLocal(local)) {
+            applySnapshot(remote)
+            val applied = stateHash(snapshot())
+            authPrefs.edit().putString("last_local_hash", applied).putString("last_remote_hash", remoteHash).apply()
+            return@withContext "Downloaded your saved data from your account."
+        }
         if (oldLocalHash == null && oldRemoteHash == null) {
             if (stateHash(local) != stateHash(emptySnapshot())) {
                 error("Cloud data already exists for this account. Choose Download cloud data or Upload this device before the first sync.")
@@ -348,6 +354,37 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         else -> value?.toString() ?: "null"
     }
 
-    private fun emptySnapshot() = JSONObject().put("schema", 1).put("media", JSONObject().put("watch_items", JSONArray()).put("watched", JSONArray()).put("favorite_order", JSONObject().put("movie", "").put("tv", "")))
-        .put("music", JSONObject().put("values", JSONObject())).put("iptv", JSONObject().put("values", JSONObject()))
+    private fun isPristineLocal(state: JSONObject): Boolean {
+        val media = state.optJSONObject("media") ?: JSONObject()
+        if ((media.optJSONArray("watch_items")?.length() ?: 0) > 0 ||
+            (media.optJSONArray("watched")?.length() ?: 0) > 0) return false
+        val order = media.optJSONObject("favorite_order") ?: JSONObject()
+        if (order.optString("movie").isNotBlank() || order.optString("tv").isNotBlank()) return false
+        if ((state.optJSONObject("music")?.optJSONObject("values")?.length() ?: 0) > 0) return false
+        if ((state.optJSONObject("search")?.optJSONObject("values")?.length() ?: 0) > 0) return false
+        val settings = state.optJSONObject("settings") ?: JSONObject()
+        if (listOf("player_controls", "weather", "playback_sources").any { (settings.optJSONObject(it)?.length() ?: 0) > 0 }) return false
+        val iptv = state.optJSONObject("iptv")?.optJSONObject("values") ?: JSONObject()
+        for (key in iptv.keys()) {
+            val value = iptv.get(key)
+            if (value is JSONArray) {
+                if ((0 until value.length()).any { value.optString(it) != JA_WEATHER_CHANNEL }) return false
+            } else if (value is String && value.isNotBlank()) {
+                val rows = runCatching { JSONArray(value) }.getOrNull()
+                if (rows == null || (0 until rows.length()).any { rows.optString(it) != JA_WEATHER_CHANNEL }) return false
+            } else if (value !is Boolean) return false
+        }
+        val arl = state.optJSONObject("credentials")?.optString("deezer_arl").orEmpty()
+        return arl.isBlank() || arl == "null"
+    }
+
+    private fun emptySnapshot() = JSONObject().put("schema", 2)
+        .put("media", JSONObject().put("watch_items", JSONArray()).put("watched", JSONArray())
+            .put("favorite_order", JSONObject().put("movie", "").put("tv", "")))
+        .put("music", JSONObject().put("values", JSONObject()))
+        .put("iptv", JSONObject().put("values", JSONObject()))
+        .put("search", JSONObject().put("values", JSONObject()))
+        .put("settings", JSONObject().put("player_controls", JSONObject()).put("weather", JSONObject())
+            .put("playback_sources", JSONObject()))
+        .put("credentials", JSONObject().put("deezer_arl", JSONObject.NULL))
 }
