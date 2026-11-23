@@ -70,6 +70,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 
 private val bg = Color(0xFF12171D)
 private val accent = Color(0xFFE5A43B)
@@ -265,7 +267,33 @@ class MainActivity : ComponentActivity() {
     val preferredSourceReset = remember { PreferredSourceReset(appContext) }
     val scope = rememberCoroutineScope()
     val accountSync = remember { JaAccountSync(appContext, dao) }
+    val cloudApplyGeneration by JaAccountSync.cloudAppliedGeneration.collectAsState()
     DisposableEffect(lifecycleOwner, accountSync) {
+        val syncPrefs = listOf(
+            "ja_music_library", "ja_live_favorites", "ja_favorite_display_order_v1", "ja_watched_v1",
+            "ja_player_controls", "ja_weather", "ja_playback_server_history_v1",
+            JaSearchHistory.PREFS, "ja_music_lab_session"
+        )
+        val registered = mutableListOf<Pair<android.content.SharedPreferences, android.content.SharedPreferences.OnSharedPreferenceChangeListener>>()
+        syncPrefs.forEach { name ->
+            val prefs = appContext.getSharedPreferences(name, Context.MODE_PRIVATE)
+            val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                val included = when (name) {
+                    "ja_weather" -> key in setOf("weatherstar", "weatherstar-sound", "weatherstar-volume", "music-choice", "custom-music", "zip")
+                    "ja_live_favorites" -> key == "ids" || key == "order" || key?.startsWith("group-order:") == true
+                    "ja_favorite_display_order_v1" -> key == "movie-ids" || key == "tv-ids"
+                    else -> true
+                }
+                if (included && !JaAccountSync.shouldSuppressAutoSync()) JaAccountSyncWorker.enqueue(appContext)
+            }
+            prefs.registerOnSharedPreferenceChangeListener(listener)
+            registered += prefs to listener
+        }
+        val rowsJob = scope.launch {
+            dao.observeAll().drop(1).collect {
+                if (!JaAccountSync.shouldSuppressAutoSync()) JaAccountSyncWorker.enqueue(appContext)
+            }
+        }
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START && accountSync.session() != null) {
                 scope.launch {
@@ -275,10 +303,16 @@ class MainActivity : ComponentActivity() {
                         onSignedOut()
                     }
                 }
+            } else if (event == Lifecycle.Event.ON_STOP) {
+                JaAccountSyncWorker.enqueue(appContext, delayMs = 0L)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            registered.forEach { (prefs, listener) -> prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            rowsJob.cancel()
+        }
     }
     val settings = remember { PlayerControlSettings(context = appContext) }
     // Persist the order in which titles were favorited separately from the
@@ -407,6 +441,8 @@ class MainActivity : ComponentActivity() {
     // Search state lives above the details routes so Back restores the query and results.
     var search by remember { mutableStateOf("") }
     var searchMode by remember { mutableStateOf(JaSearchMode.ALL) }
+    val searchHistoryStore = remember { JaSearchHistory(appContext) }
+    var recentSearches by remember { mutableStateOf(searchHistoryStore.all()) }
     val searchGridState = rememberLazyGridState() // Keep search position while viewing title/person details.
     // A new activity starts at the beginning. Returning from details keeps in-session positions.
     LaunchedEffect(Unit) {
@@ -504,7 +540,27 @@ class MainActivity : ComponentActivity() {
             } while (historyRefreshPending[0])
         }
     }
+    LaunchedEffect(cloudApplyGeneration) {
+        if (cloudApplyGeneration > 0) {
+            refreshHistory()
+            liveTv.reloadPersonalFavorites()
+            JaMusicLibrary.notifyCloudRestore()
+            recentSearches = searchHistoryStore.all()
+            showMusicTab = settings.showMusicTab
+            musicDesktopMode = settings.musicDesktopMode
+            showBack = settings.showBack
+            delayTvEpisodes = settings.delayTvEpisodes
+            showRestore = settings.showRestore
+            showPlayerDiagnostics = settings.showPlayerDiagnostics
+            matchTvFrameRate = settings.matchTvFrameRate
+            matchTvResolution = settings.matchTvResolution
+            matchStreamQuality = settings.matchStreamQuality
+            adBlockerMode = settings.adBlockerMode
+            weather.reloadPreferences()
+        }
+    }
     fun runSearch(text: String, desiredMode: JaSearchMode) {
+        if (text.isNotBlank()) recentSearches = searchHistoryStore.record(text, desiredMode)
         titleReturnFocus.clear()
         searchRevision += 1
         searchReturnBookmark = null
@@ -1179,7 +1235,13 @@ class MainActivity : ComponentActivity() {
         }
         if (tab == "Settings" && selected == null) {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-                JaAccountSyncSettings(dao, onCloudDataApplied = { liveTv.reloadPersonalFavorites() }, onSignedOut = onSignedOut)
+                JaAccountSyncSettings(dao, onCloudDataApplied = {
+                    liveTv.reloadPersonalFavorites()
+                    refreshHistory()
+                    JaMusicLibrary.notifyCloudRestore()
+                    recentSearches = searchHistoryStore.all()
+                    weather.reloadPreferences()
+                }, onSignedOut = onSignedOut)
                 Spacer(Modifier.height(16.dp))
                 JaUpdateSettings()
                 JaWeatherSettings(weather)
@@ -1452,6 +1514,13 @@ class MainActivity : ComponentActivity() {
                     subRowFocus = subRequester,
                     returnFocus = titleReturnFocus,
                     query = search, onQueryChange = { search = it },
+                    recentSearches = recentSearches,
+                    onRunRecentSearch = { entry ->
+                        search = entry.query
+                        searchMode = entry.mode
+                        runSearch(entry.query, entry.mode)
+                    },
+                    onClearRecentSearches = { recentSearches = searchHistoryStore.clear() },
                     gridState = searchGridState,
                     mode = searchMode,
                     onModeChange = { newMode ->
