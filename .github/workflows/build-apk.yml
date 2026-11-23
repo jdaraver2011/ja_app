@@ -298,16 +298,19 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: gradle --no-daemon --stacktrace :app:generateBaselineProfile
+          script: |
+            set +e
+            gradle --no-daemon --stacktrace :app:generateBaselineProfile
+            result=$?
+            if [ "$result" -ne 0 ]; then
+              mkdir -p test-results
+              adb logcat -d > test-results/baselineprofile-logcat.txt 2>&1 || true
+            fi
+            exit "$result"
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
-      - name: Capture Baseline Profile failure logcat
-        if: ${{ always() && inputs.generate_baseline_profile && failure() }}
-        run: |
-          mkdir -p test-results
-          adb logcat -d > test-results/baselineprofile-logcat.txt || true
       - name: Upload Baseline Profile test reports
         if: ${{ always() && inputs.generate_baseline_profile }}
         uses: actions/upload-artifact@v7.0.2
