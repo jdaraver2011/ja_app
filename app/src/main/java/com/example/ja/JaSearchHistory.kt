@@ -31,12 +31,12 @@ internal class JaSearchHistory(context: Context) {
         val json = JSONArray().apply {
             entries.forEach { put(JSONObject().put("query", it.query).put("mode", it.mode.name).put("savedAt", it.savedAt)) }
         }
-        check(prefs.edit().putString(KEY_ENTRIES, json.toString()).commit()) { "Could not save recent searches" }
+        prefs.edit().putString(KEY_ENTRIES, json.toString()).apply()
         return entries
     }
 
     fun clear(): List<Entry> {
-        check(prefs.edit().remove(KEY_ENTRIES).commit()) { "Could not clear recent searches" }
+        prefs.edit().remove(KEY_ENTRIES).apply()
         return emptyList()
     }
 
