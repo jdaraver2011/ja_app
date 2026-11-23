@@ -24,7 +24,6 @@
     const nativePresentation = window.JaWave && typeof window.JaWave.present === 'function';
     const renderLimitWidth = nativePresentation ? 960 : 1280;
     const renderLimitHeight = nativePresentation ? 540 : 720;
-    const frameInterval = 1000 / 30;
     const size = () => { const scale = Math.min(1, renderLimitWidth / innerWidth, renderLimitHeight / innerHeight); return [Math.max(64, Math.round(innerWidth * scale)), Math.max(64, Math.round(innerHeight * scale))]; };
     const [w,h] = size();
     // Butterchurn sets viewport/texture sizes, but does not resize the supplied canvas.
@@ -34,7 +33,6 @@
     window.nextPreset = () => { index = (index + 1) % names.length; pixelChecked = false; visual.loadPreset(presets[names[index]], 1.5); status.textContent = names[index]; };
     visual.loadPreset(presets[names[index]], 0); status.textContent = names[index];
     addEventListener('resize', () => { const [width,height] = size(); canvas.width = renderCanvas.width = width; canvas.height = renderCanvas.height = height; visual.setRendererSize(width,height); });
-    let last = 0;
     let heartbeat = 0;
 
     let pixelChecked = false;
@@ -43,9 +41,8 @@
       if (canvas.dataset.error) return;
       requestAnimationFrame(render);
       // Keep the last frame on screen while the native player is paused or stopped.
-      if (document.hidden || (nativePresentation && !window.JaWave.isPlaying()) || now - last < frameInterval) return;
+      if (document.hidden || (nativePresentation && !window.JaWave.isPlaying())) return;
       if (nativePresentation && typeof window.JaWave.ready === 'function' && !window.JaWave.ready()) return;
-      last = now - ((now - last) % frameInterval);
       try {
         if (window.JaWave && typeof window.JaWave.samples !== 'function') throw {name:'PCM_BRIDGE_MISSING'};
         const data = window.JaWave ? JSON.parse(window.JaWave.samples()) : {mix:new Array(1024).fill(128), left:new Array(1024).fill(128), right:new Array(1024).fill(128)};

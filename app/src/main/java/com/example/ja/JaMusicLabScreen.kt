@@ -260,7 +260,7 @@ private fun JaMusicLabScreenContent(modifier: Modifier, onExit: () -> Unit) {
                             val kind = when (libraryKind) { "Artists" -> "artist"; "Albums" -> "album"; else -> "playlist" }
                             val saved = library.saved().filter { it.kind == kind }
                             items(saved.chunked(3), key = { it.first().id }) { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                row.forEach { c -> MusicCard(c.title, c.subtitle, c.art, { card(c) }, Modifier.weight(1f), round = c.kind == "artist") }
+                                row.forEach { c -> MusicCard(c.title, c.subtitle, c.art, { card(c) }, round = c.kind == "artist") }
                                 repeat(3-row.size) { Spacer(Modifier.weight(1f)) }
                             } }
                             if (saved.isEmpty() && (kind != "playlist" || library.playlists().isEmpty())) item { Text("No saved ${libraryKind.lowercase()} yet.", color = Color.LightGray) }

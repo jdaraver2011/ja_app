@@ -22,7 +22,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 
-/** Routes Android TV select keys into the active Deezer DOM control and captures safe focus diagnostics. */
+/** Keeps Deezer's consent dialog reachable and routes Android TV select keys safely. */
 private class DeezerSignInWebView(context: Context) : WebView(context) {
     private var confirmDown = false
     private var initialPageFocusRequested = false
@@ -31,6 +31,50 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
         if (initialPageFocusRequested) return
         initialPageFocusRequested = true
         post { requestFocus() }
+    }
+
+    fun focusConsentControls() {
+        val script = """(() => {
+            if (window.__jaConsentFocusInstalled) return "observer-installed";
+            window.__jaConsentFocusInstalled = true;
+            const isVisible = el => {
+                const r = el.getBoundingClientRect();
+                const s = window.getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && s.display !== "none" &&
+                    s.visibility !== "hidden" && Number(s.opacity || 1) > 0;
+            };
+            const isControl = el => el.matches(
+                "button,a[href],[role='button'],[role='link'],input,select,textarea,[tabindex]"
+            ) && !el.disabled && el.getAttribute("aria-hidden") !== "true";
+            const focusConsentControl = () => {
+                const controls = Array.from(document.querySelectorAll(
+                    "button,a[href],[role='button'],[role='link'],input,select,textarea,[tabindex]"
+                )).filter(el => isVisible(el) && isControl(el));
+                for (const control of controls) {
+                    let parent = control;
+                    for (let depth = 0; parent && depth < 9; depth++, parent = parent.parentElement) {
+                        const text = (parent.innerText || parent.textContent || "").toLowerCase();
+                        const hasConsentText = text.includes("cookie") &&
+                            /(accept|refuse|reject|preferences|consent)/.test(text);
+                        if (hasConsentText && text.length < 8000) {
+                            const active = document.activeElement;
+                            if (active && parent.contains(active)) return "already-focused";
+                            control.focus({preventScroll:true});
+                            return "focused:" + (control.tagName || "unknown").toLowerCase();
+                        }
+                    }
+                }
+                return "no-consent-dialog";
+            };
+            const result = focusConsentControl();
+            const observer = new MutationObserver(() => focusConsentControl());
+            observer.observe(document.documentElement, {childList:true, subtree:true, attributes:true});
+            return result;
+        })()"""
+        evaluateJavascript(script) { result ->
+            val status = result?.trim('"')?.take(60) ?: "no-result"
+            Log.i("JA_DEEZER_REMOTE", "CONSENT_FOCUS status=$status")
+        }
     }
 
     init {
@@ -50,18 +94,20 @@ private class DeezerSignInWebView(context: Context) : WebView(context) {
         )
         if (event.keyCode !in confirmKeys) return super.dispatchKeyEvent(event)
         Log.i("JA_DEEZER_REMOTE", "KEY action=${event.action} code=${event.keyCode} repeat=${event.repeatCount} focused=${hasFocus()} window=${hasWindowFocus()}")
+        val nativeHandled = super.dispatchKeyEvent(event)
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) confirmDown = true
                 return true
             }
             KeyEvent.ACTION_UP -> {
-                if (confirmDown) activateFocusedControl(event.keyCode)
+                if (confirmDown && !nativeHandled) activateFocusedControl(event.keyCode)
+                else if (confirmDown) Log.i("JA_DEEZER_REMOTE", "SELECT handledByWebView=true")
                 confirmDown = false
                 return true
             }
         }
-        return true
+        return nativeHandled
     }
 
     private fun activateFocusedControl(keyCode: Int) {
@@ -153,7 +199,10 @@ internal fun JaMusicSignIn(onClose: () -> Unit, onSession: (String) -> Unit) {
                         override fun onPageFinished(v: WebView?, url: String?) {
                             cookies()
                             Log.i("JA_DEEZER_REMOTE", "PAGE_READY host=${android.net.Uri.parse(url.orEmpty()).host ?: "unknown"}")
-                            (v as? DeezerSignInWebView)?.focusWebContentOnce()
+                            (v as? DeezerSignInWebView)?.apply {
+                                focusWebContentOnce()
+                                focusConsentControls()
+                            }
                         }
                         override fun shouldOverrideUrlLoading(v: WebView?, request: WebResourceRequest): Boolean {
                             val uri = request.url

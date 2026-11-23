@@ -34,7 +34,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, master, v2.6.0-supabase-test, v2.6.2, v2.6.3, v2.7.2-settings-sync-iptv, v2.7.3-settings-iptv, v2.7.4-settings-iptv-visualizer, v2.7.6-settings-ui-navigation, v2.7.7-music-iptv]
+    branches: [main, master, v2.6.0-supabase-test, v2.6.2, v2.6.3, v2.7.2-settings-sync-iptv, v2.7.3-settings-iptv, v2.7.4-settings-iptv-visualizer, v2.7.6-settings-ui-navigation, v2.7.7-music-iptv, v2.7.8-deezer-library-viz]
 permissions:
   contents: read
 concurrency:
@@ -383,7 +383,7 @@ jobs:
           path: app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
       - name: Prepare public update assets
-        if: ${{ inputs.publish_update || (github.event_name == 'push' && github.ref_name == 'v2.7.7-music-iptv') }}
+        if: ${{ inputs.publish_update || (github.event_name == 'push' && github.ref_name == 'v2.7.8-deezer-library-viz') }}
         env:
           BUILD_VARIANT: ${{ inputs.build_variant || 'debug' }}
           UPDATE_REPO: ${{ vars.JA_UPDATE_REPOSITORY || github.repository }}
@@ -395,7 +395,7 @@ jobs:
           esac
           python3 scripts/prepare_update_release.py --apk "$apk" --repo "$UPDATE_REPO" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt2"
       - name: Publish device update
-        if: ${{ inputs.publish_update || (github.event_name == 'push' && github.ref_name == 'v2.7.7-music-iptv') }}
+        if: ${{ inputs.publish_update || (github.event_name == 'push' && github.ref_name == 'v2.7.8-deezer-library-viz') }}
         env:
           GH_TOKEN: ${{ secrets.JA_UPDATE_PUBLISH_TOKEN || github.token }}
           UPDATE_REPO: ${{ vars.JA_UPDATE_REPOSITORY || github.repository }}
