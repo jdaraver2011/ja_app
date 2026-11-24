@@ -94,7 +94,7 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
             visibility = android.view.View.INVISIBLE
         }
     }
-    val bridge = remember { MusicWaveBridge { bitmap, preset ->
+    val bridge: MusicWaveBridge = remember { MusicWaveBridge { bitmap, preset ->
         imageView.setImageBitmap(bitmap)
         imageView.visibility = android.view.View.VISIBLE
         if (nativePreset != preset) nativePreset = preset
