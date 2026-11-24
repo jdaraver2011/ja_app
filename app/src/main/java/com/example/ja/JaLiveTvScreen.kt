@@ -240,7 +240,15 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val returnFocus=remember{FocusRequester()}
     DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)}
         owner.lifecycle.addObserver(observer);onDispose{owner.lifecycle.removeObserver(observer)}}
-    LaunchedEffect(resumed){if(resumed)while(isActive){state.refresh();delay(900_000)}}
+    // Give a new guide its first load, then wait for playback to release the player.
+    val automaticRefreshAllowed = resumed && !state.fullscreen &&
+        (!state.catalogReady || !state.playerAttached)
+    LaunchedEffect(automaticRefreshAllowed) {
+        if (automaticRefreshAllowed) while (isActive) {
+            state.refresh()
+            delay(900_000)
+        }
+    }
     LaunchedEffect(state.channels,state.fullscreen,state.catalogReady){
         if(state.catalogReady&&!state.fullscreen&&state.channels.isNotEmpty()&&
             (state.previewChannel==null||state.channels.none{it.id==state.previewChannel?.id})){
