@@ -89,7 +89,12 @@ object JaVidSrcCatalog {
         }
     }
     fun foreground(value: Boolean) { foreground=value }
-    fun playbackBusy(value: Boolean) { playing=value }
+    fun playbackBusy(value: Boolean) {
+        synchronized(feedSwitchLock) {
+            playing = value
+            if (value) automaticCalls.toList().forEach { it.cancel() }
+        }
+    }
     fun includeMovie(id: Int): Boolean {
         val s=_snapshot.value;val q=_quality.value
         return s.ready && id in s.movies && id !in q.cams && id !in q.missing
@@ -117,6 +122,7 @@ object JaVidSrcCatalog {
         scope.launch {
             initialized.await()
             syncMutex.withLock {
+                if (!force && playing) return@withLock
                 val now=System.currentTimeMillis()
                 val prefs=app.getSharedPreferences("ja_vidsrc_sync",Context.MODE_PRIVATE)
                 val retry=prefs.getLong("retry_after",0L)
@@ -132,7 +138,7 @@ object JaVidSrcCatalog {
                                 kind to file
                             } }.awaitAll().toMap()
                         }
-                        if(!force && !_dailyDownloads.value)throw CancellationException("Automatic downloads disabled")
+                        if(!force && (playing || !_dailyDownloads.value))throw CancellationException("Automatic feed refresh deferred")
                         val fresh=db.install(files,now)
                         _snapshot.value=fresh
                         prefs.edit().remove("retry_after").apply()
@@ -155,7 +161,7 @@ object JaVidSrcCatalog {
         val call=feedsClient.newCall(request)
         synchronized(feedSwitchLock) {
             if(automatic) {
-                if(!_dailyDownloads.value)throw CancellationException("Automatic downloads disabled")
+                if(playing || !_dailyDownloads.value)throw CancellationException("Automatic feed refresh deferred")
                 automaticCalls.add(call)
             }
         }
