@@ -98,7 +98,7 @@ class JaMusicLabService : MediaLibraryService() {
         fun next() { instance?.player?.let { if (it.hasNextMediaItem()) it.seekToNextMediaItem() } }
         fun previous() { instance?.player?.seekToPrevious() }
         fun seekTo(position: Long) { instance?.player?.seekTo(position.coerceAtLeast(0)) }
-        fun stop(context: Context) { instance?.searchJob?.cancel(); instance?.player?.let { it.stop(); it.clearMediaItems() };
+        fun stop(context: Context) { instance?.let { it.connectJob?.cancel(); it.searchJob?.cancel(); it.player.stop(); it.player.clearMediaItems() };
             mutable.value = State(message = "Music stopped.", account = mutable.value.account); context.stopService(Intent(context, JaMusicLabService::class.java)) }
         fun logout(context: Context) {
             JaMusicLabVault(context).clear()
