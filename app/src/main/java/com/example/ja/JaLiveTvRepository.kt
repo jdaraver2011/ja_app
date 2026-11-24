@@ -56,15 +56,19 @@ internal class JaLiveTvRepository(private val context:Context) {
         val body=r.body?:throw IOException("Empty response")
         LimitedInput(body.byteStream(),limit).bufferedReader().use{it.readText()}
     }
-    suspend fun channels(force:Boolean=false):JaLiveChannels = withContext(Dispatchers.IO) { catalogLock.withLock {
+    suspend fun channels(force:Boolean=false,onCached:suspend(JaLiveChannels)->Unit={}):JaLiveChannels = withContext(Dispatchers.IO) { catalogLock.withLock {
         val now=System.currentTimeMillis()
         val zone=ZoneId.systemDefault()
         val localDate=Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         val todaySix=localDate.atTime(6,0).atZone(zone).toInstant().toEpochMilli()
         val file=File(root,"direct-catalog.json")
         val legacy=File(root,"verified-us.json")
-        val cachedRecord=listOf(file,legacy).mapNotNull{candidate->
-            runCatching{if(candidate.isFile)candidate to parseCatalog(candidate.readText(),false) else null}.getOrNull()
+        val cachedRecord=sequenceOf(file,legacy).mapNotNull{candidate->
+            val modified=candidate.lastModified()
+            if(modified<=0L)null else runCatching {
+                candidate to (memoryCatalog?.takeIf{candidate==file&&it.second==modified}?.first
+                    ?:parseCatalog(candidate.readText(),false))
+            }.getOrNull()
         }.firstOrNull()
         val cachedFile=cachedRecord?.first
         val cached=cachedRecord?.second
@@ -74,9 +78,9 @@ internal class JaLiveTvRepository(private val context:Context) {
         val prefs=context.getSharedPreferences("ja_live_tv_refresh",Context.MODE_PRIVATE)
         val attemptedToday=prefs.getString("automatic_attempt_date","")==localDate.toString()
         val shouldRefresh=force||(due&&!attemptedToday)
-        memoryCatalog?.takeIf{cached!=null&&!shouldRefresh}?.let{return@withContext it.first}
         if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
         if(cached==null&&!shouldRefresh)throw IOException("No catalog cache is available; automatic refresh was already attempted today")
+        if(cached!=null)withContext(Dispatchers.Main){onCached(cached)}
         // Record the daily attempt before starting the request so failed network calls do not repeat on every app open.
         // A first install can fetch before 6:00 AM and still counts as today's automatic attempt.
         // A manual refresh after 6:00 AM also counts as today's attempt.
@@ -230,7 +234,12 @@ internal class JaLiveTvRepository(private val context:Context) {
         val began=android.os.SystemClock.elapsedRealtime()
         val now=System.currentTimeMillis();val key=signature(channels)
         val cached=cachedGuide(channels)
-        if(!force&&cached!=null&&!cached.saved&&JaLiveTvRules.fresh(cached.fetched,now,21_600_000))return@withContext cached
+        if(!force&&cached!=null){
+            val rebuiltAt=File(root,"guide-$key.json").lastModified()
+            val coversNow=cached.programs.any{it.start<=now&&it.end>now}
+            if((coversNow&&!refreshDueAfterSix(rebuiltAt,now))||
+                (!cached.saved&&JaLiveTvRules.fresh(cached.fetched,now,21_600_000)))return@withContext cached
+        }
         val cancellation=currentCoroutineContext()
         suspend fun loadFeed(url:String,name:String,limit:Long,aliases:Map<String,String>):Feed? {
             val file=File(root,name);var stale=false
