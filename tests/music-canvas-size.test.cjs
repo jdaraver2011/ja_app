@@ -2,11 +2,12 @@ const fs = require('fs');
 const vm = require('vm');
 const assert = require('node:assert/strict');
 const code = fs.readFileSync('app/src/main/assets/music-visualizer/visualizer.js', 'utf8');
-const canvas = {width:300,height:150,dataset:{},addEventListener(){}};
+const canvas = {width:300,height:150,dataset:{},addEventListener(){},getContext(){return {drawImage(){}}}};
+const renderCanvas = {width:300,height:150,addEventListener(){}};
 const listeners = {};
 let renderer;
 const ctx = {
- document:{getElementById:id=>id==='visual'?canvas:{textContent:''},hidden:false},
+ document:{getElementById:id=>id==='visual'?canvas:{textContent:''},createElement:tag=>tag==='canvas'?renderCanvas:{},hidden:false},
  innerWidth:412,innerHeight:1800, Uint8Array, console,
  requestAnimationFrame(){}, addEventListener:(name,fn)=>{listeners[name]=fn;},
  window:{butterchurn:{createVisualizer:(_audio,c,opts)=>{
@@ -20,7 +21,7 @@ const ctx = {
 vm.runInNewContext(code,ctx);
 assert.ok(renderer, 'Renderer must initialize');
 assert.ok(!canvas.dataset.error,'Canvas sizing failure must not be hidden by catch');
-assert.equal(canvas.width,165);assert.equal(canvas.height,720);
+assert.equal(canvas.width,124);assert.equal(canvas.height,540);
 ctx.innerWidth=1800;ctx.innerHeight=412;listeners.resize();
-assert.equal(canvas.width,1280);assert.equal(canvas.height,293);
+assert.equal(canvas.width,960);assert.equal(canvas.height,220);
 console.log('Canvas backing dimensions match renderer on portrait startup and landscape resize');
