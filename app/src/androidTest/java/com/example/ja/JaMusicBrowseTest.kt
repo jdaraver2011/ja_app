@@ -62,41 +62,91 @@ class JaMusicBrowseTest {
         compose.onNodeWithText("‹ JA").performClick()
         compose.runOnIdle { assertTrue(exited) }
     }
-    @Test(timeout = 120000) fun androidWebViewReceivesPcmAndRendersFrames() {
-        compose.setContent { MaterialTheme { JaMusicVisualizer(onBack = {}) } }
+    @Test(timeout = 120000)
+    fun androidWebViewReceivesPcmAndRendersFrames() {
+        compose.setContent {
+            MaterialTheme { JaMusicVisualizer(playbackActive = { true }, onBack = {}) }
+        }
+        compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        var view: android.webkit.WebView? = null
+        lateinit var webView: android.webkit.WebView
+        lateinit var presentation: android.widget.ImageView
         instrumentation.runOnMainSync {
-            fun find(v: android.view.View): android.webkit.WebView? {
-                if (v is android.webkit.WebView) return v
-                if (v is android.view.ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { return it }
-                return null
+            fun views(view: android.view.View): Sequence<android.view.View> = sequence {
+                yield(view)
+                if (view is android.view.ViewGroup) {
+                    for (i in 0 until view.childCount) yieldAll(views(view.getChildAt(i)))
+                }
             }
             val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
                 .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first()
-            view = find(activity.window.decorView)
+            val children = views(activity.window.decorView).toList()
+            webView = children.filterIsInstance<android.webkit.WebView>().single()
+            presentation = children.filterIsInstance<android.widget.ImageView>()
+                .single { it.contentDescription == "Music visualizer" }
         }
-        assertNotNull(view)
-        val answer = java.util.concurrent.atomic.AtomicReference("")
-        val until = android.os.SystemClock.elapsedRealtime() + 90000
-        var passed = false
-        while (android.os.SystemClock.elapsedRealtime() < until) {
-            val buffer = java.nio.ByteBuffer.allocate(4096).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            repeat(1024) { i -> val sample = (kotlin.math.sin(i * 0.1) * 18000).toInt().toShort(); buffer.putShort(sample); buffer.putShort(sample) }; buffer.flip()
-            JaMusicVisualization.pcm.capture16(buffer, android.os.SystemClock.elapsedRealtime())
-            instrumentation.runOnMainSync {
-                view!!.evaluateJavascript("JSON.stringify({frames:Number(document.querySelector('canvas').dataset.frames||0),error:document.querySelector('canvas').dataset.error||'',peak:Math.max(...JSON.parse(JaWave.samples())),outputPeak:Number(document.querySelector('canvas').dataset.outputPeak||0),width:document.querySelector('canvas').width,expectedWidth:Math.max(64,Math.round(innerWidth*Math.min(1,1280/innerWidth,720/innerHeight)))})") { answer.set(it) }
-            }
-            android.os.SystemClock.sleep(250)
-            val raw = answer.get()
-            if (raw.startsWith("\"")) {
-                val obj = org.json.JSONObject(org.json.JSONArray("[" + raw + "]").getString(0))
-                assertEquals("Android renderer error", "", obj.optString("error"))
-                if (obj.optInt("frames") > 0) assertEquals("Canvas buffer must match renderer viewport", obj.optInt("expectedWidth"), obj.optInt("width"))
-                if (obj.optInt("frames") >= 40 && obj.optInt("peak") > 128 && obj.optInt("outputPeak") > 0) { passed = true; break }
-            }
-        }
-        assertTrue("Android WebView must render and receive PCM: " + answer.get(), passed)
-    }
 
+        val probe = """
+            (() => {
+                const canvas = document.getElementById('visual');
+                const bridge = window.JaWave;
+                let signal = false;
+                let probeError = '';
+                try {
+                    if (bridge) {
+                        const stereo = JSON.parse(bridge.samples());
+                        signal = ['mix', 'left', 'right'].every(key =>
+                            Array.isArray(stereo[key]) && stereo[key].length === 1024 &&
+                            stereo[key].some(value => Math.abs(value - 128) > 8));
+                    }
+                } catch (error) {
+                    probeError = String(error);
+                }
+                return JSON.stringify({
+                    page: document.readyState, canvas: !!canvas, bridge: !!bridge, signal, probeError,
+                    error: canvas?.dataset.error || '', frames: Number(canvas?.dataset.frames || 0)
+                });
+            })()
+        """.trimIndent()
+        val answer = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val deadline = android.os.SystemClock.elapsedRealtime() + 85000
+        val pcm = java.nio.ByteBuffer.allocate(4096).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        repeat(1024) { index ->
+            val sample = (kotlin.math.sin(index * 0.1) * 18000).toInt().toShort()
+            pcm.putShort(sample).putShort(sample)
+        }
+        var firstFrame: android.graphics.Bitmap? = null
+        var nativeStatus = "no visible bitmap"
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            pcm.rewind()
+            JaMusicVisualization.pcm.capture16(pcm, android.os.SystemClock.elapsedRealtime())
+            var framesPresented = false
+            instrumentation.runOnMainSync {
+                webView.evaluateJavascript(probe) { answer.set(it) }
+                val bitmap = (presentation.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                if (presentation.isShown && bitmap != null) {
+                    assertTrue("Unexpected native frame size: ${bitmap.width}x${bitmap.height}",
+                        bitmap.width in 1..960 && bitmap.height in 1..540)
+                    nativeStatus = "${bitmap.width}x${bitmap.height} bitmap"
+                    val hasColor = (0 until bitmap.height step 8).any { y ->
+                        (0 until bitmap.width step 8).any { x ->
+                            bitmap.getPixel(x, y) and 0x00ffffff != 0
+                        }
+                    }
+                    if (hasColor) {
+                        if (firstFrame == null) firstFrame = bitmap
+                        framesPresented = firstFrame !== bitmap && firstFrame?.sameAs(bitmap) == false
+                    }
+                }
+            }
+            val raw = answer.get()
+            if (raw != null && raw.startsWith("\"")) {
+                val status = org.json.JSONObject(org.json.JSONArray("[" + raw + "]").getString(0))
+                assertEquals("Android renderer error: $status", "", status.optString("error"))
+                if (framesPresented && status.optBoolean("signal") && status.optInt("frames") >= 2) return
+            }
+            android.os.SystemClock.sleep(200)
+        }
+        fail("Visualizer did not receive PCM and present changing native frames. WebView: ${answer.get()}; Android: $nativeStatus")
+    }
 }
