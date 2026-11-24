@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         // Home, app switching and configuration changes never take this path.
-        if (explicitExit && !JaMusicService.keepsProcessAlive() && !JaMusicLabService.keepsProcessAlive()) {
+        if (explicitExit) {
             val main = android.os.Handler(android.os.Looper.getMainLooper())
             val terminate = Runnable { android.os.Process.killProcess(android.os.Process.myPid()) }
             main.postDelayed(terminate, 5000L)
@@ -1090,6 +1090,7 @@ class MainActivity : ComponentActivity() {
         when {
             tab == "Settings" && settingsSection != null -> { settingsReturnSection = settingsSection; settingsSection = null }
             tab == "IPTV" && liveTv.fullscreen -> { liveTv.fullscreen = false }
+            tab == "IPTV" -> { tab = "Movies"; navigationLevel = 0; focusMain() }
             weatherOpen -> { weatherOpen = false; weatherReturnFocus = true }
             playback != null -> {
                 Log.i("JA_SOURCES", "PLAYER_CLOSED reason=ANDROID_BACK")
@@ -1104,9 +1105,15 @@ class MainActivity : ComponentActivity() {
             else -> {
                 if (exitGate.press(android.os.SystemClock.elapsedRealtime())) {
                     exiting = true
+                    liveTv.stopPlayback()
+                    JaMusicLabService.stop(appContext)
+                    JaMusicService.stop(appContext)
                     scope.launch {
-                        PlaybackProgress.flush()
-                        activity?.closeFromDoubleBack()
+                        try {
+                            kotlinx.coroutines.withTimeoutOrNull(2_000L) { PlaybackProgress.flush() }
+                        } finally {
+                            activity?.closeFromDoubleBack()
+                        }
                     }
                 } else android.widget.Toast.makeText(appContext,
                     "Press Back again to exit", android.widget.Toast.LENGTH_SHORT).show()
@@ -1216,6 +1223,14 @@ class MainActivity : ComponentActivity() {
         return
     }
     if (showMusicTab && tab == "Music" && selected == null && selectedPerson == null) {
+        DisposableEffect(appContext) {
+            onDispose {
+                if (activity?.isChangingConfigurations != true) {
+                    JaMusicLabService.stop(appContext)
+                    JaMusicService.stop(appContext)
+                }
+            }
+        }
         JaMusicLabScreen(Modifier.fillMaxSize(), onExit = { tab = "Movies"; navigationLevel = 0 })
         return
     }
