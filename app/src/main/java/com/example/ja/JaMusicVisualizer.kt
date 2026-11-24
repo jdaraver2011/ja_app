@@ -28,7 +28,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 
 internal object JaMusicVisualization { val pcm = JaMusicPcm() }
 /** Offline, fixed-origin renderer. Its only bridge exposes a 1024-sample waveform, never account data. */
-internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = { bitmap, _ -> bitmap.recycle() }) {
+internal class MusicWaveBridge(
+    private val playbackActive: () -> Boolean = { JaMusicLabService.state.value.playing },
+    private val onFrame: (Bitmap, String) -> Unit = { bitmap, _ -> bitmap.recycle() }
+) {
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private val pending = java.util.concurrent.atomic.AtomicBoolean(false)
     @Volatile private var closed = false
@@ -82,10 +85,16 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
         android.util.Log.i("JA_MUSIC_VIS", "WEB_$safe frames=$frames jsPeak=$peak ${JaMusicVisualization.pcm.diagnostic(now)}")
     }
     @JavascriptInterface fun samples(): String = JaMusicVisualization.pcm.snapshotStereo(SystemClock.elapsedRealtime())
-    @JavascriptInterface fun isPlaying(): Boolean = JaMusicLabService.state.value.playing
+    @JavascriptInterface fun isPlaying(): Boolean = playbackActive()
 }
+@Composable
+internal fun JaMusicVisualizer(onBack: () -> Unit) {
+    JaMusicVisualizer(playbackActive = { JaMusicLabService.state.value.playing }, onBack = onBack)
+}
+
 @SuppressLint("SetJavaScriptEnabled")
-@Composable internal fun JaMusicVisualizer(onBack: () -> Unit) {
+@Composable
+internal fun JaMusicVisualizer(playbackActive: () -> Boolean, onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val state by JaMusicLabService.state.collectAsState()
@@ -98,7 +107,8 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
             visibility = android.view.View.INVISIBLE
         }
     }
-    val bridge: MusicWaveBridge = remember { MusicWaveBridge { bitmap, preset ->
+    val currentPlaybackActive by rememberUpdatedState(playbackActive)
+    val bridge: MusicWaveBridge = remember { MusicWaveBridge(playbackActive = { currentPlaybackActive() }) { bitmap, preset ->
         imageView.setImageBitmap(bitmap)
         imageView.visibility = android.view.View.VISIBLE
         if (nativePreset != preset) nativePreset = preset
