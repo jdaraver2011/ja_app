@@ -12,5 +12,5 @@ jobs:
       run_checks: false
       publish_update: false
       build_variant: release
-      generate_baseline_profile: true
+      generate_baseline_profile: false
     secrets: inherit
