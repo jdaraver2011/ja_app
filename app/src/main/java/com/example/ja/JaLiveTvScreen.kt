@@ -142,6 +142,13 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         }
         moveSession.clear();movingId=null;draftOrder=emptyList();suppressPickUpRelease=false;returnChannel=id
     }
+    fun stopPlayback(){
+        fullscreen=false
+        previewChannel=null
+        playingChannelId=null
+        focusedChannel=null
+        returnChannel=null
+    }
     fun playbackStarted(channel:JaLiveChannel){
         playingChannelId=channel.id
         if(lastChannelId!=channel.id){lastChannelId=channel.id;prefs.edit().putString("last-channel",channel.id).apply()}
@@ -194,12 +201,20 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         refreshJob=scope.launch {
             loading=true;error=null
             try{
-                val result=repository.channels(force)
-                channels=listOf(jaWeatherChannel())+result.channels.filter{it.id!=JA_WEATHER_CHANNEL};saved=result.saved;verifiedAt=result.verifiedAt
+                fun applyCatalog(result:JaLiveChannels){
+                    channels=listOf(jaWeatherChannel())+result.channels.filter{it.id!=JA_WEATHER_CHANNEL}
+                    saved=result.saved;verifiedAt=result.verifiedAt
+                    catalogReady=true
+                }
+                val result=repository.channels(force){cached->
+                    applyCatalog(cached)
+                    repository.cachedGuide(channels)?.let{guide=it}
+                }
+                applyCatalog(result)
                 favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id})
-        groupOrders["Favorites"]=favoriteOrder
-        prefs.edit().putString("group-order:Favorites",org.json.JSONArray(favoriteOrder).toString()).apply()
-        saveOrder()
+                groupOrders["Favorites"]=favoriteOrder
+                prefs.edit().putString("group-order:Favorites",org.json.JSONArray(favoriteOrder).toString()).apply()
+                saveOrder()
             }catch(e:CancellationException){throw e}catch(_:Exception){error="Channel catalog unavailable. Check your connection and retry."}
             finally{loading=false;catalogReady=true}
             if(channels.isEmpty())return@launch
@@ -238,6 +253,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val searchFocus=remember{FocusRequester()}
     val jaButtonFocus=remember{FocusRequester()}
     val returnFocus=remember{FocusRequester()}
+    DisposableEffect(state){onDispose{state.stopPlayback()}}
     DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)}
         owner.lifecycle.addObserver(observer);onDispose{owner.lifecycle.removeObserver(observer)}}
     // Give a new guide its first load, then wait for playback to release the player.
