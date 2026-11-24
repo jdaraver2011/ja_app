@@ -1,8 +1,6 @@
 package com.example.ja
 
 import android.content.Context
-import android.net.Uri
-import android.text.Html
 import android.util.Log
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +23,6 @@ import java.io.File
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.IOException
-import java.net.URI
 import java.time.Instant
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
@@ -80,8 +77,9 @@ internal class JaLiveTvRepository(private val context:Context) {
         if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
         if(cached==null&&!shouldRefresh)throw IOException("No catalog cache is available; automatic refresh was already attempted today")
         // Record the daily attempt before starting the request so failed network calls do not repeat on every app open.
-        // A manual refresh after 6:00 AM counts as today's attempt; one before 6:00 AM does not.
-        if(now>=todaySix)prefs.edit().putString("automatic_attempt_date",localDate.toString()).apply()
+        // A first install can fetch before 6:00 AM and still counts as today's automatic attempt.
+        // A manual refresh after 6:00 AM also counts as today's attempt.
+        if(!force || now>=todaySix)prefs.edit().putString("automatic_attempt_date",localDate.toString()).apply()
         try {
             val raw=downloadDirectCatalog()
             val parsed=parseCatalog(raw,false)
@@ -96,7 +94,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         return lastDownload<=0L||(now>=todaySix&&lastDownload<todaySix)
     }
     private data class M3uEntry(val id:String,val name:String,val logo:String,val groups:String,val url:String)
-    private data class M3uSource(val id:String,val category:String,val url:String,val testPage:Boolean=false)
+    private data class M3uSource(val id:String,val category:String,val url:String)
     private suspend fun downloadDirectCatalog():String = supervisorScope {
         val sources=listOf(
             M3uSource("us","country-us","https://iptv-org.github.io/iptv/countries/us.m3u"),
@@ -115,64 +113,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         catalogJson(channels)
     }
     private fun downloadSource(source:M3uSource):List<JaLiveChannel> {
-        val playlist=if(source.testPage){
-            val page=text(source.url,2_000_000,30)
-            resolveTestPlaylist(page,source.url)
-        }else source.url
-        val raw=text(playlist,30_000_000,120)
-        return parseM3u(raw,source)
-    }
-    private fun decodeHtml(value:String):String=Html.fromHtml(value,Html.FROM_HTML_MODE_LEGACY).toString().trim()
-    private fun htmlAttribute(tag:String,name:String):String {
-        val pattern=Regex("""(?i)(?:^|\s)${Regex.escape(name)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""")
-        val match=pattern.find(tag)?:return ""
-        return decodeHtml(match.groups[1]?.value?:match.groups[2]?.value?:match.groups[3]?.value.orEmpty())
-    }
-    private fun pageCredential(html:String,kind:String):String? {
-        val label=if(kind=="username")Regex("(?:iptv\\s*)?user(?:name)?",RegexOption.IGNORE_CASE)
-            else Regex("(?:iptv\\s*)?pass(?:word)?",RegexOption.IGNORE_CASE)
-        val inputs=Regex("<input\\b[^>]*>",RegexOption.IGNORE_CASE).findAll(html).map{it.value}.toList()
-        for(tag in inputs){
-            val clues=listOf("name","id","aria-label","placeholder","autocomplete").joinToString(" "){htmlAttribute(tag,it)}
-            if(label.containsMatchIn(clues))htmlAttribute(tag,"value").takeIf{it.isNotBlank()}?.let{return it}
-        }
-        val labelText=if(kind=="username")"IPTV Username" else "IPTV Password"
-        val at=html.indexOf(labelText,ignoreCase=true)
-        if(at>=0){
-            val input=Regex("<input\\b[^>]*>",RegexOption.IGNORE_CASE).find(html.substring(at,(at+1200).coerceAtMost(html.length)))?.value
-            if(input!=null)htmlAttribute(input,"value").takeIf{it.isNotBlank()}?.let{return it}
-        }
-        val plain=decodeHtml(html.replace(Regex("(?is)<script\\b[^>]*>.*?</script>")," ")
-            .replace(Regex("(?is)<style\\b[^>]*>.*?</style>")," ").replace(Regex("<[^>]+>")," ").replace(Regex("\\s+")," "))
-        val plainAt=plain.indexOf(labelText,ignoreCase=true)
-        if(plainAt>=0){
-            val after=plain.substring(plainAt+labelText.length,(plainAt+labelText.length+160).coerceAtMost(plain.length))
-            Regex("[A-Za-z0-9._-]{4,}").findAll(after).map{it.value}.firstOrNull{!it.equals("copy",true)&&!it.equals("copied",true)
-                &&!it.equals("username",true)&&!it.equals("password",true)}?.let{return it}
-        }
-        return null
-    }
-    private fun resolveTestPlaylist(html:String,pageUrl:String):String {
-        val tags=Regex("<(?:a|form|button)\\b[^>]*>",RegexOption.IGNORE_CASE).findAll(html).map{it.value}
-        var discovered=""
-        for(tag in tags){
-            val value=listOf("href","action","data-href","data-url").map{htmlAttribute(tag,it)}.firstOrNull{it.isNotBlank()}.orEmpty()
-            val clue=(htmlAttribute(tag,"aria-label")+" "+htmlAttribute(tag,"title")+" "+tag).lowercase(Locale.ROOT)
-            if(value.isNotBlank()&&(Regex("m3u|playlist|get\\.php|download",RegexOption.IGNORE_CASE).containsMatchIn(value)
-                ||Regex("m3u|playlist",RegexOption.IGNORE_CASE).containsMatchIn(clue))){discovered=value;break}
-        }
-        if(discovered.isBlank())discovered=Regex("https?://[^\\\"'\\s<>]+(?:m3u|playlist|get\\.php)[^\\\"'\\s<>]*",RegexOption.IGNORE_CASE).find(decodeHtml(html))?.value.orEmpty()
-        if(discovered.isBlank())throw IOException("Test playlist link was not found on the source page")
-        val resolved=try{URI(pageUrl).resolve(discovered).toString()}catch(e:Exception){throw IOException("Test playlist URL was invalid",e)}
-        if(!webUrl(resolved))throw IOException("Test playlist URL must use HTTP or HTTPS")
-        val current=Uri.parse(resolved);val names=current.queryParameterNames
-        val user=if(names.any{it.equals("username",true)||it.equals("user",true)})"" else pageCredential(html,"username").orEmpty()
-        val pass=if(names.any{it.equals("password",true)||it.equals("pass",true)})"" else pageCredential(html,"password").orEmpty()
-        if((user.isNotBlank()&&pass.isBlank())||(pass.isNotBlank()&&user.isBlank()))throw IOException("Test playlist credentials were incomplete")
-        val builder=current.buildUpon()
-        if(user.isNotBlank())builder.appendQueryParameter("username",user)
-        if(pass.isNotBlank())builder.appendQueryParameter("password",pass)
-        return builder.build().toString()
+        return parseM3u(text(source.url,30_000_000,120),source)
     }
     private fun parseM3u(raw:String,source:M3uSource):List<JaLiveChannel> {
         if(!raw.trimStart().startsWith("#EXTM3U"))throw IOException("${source.id.uppercase(Locale.ROOT)} playlist was not valid M3U")
