@@ -2,6 +2,8 @@ package com.example.ja.baselineprofile
 
 import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -13,9 +15,31 @@ class JaBaselineProfileGenerator {
 
     @Test
     fun coldStart() {
+        baselineProfileRule.collect(packageName = "com.example.ja", includeInStartupProfile = true) {
+            pressHome()
+            startActivityAndWait()
+            check(device.wait(Until.hasObject(By.text("Movies")), 15_000)) { "JA home navigation did not appear" }
+        }
+    }
+
+    @Test
+    fun openMediaTabs() {
         baselineProfileRule.collect(packageName = "com.example.ja") {
             pressHome()
             startActivityAndWait()
+            fun clickTab(tab: String) {
+                val control = checkNotNull(device.wait(Until.findObject(By.text(tab)), 15_000)) {
+                    "JA tab did not appear: $tab"
+                }
+                control.click()
+            }
+            clickTab("TV")
+            check(device.wait(Until.hasObject(By.text("Popular")), 15_000)) { "TV navigation did not appear" }
+            clickTab("IPTV")
+            check(device.wait(Until.hasObject(By.text("JA IPTV")), 15_000)) { "IPTV did not open" }
+            device.pressBack()
+            clickTab("Music")
+            check(device.wait(Until.hasObject(By.text("JA Music")), 15_000)) { "Music did not open" }
         }
     }
 }

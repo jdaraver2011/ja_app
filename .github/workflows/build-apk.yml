@@ -318,6 +318,7 @@ jobs:
         with:
           name: JA-baseline-profile-diagnostics-${{ github.run_id }}
           path: |
+            app/src/main/generated/baselineProfiles/*.txt
             baselineprofile/build/reports/androidTests/connected/**
             baselineprofile/build/outputs/androidTest-results/connected/**
             test-results/**
@@ -336,6 +337,26 @@ jobs:
             *) echo "Unsupported APK build variant: $BUILD_VARIANT"; exit 1 ;;
           esac
           gradle --no-daemon --stacktrace ":app:$gradle_task"
+      - name: Verify generated JA Baseline Profile in APK
+        if: ${{ inputs.generate_baseline_profile }}
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant || 'debug' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          profile = Path("app/src/main/generated/baselineProfiles/baseline-prof.txt")
+          if not profile.is_file() or "Lcom/example/ja/" not in profile.read_text():
+              raise SystemExit("The generated Baseline Profile contains no JA rules.")
+          variant = os.environ["BUILD_VARIANT"]
+          with ZipFile(f"app/build/outputs/apk/{variant}/app-{variant}.apk") as apk:
+              for asset in ("assets/dexopt/baseline.prof", "assets/dexopt/baseline.profm"):
+                  if asset not in apk.namelist() or apk.getinfo(asset).file_size == 0:
+                      raise SystemExit(f"APK is missing a non-empty {asset}.")
+          print(f"Verified generated JA rules and packaged {variant} Baseline Profile.")
+          PY
       - name: Enable KVM for music service regression
         if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
         run: |
