@@ -39,26 +39,50 @@ internal class MusicWaveBridge(
     private var lastBitmapLog = 0L
     private var bitmapCount = 0
     private var lastBitmapCount = 0
+    private var profileSize = ""
+    private var profileStart = 0L
+    private var profileFrames = 0
+    private val profileTimes = LongArray(5)
     fun attachTo(webView: WebView) {
         webView.addJavascriptInterface(this, "JaWave")
     }
 
     @JavascriptInterface fun ready(): Boolean = active && !closed && !pending.get()
+    @JavascriptInterface fun profilingEnabled(): Boolean = BuildConfig.JA_VISUALIZER_PROFILING
+    @JavascriptInterface fun reportProfile(sample: String) {
+        if (BuildConfig.JA_VISUALIZER_PROFILING && sample.length <= 320 &&
+            sample.all { it.isLetterOrDigit() || it == ' ' || it == '=' || it == '.' }) {
+            android.util.Log.i("JA_MUSIC_VIS", "PROFILE_WEB $sample")
+        }
+    }
     fun close() { closed = true; active = false }
     @JavascriptInterface fun present(data: String, preset: String) {
         if (closed || !active || data.length > 1024 * 1024 || !data.startsWith("data:image/jpeg;base64,") || !pending.compareAndSet(false, true)) return
         try {
+            val profiling = BuildConfig.JA_VISUALIZER_PROFILING
+            val started = if (profiling) SystemClock.elapsedRealtimeNanos() else 0L
             val bytes = Base64.decode(data.substringAfter(','), Base64.NO_WRAP)
+            val decodedBase64 = if (profiling) SystemClock.elapsedRealtimeNanos() else 0L
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val checkedBounds = if (profiling) SystemClock.elapsedRealtimeNanos() else 0L
             if (bounds.outWidth !in 1..1280 || bounds.outHeight !in 1..720) { pending.set(false); return }
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
                 BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 })
             if (bitmap == null) { pending.set(false); return }
+            val decodedBitmap = if (profiling) SystemClock.elapsedRealtimeNanos() else 0L
             main.post {
                 try {
                     if (closed || !active) bitmap.recycle() else {
+                        val presenting = if (profiling) SystemClock.elapsedRealtimeNanos() else 0L
                         onFrame(bitmap, preset.take(160))
+                        if (profiling) {
+                            val presented = SystemClock.elapsedRealtimeNanos()
+                            recordProfile(bitmap, started, presented, longArrayOf(
+                                decodedBase64 - started, checkedBounds - decodedBase64,
+                                decodedBitmap - checkedBounds, presenting - decodedBitmap, presented - presenting
+                            ))
+                        }
                         bitmapCount++
                         val now = SystemClock.elapsedRealtime()
                         if (now - lastBitmapLog >= 5000) {
@@ -75,6 +99,27 @@ internal class MusicWaveBridge(
             pending.set(false)
             android.util.Log.w("JA_MUSIC_VIS", "NATIVE_BITMAP_DECODE_FAILED")
         }
+    }
+    private fun recordProfile(bitmap: Bitmap, start: Long, end: Long, times: LongArray) {
+        val size = "${bitmap.width}x${bitmap.height}"
+        if (profileSize != size || profileStart == 0L) {
+            profileSize = size
+            profileStart = start
+            profileFrames = 0
+            profileTimes.fill(0)
+        }
+        profileFrames++
+        for (index in times.indices) profileTimes[index] += times[index]
+        val elapsed = end - profileStart
+        if (elapsed < 5_000_000_000L) return
+        val metrics = java.lang.String.format(
+            java.util.Locale.US,
+            "size=%s fps=%.1f frames=%d base64Ms=%.2f boundsMs=%.2f bitmapMs=%.2f mainQueueMs=%.2f imageViewMs=%.2f",
+            size, profileFrames * 1e9 / elapsed, profileFrames,
+            *profileTimes.map { it / (1e6 * profileFrames) }.toTypedArray()
+        )
+        android.util.Log.i("JA_MUSIC_VIS", "PROFILE_NATIVE $metrics")
+        profileStart = 0L
     }
     private var lastReport = 0L
     @JavascriptInterface fun report(code: String, frames: Int, peak: Int) {
@@ -99,6 +144,7 @@ internal fun JaMusicVisualizer(playbackActive: () -> Boolean, onBack: () -> Unit
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val state by JaMusicLabService.state.collectAsState()
     var nativePreset by remember { mutableStateOf("") }
+    var profileHeight by remember { mutableIntStateOf(720) }
     val imageView = remember {
         ImageView(context).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
@@ -164,6 +210,15 @@ internal fun JaMusicVisualizer(playbackActive: () -> Boolean, onBack: () -> Unit
         AndroidView(factory = { imageView }, modifier = Modifier.fillMaxSize().padding(bottom = 64.dp))
         if (nativePreset.isNotBlank()) Text(nativePreset, color = Color.White, style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
+        if (BuildConfig.JA_VISUALIZER_PROFILING && nativePreset.isNotBlank()) {
+            TvFocusButton(
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                onClick = {
+                    profileHeight = if (profileHeight == 720) 540 else 720
+                    view.evaluateJavascript("window.setJaProfileResolution($profileHeight)", null)
+                }
+            ) { Text("${profileHeight}p profiling") }
+        }
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xDD101923)).padding(8.dp).horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
             VisualizerIconButton(R.drawable.ja_music_back, "Back to player", onBack)

@@ -38,3 +38,50 @@ bridgeReady=false;
 frameCallback(1000);
 assert.equal(renders,30,'Skip rendering when a native bitmap is pending');
 console.log('720p canvas sizing and native 30 fps frame pacing passed');
+
+assert.equal(ctx.window.setJaProfileResolution, undefined);
+let clock = 0;
+const profileReports = [];
+ctx.performance = {now: () => clock += 0.1};
+ctx.window.JaWave.profilingEnabled = () => true;
+ctx.window.JaWave.reportProfile = value => profileReports.push(value);
+renderCanvas.getContext = () => ({getExtension: () => null});
+bridgeReady = true;
+vm.runInNewContext(code, ctx);
+assert.equal(canvas.width, 1280);
+assert.equal(canvas.height, 720);
+ctx.window.setJaProfileResolution(540);
+assert.equal(canvas.width, 960);
+assert.equal(canvas.height, 540);
+ctx.window.setJaProfileResolution(1080);
+assert.equal(canvas.height, 540);
+for (let i = 0; i <= 306; i++) {
+ clock = i * 1000 / 60;
+ frameCallback(clock);
+}
+assert.match(profileReports[0], /size=960x540 .*renderSubmitMs=.*copyMs=.*jpegMs=.*gpuMs=na/);
+ctx.window.setJaProfileResolution(720);
+assert.equal(canvas.width, 1280);
+assert.equal(canvas.height, 720);
+assert.ok(!canvas.dataset.error);
+console.log('Profiling resolution switch and fallback timing reports passed');
+
+const gpuTimer = {GPU_DISJOINT_EXT:1,TIME_ELAPSED_EXT:2};
+let activeQuery = false;
+renderCanvas.getContext = () => ({
+ QUERY_RESULT_AVAILABLE:3, QUERY_RESULT:4,
+ getExtension: () => gpuTimer, getParameter: () => false,
+ createQuery: () => ({}), deleteQuery(){},
+ beginQuery(){assert.equal(activeQuery,false);activeQuery=true;},
+ endQuery(){assert.equal(activeQuery,true);activeQuery=false;},
+ getQueryParameter: (_query, param) => param === 3 ? true : 2e6
+});
+profileReports.length = 0;
+vm.runInNewContext(code, ctx);
+for (let i = 0; i <= 306; i++) {
+ clock = i * 1000 / 60;
+ frameCallback(clock);
+}
+assert.match(profileReports[0], /gpuMs=2\.00 gpuSamples=[1-9]\d*/);
+assert.ok(!canvas.dataset.error);
+console.log('An available WebGL timer contributes asynchronous GPU samples');
