@@ -72,6 +72,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 private val bg = Color(0xFF12171D)
 private val accent = Color(0xFFE5A43B)
@@ -254,7 +256,6 @@ class MainActivity : ComponentActivity() {
             catalogueGeneration = catalogueRefresh.generation()
         }
     }
-    LaunchedEffect(catalogueGeneration, catalogueDate) { JaVidSrcCatalog.refreshOverdue() }
     val repo = remember(catalogueDate, catalogueGeneration) { TmdbRepository() }
     val movieCatalogueRepo = remember(catalogueDate, catalogueGeneration, sourceDataVersion) { TmdbRepository() }
     val detailsRepo = remember { TmdbDetailsRepository() }
@@ -794,8 +795,21 @@ class MainActivity : ComponentActivity() {
             } finally { tvPopularLoading = false }
         }
     }
+    val musicPlayback = remember {
+        JaMusicLabService.state.map { it.running && it.queue.isNotEmpty() }.distinctUntilChanged()
+    }
+    val musicActive by musicPlayback.collectAsState(
+        initial = JaMusicLabService.state.value.let { it.running && it.queue.isNotEmpty() }
+    )
+    val playbackBusy = playback != null || playbackLoading || liveActive || musicActive || weatherOpen
+    LaunchedEffect(playbackBusy, catalogueGeneration, catalogueDate) {
+        JaVidSrcCatalog.playbackBusy(playbackBusy)
+        if (!playbackBusy) {
+            delay(1500)
+            JaVidSrcCatalog.refreshOverdue()
+        }
+    }
     LaunchedEffect(playback,playbackLoading,liveActive,weatherOpen,weather.sound) {
-        JaVidSrcCatalog.playbackBusy(playback != null || playbackLoading || liveActive)
         JaMusicService.setVideoActive(playback != null || playbackLoading || liveActive || (weatherOpen&&weather.weatherStar&&weather.sound))
     }
     val catalogueVisible = !liveTv.fullscreen && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
