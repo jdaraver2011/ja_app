@@ -63,7 +63,7 @@ try:
         assert page.locator('#status').inner_text() != first, 'Preset selection should change'
         previous_presented = page.evaluate('window.JaWave.presented')
         page.set_viewport_size({'width': 390, 'height': 760})
-        page.wait_for_function('window.JaWave.presented > arguments[0]', arg=previous_presented, timeout=30000)
+        page.wait_for_function('(previous) => window.JaWave.presented > previous', arg=previous_presented, timeout=30000)
         size = page.evaluate('({width: document.querySelector("#visual").width, height: document.querySelector("#visual").height})')
         assert size['width'] <= 960 and size['height'] <= 540, f'Portrait size exceeded native bitmap bounds: {size}'
         assert size['width'] > 0 and size['height'] > 0
