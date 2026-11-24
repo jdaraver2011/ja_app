@@ -1,6 +1,7 @@
 package com.example.ja
 
 import android.content.Context
+import android.text.Html
 import android.util.Log
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
@@ -115,6 +116,12 @@ internal class JaLiveTvRepository(private val context:Context) {
     private fun downloadSource(source:M3uSource):List<JaLiveChannel> {
         return parseM3u(text(source.url,30_000_000,120),source)
     }
+    private fun decodeHtml(value:String):String=Html.fromHtml(value,Html.FROM_HTML_MODE_LEGACY).toString().trim()
+    private fun htmlAttribute(tag:String,name:String):String {
+        val pattern=Regex("""(?i)(?:^|\s)${Regex.escape(name)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""")
+        val match=pattern.find(tag)?:return ""
+        return decodeHtml(match.groups[1]?.value?:match.groups[2]?.value?:match.groups[3]?.value.orEmpty())
+    }
     private fun parseM3u(raw:String,source:M3uSource):List<JaLiveChannel> {
         if(!raw.trimStart().startsWith("#EXTM3U"))throw IOException("${source.id.uppercase(Locale.ROOT)} playlist was not valid M3U")
         val rows=mutableListOf<M3uEntry>();var current:Triple<String,String,String>?=null
@@ -137,9 +144,9 @@ internal class JaLiveTvRepository(private val context:Context) {
         for(row in rows){
             val name=row.name.ifBlank{row.id.ifBlank{"Unnamed channel"}}
             val tvgId=row.id.trim()
-            val key=if(tvgId.isNotBlank())"${if(source.testPage)"test:" else "id:"}${tvgId.lowercase(Locale.ROOT)}"
+            val key=if(tvgId.isNotBlank())"id:${tvgId.lowercase(Locale.ROOT)}"
                 else "${source.id}:name:${slug(name)}"
-            val stableId=if(tvgId.isNotBlank())(if(source.testPage)"test-$tvgId" else tvgId) else "${source.id}-${slug(name)}"
+            val stableId=if(tvgId.isNotBlank())tvgId else "${source.id}-${slug(name)}"
             val groups=row.groups.split(Regex("[|;]" )).map{slug(decodeHtml(it))}.filter{it.isNotBlank()
                 &&it !in setOf("us","usa","united-states","uk","gb","united-kingdom")}
             val categories=(groups+source.category).toSet()
