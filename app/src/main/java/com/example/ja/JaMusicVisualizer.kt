@@ -3,6 +3,10 @@ package com.example.ja
 import android.annotation.SuppressLint
 import android.webkit.*
 import android.os.SystemClock
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import android.widget.ImageView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -24,12 +28,48 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 
 internal object JaMusicVisualization { val pcm = JaMusicPcm() }
 /** Offline, fixed-origin renderer. Its only bridge exposes a 1024-sample waveform, never account data. */
-internal class MusicWaveBridge {
-    private var lastReport = 0L
-    @Volatile var active = true
+internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = { bitmap, _ -> bitmap.recycle() }) {
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val pending = java.util.concurrent.atomic.AtomicBoolean(false)
     @Volatile private var closed = false
+    @Volatile var active = true
+    private var lastBitmapLog = 0L
+    private var bitmapCount = 0
+    private var lastBitmapCount = 0
+    @JavascriptInterface fun ready(): Boolean = active && !closed && !pending.get()
     fun close() { closed = true; active = false }
-
+    @JavascriptInterface fun present(data: String, preset: String) {
+        if (closed || !active || data.length > 1024 * 1024 || !data.startsWith("data:image/jpeg;base64,") || !pending.compareAndSet(false, true)) return
+        try {
+            val bytes = Base64.decode(data.substringAfter(','), Base64.NO_WRAP)
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth !in 1..960 || bounds.outHeight !in 1..540) { pending.set(false); return }
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+                BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 })
+            if (bitmap == null) { pending.set(false); return }
+            main.post {
+                try {
+                    if (closed || !active) bitmap.recycle() else {
+                        onFrame(bitmap, preset.take(160))
+                        bitmapCount++
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastBitmapLog >= 5000) {
+                            val previousBitmapLog = lastBitmapLog
+                            lastBitmapLog = now
+                            val fps = if (lastBitmapCount == 0) "startup" else java.lang.String.format(java.util.Locale.US, "%.1f", (bitmapCount - lastBitmapCount) * 1000.0 / (now - previousBitmapLog).coerceAtLeast(1))
+                            lastBitmapCount = bitmapCount
+                            android.util.Log.i("JA_MUSIC_VIS", "NATIVE_BITMAP frames=$bitmapCount fps=$fps width=${bitmap.width} height=${bitmap.height}")
+                        }
+                    }
+                } finally { pending.set(false) }
+            }
+        } catch (_: Exception) {
+            pending.set(false)
+            android.util.Log.w("JA_MUSIC_VIS", "NATIVE_BITMAP_DECODE_FAILED")
+        }
+    }
+    private var lastReport = 0L
     @JavascriptInterface fun report(code: String, frames: Int, peak: Int) {
         val now = SystemClock.elapsedRealtime()
         if (now - lastReport < 4000 && code == "FRAME") return
@@ -45,7 +85,20 @@ internal class MusicWaveBridge {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val state by JaMusicLabService.state.collectAsState()
-    val bridge = remember { MusicWaveBridge() }
+    var nativePreset by remember { mutableStateOf("") }
+    val imageView = remember {
+        ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(android.graphics.Color.BLACK)
+            contentDescription = "Music visualizer"
+            visibility = android.view.View.INVISIBLE
+        }
+    }
+    val bridge = remember { MusicWaveBridge { bitmap, preset ->
+        imageView.setImageBitmap(bitmap)
+        imageView.visibility = android.view.View.VISIBLE
+        if (nativePreset != preset) nativePreset = preset
+    } }
     val view = remember {
         WebView(context).apply {
             setBackgroundColor(android.graphics.Color.BLACK)
@@ -89,11 +142,14 @@ internal class MusicWaveBridge {
             if (event == Lifecycle.Event.ON_RESUME) { bridge.active = true; JaMusicVisualization.pcm.enable(true); view.onResume() }
         }
         lifecycle.addObserver(observer)
-        onDispose { bridge.close(); android.util.Log.i("JA_MUSIC_VIS", "CLOSE"); lifecycle.removeObserver(observer); JaMusicVisualization.pcm.enable(false); view.removeJavascriptInterface("JaWave"); view.stopLoading(); view.destroy() }
+        onDispose { bridge.close(); imageView.setImageDrawable(null); android.util.Log.i("JA_MUSIC_VIS", "CLOSE"); lifecycle.removeObserver(observer); JaMusicVisualization.pcm.enable(false); view.removeJavascriptInterface("JaWave"); view.stopLoading(); view.destroy() }
     }
     BackHandler(onBack = onBack)
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().padding(bottom = 64.dp))
+        AndroidView(factory = { imageView }, modifier = Modifier.fillMaxSize().padding(bottom = 64.dp))
+        if (nativePreset.isNotBlank()) Text(nativePreset, color = Color.White, style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xDD101923)).padding(8.dp).horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
             VisualizerIconButton(R.drawable.ja_music_back, "Back to player", onBack)

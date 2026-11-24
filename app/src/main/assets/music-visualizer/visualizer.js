@@ -22,8 +22,8 @@
     if (!names.length) throw Error('No presets');
     const nativeAudio = window.JaWave && typeof window.JaWave.samples === 'function';
     // Match render detail to this display while capping the GPU workload at 720p.
-    const renderLimitWidth = 1280;
-    const renderLimitHeight = 720;
+    const renderLimitWidth = 960;
+    const renderLimitHeight = 540;
     const size = () => {
       const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
       const screenWidth = Math.max(64, Math.round(innerWidth * pixelRatio));
