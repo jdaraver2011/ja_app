@@ -141,7 +141,7 @@ class JaMusicLabService : MediaLibraryService() {
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this)
             .setNotificationId(MUSIC_NOTIFICATION).setChannelId(MUSIC_CHANNEL)
             .setChannelName(R.string.ja_music_notification_channel).build())
-        cache = SimpleCache(File(cacheDir, "music-lab"), LeastRecentlyUsedCacheEvictor(64L * 1024 * 1024), StandaloneDatabaseProvider(this))
+        cache = SimpleCache(File(cacheDir, "music-lab"), LeastRecentlyUsedCacheEvictor(256L * 1024 * 1024), StandaloneDatabaseProvider(this))
         val cached = CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(
             DefaultHttpDataSource.Factory().setUserAgent("JA-Music/2.5.2").setAllowCrossProtocolRedirects(false)
                 .setConnectTimeoutMs(20000).setReadTimeoutMs(20000))
