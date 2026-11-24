@@ -1,0 +1,16 @@
+name: Publish JA 2.8.3 device update
+on:
+  push:
+    branches: [v2.8.3]
+    paths: [.github/workflows/publish-v2.8.3.yml]
+permissions:
+  contents: write
+jobs:
+  publish:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      run_checks: true
+      publish_update: true
+      build_variant: release
+      generate_baseline_profile: false
+    secrets: inherit
