@@ -1,9 +1,15 @@
-import importlib.util, json, tempfile, unittest, hashlib, subprocess, os
+import importlib.util, json, tempfile, unittest, hashlib, subprocess, os, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('updates', ROOT/'scripts/prepare_update_release.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 class UpdateReleaseTests(unittest.TestCase):
+ def test_device_checks_public_manifest_without_github_api(self):
+  source=(ROOT/'app/src/main/java/com/example/ja/JaAppUpdates.kt').read_text(encoding='utf-8')
+  workflow=(ROOT/'.github/workflows/build-apk.yml').read_text(encoding='utf-8')
+  self.assertIn('json("https://github.com/$repo/releases/latest/download/ja-update.json")',source)
+  self.assertNotIn('api.github.com',source)
+  self.assertIn('https://github.com/$UPDATE_REPO/releases/latest/download/ja-update.json',workflow)
  def test_invalid_repository_rejected_before_execution(self):
   for value in ['', 'private repo', '../bad', 'owner/repo;echo x', 'owner/repo/other']:
    with self.assertRaises(ValueError):module.prepare(Path('missing.apk'),value,Path('missing-aapt'),Path('unused'))
@@ -24,6 +30,6 @@ class UpdateReleaseTests(unittest.TestCase):
    with self.assertRaises(ValueError):module.prepare(Path('x'), 'owner/updates',Path('aapt'),Path('unused'))
  def test_publish_requires_signing_key(self):
   env=dict(os.environ,JA_KEYSTORE_BASE64='',PUBLISH_UPDATE='true')
-  result=subprocess.run(['python3',str(ROOT/'scripts/restore_update_signing.py')],env=env,capture_output=True,text=True)
+  result=subprocess.run([sys.executable,str(ROOT/'scripts/restore_update_signing.py')],env=env,capture_output=True,text=True)
   self.assertNotEqual(result.returncode,0);self.assertIn('Publishing requires',result.stderr)
 if __name__=='__main__':unittest.main()

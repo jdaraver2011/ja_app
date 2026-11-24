@@ -65,14 +65,7 @@ internal class JaAppUpdates(private val context: Context) {
             check(folder.isDirectory || folder.mkdirs()) { "Could not prepare update storage." }
             val repo = BuildConfig.JA_UPDATE_REPOSITORY
             require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(repo)) { "Update repository is not configured correctly." }
-            val release = json("https://api.github.com/repos/$repo/releases/latest")
-            val assets = release.getJSONArray("assets")
-            var metadataUrl: String? = null
-            for(i in 0 until assets.length()) {
-                val asset = assets.getJSONObject(i)
-                if(asset.optString("name") == "ja-update.json") metadataUrl = asset.getString("browser_download_url")
-            }
-            val meta = json(metadataUrl ?: error("The latest release has no JA update metadata."))
+            val meta = json("https://github.com/$repo/releases/latest/download/ja-update.json")
             check(meta.getString("packageName") == context.packageName) { "Update package does not match JA." }
             val version = meta.getLong("versionCode")
             if(version <= BuildConfig.VERSION_CODE) {

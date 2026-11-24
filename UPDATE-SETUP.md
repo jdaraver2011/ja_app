@@ -4,7 +4,7 @@ This version builds on v2.0.10. The APK artifact is JA-2.1.0-debug. Keep the sam
 
 ## How remote updates work
 
-Compilation produces an APK. When you explicitly publish that build, GitHub Releases hosts the signed APK and a small ja-update.json manifest. Any installed updater-enabled JA device with internet access can select Settings > Update Now. It checks the latest published non-prerelease release, downloads a newer APK, verifies SHA-256/size/package/version/signing certificate, and offers Install Update. Android handles the final installation confirmation.
+Compilation produces an APK. When you explicitly publish that build, GitHub Releases hosts the signed APK and a small ja-update.json manifest. Any installed updater-enabled JA device with internet access can select Settings > Update Now. The updater fetches the manifest through the public latest-release download URL, downloads a newer APK, verifies SHA-256/size/package/version/signing certificate, and offers Install Update. Android handles the final installation confirmation. After publishing, the workflow checks that the same public URL serves the newly built manifest and that the APK URL is reachable.
 
 Devices do not need to share your network. No ADB connection, router port forwarding or inbound device connection is needed. This is a device-initiated pull update, not a silent push installation. No scheduled background checks were added. Ordinary unmanaged Android/TV devices require the OS installation/unknown-source permission flow.
 
