@@ -798,9 +798,7 @@ class MainActivity : ComponentActivity() {
     val musicPlayback = remember {
         JaMusicLabService.state.map { it.running && it.queue.isNotEmpty() }.distinctUntilChanged()
     }
-    val musicActive by musicPlayback.collectAsState(
-        initial = JaMusicLabService.state.value.let { it.running && it.queue.isNotEmpty() }
-    )
+    val musicActive by musicPlayback.collectAsState(initial = false)
     val playbackBusy = playback != null || playbackLoading || liveActive || musicActive || weatherOpen
     LaunchedEffect(playbackBusy, catalogueGeneration, catalogueDate) {
         JaVidSrcCatalog.playbackBusy(playbackBusy)
