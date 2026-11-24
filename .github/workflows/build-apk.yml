@@ -64,6 +64,25 @@ jobs:
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
+      - name: Configure build
+        env:
+          JA_UPDATE_REPOSITORY: ${{ vars.JA_UPDATE_REPOSITORY || github.repository }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          AUTHORIZED_EMBED_TEMPLATE: ${{ secrets.AUTHORIZED_EMBED_TEMPLATE }}
+          AUTHORIZED_EMBED_HOST: ${{ secrets.AUTHORIZED_EMBED_HOST }}
+          DIRECT_MEDIA_TEMPLATE: ${{ secrets.DIRECT_MEDIA_TEMPLATE }}
+          DIRECT_MEDIA_HOST: ${{ secrets.DIRECT_MEDIA_HOST }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: python3 scripts/configure_build.py
+      - name: Report Android lint findings
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        continue-on-error: false
+        env:
+          JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
+          JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
+          JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
+        run: gradle --no-daemon lintDebug
       - name: Install weather media tools
         run: |
           sudo apt-get update -qq
@@ -111,17 +130,6 @@ jobs:
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-update-tests" app/src/main/java/com/example/ja/JaUpdateRules.java tests/JaUpdateRulesTest.java
           java -cp "$RUNNER_TEMP/ja-update-tests" com.example.ja.JaUpdateRulesTest
           python3 tests/update-release.test.py
-      - name: Configure build
-        env:
-          JA_UPDATE_REPOSITORY: ${{ vars.JA_UPDATE_REPOSITORY || github.repository }}
-          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-          AUTHORIZED_EMBED_TEMPLATE: ${{ secrets.AUTHORIZED_EMBED_TEMPLATE }}
-          AUTHORIZED_EMBED_HOST: ${{ secrets.AUTHORIZED_EMBED_HOST }}
-          DIRECT_MEDIA_TEMPLATE: ${{ secrets.DIRECT_MEDIA_TEMPLATE }}
-          DIRECT_MEDIA_HOST: ${{ secrets.DIRECT_MEDIA_HOST }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-        run: python3 scripts/configure_build.py
       - name: Test TV season source preferences
         if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
         run: |
@@ -328,14 +336,6 @@ jobs:
             *) echo "Unsupported APK build variant: $BUILD_VARIANT"; exit 1 ;;
           esac
           gradle --no-daemon --stacktrace ":app:$gradle_task"
-      - name: Report Android lint findings
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
-        continue-on-error: false
-        env:
-          JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
-          JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
-          JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
-        run: gradle --no-daemon lintDebug
       - name: Enable KVM for music service regression
         if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
         run: |
