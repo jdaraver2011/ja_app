@@ -353,7 +353,13 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: >-
-            gradle --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.ja.JaMusicForegroundTest,com.example.ja.JaMusicBrowseTest; result=$?; mkdir -p test-results; adb pull /sdcard/Android/data/com.example.ja/files/music-ui test-results/ || true; exit "$result"
+            gradle --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.ja.JaMusicForegroundTest,com.example.ja.JaMusicBrowseTest;
+            result=$?;
+            mkdir -p test-results;
+            adb logcat -d -s JA_MUSIC_VIS chromium AndroidRuntime > test-results/music-logcat.txt 2>&1 || true;
+            screenshot_dir=/sdcard/Android/data/com.example.ja/files/music-ui;
+            if adb shell test -d "$screenshot_dir"; then adb pull "$screenshot_dir" test-results/ || true; fi;
+            exit "$result"
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
