@@ -4,6 +4,7 @@ on:
     branches: [v2.8.2]
     paths:
       - .github/workflows/build-v2.8.2.yml
+      - app/src/androidTest/java/com/example/ja/JaMusicBrowseTest.kt
 permissions:
   contents: write
 jobs:

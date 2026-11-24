@@ -126,7 +126,8 @@ class JaMusicBrowseTest {
                 val bitmap = (presentation.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
                 if (presentation.isShown && bitmap != null) {
                     assertTrue("Unexpected native frame size: ${bitmap.width}x${bitmap.height}",
-                        bitmap.width in 1..960 && bitmap.height in 1..540)
+                        bitmap.width in 1..1280 && bitmap.height in 1..720 &&
+                            (bitmap.width == 1280 || bitmap.height == 720))
                     nativeStatus = "${bitmap.width}x${bitmap.height} bitmap"
                     val hasColor = (0 until bitmap.height step 8).any { y ->
                         (0 until bitmap.width step 8).any { x ->
