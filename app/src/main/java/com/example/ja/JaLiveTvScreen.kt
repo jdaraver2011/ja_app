@@ -68,6 +68,8 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -159,7 +161,17 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     }
     var appliedView:String?=null
     var view by mutableStateOf("United States")
-    var channels by mutableStateOf<List<JaLiveChannel>>(listOf(jaWeatherChannel()))
+    private data class CatalogIndex(
+        val channels: List<JaLiveChannel>,
+        val groups: List<String>,
+        val channelsByGroup: Map<String, List<JaLiveChannel>>
+    )
+    private var catalogIndex by mutableStateOf(
+        CatalogIndex(listOf(jaWeatherChannel()), JaLiveTvRules.views(), emptyMap())
+    )
+    val channels get() = catalogIndex.channels
+    val groups get() = catalogIndex.groups
+    val channelsByGroup get() = catalogIndex.channelsByGroup
     var catalogReady by mutableStateOf(false)
     var guide by mutableStateOf<JaLiveGuide?>(null)
     var loading by mutableStateOf(false)
@@ -201,8 +213,20 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         refreshJob=scope.launch {
             loading=true;error=null
             try{
-                fun applyCatalog(result:JaLiveChannels){
-                    channels=listOf(jaWeatherChannel())+result.channels.filter{it.id!=JA_WEATHER_CHANNEL}
+                var indexedChannels: List<JaLiveChannel>? = null
+                suspend fun applyCatalog(result:JaLiveChannels){
+                    if (indexedChannels !== result.channels) {
+                        val indexStart = SystemClock.elapsedRealtime()
+                        catalogIndex = withContext(Dispatchers.Default) {
+                            val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL }
+                            val groups = JaLiveTvRules.views(channels.flatMap { it.categories }.toSet())
+                            CatalogIndex(channels, groups, groups.associateWith { group ->
+                                channels.filter { JaLiveTvRules.categoryMatches(group, it.categories) }
+                            })
+                        }
+                        indexedChannels = result.channels
+                        android.util.Log.i("JA_IPTV_PERF", "CATALOG_INDEX ms=${SystemClock.elapsedRealtime() - indexStart}")
+                    }
                     saved=result.saved;verifiedAt=result.verifiedAt
                     catalogReady=true
                 }
@@ -219,8 +243,15 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
             finally{loading=false;catalogReady=true}
             if(channels.isEmpty())return@launch
             guideLoading=true;guideError=null
-            repository.cachedGuide(channels)?.let{guide=it}
-            try{guide=repository.guide(channels,force){partial->guide=partial}}
+            val cacheStart = SystemClock.elapsedRealtime()
+            val cachedGuide = repository.cachedGuide(channels)
+            cachedGuide?.let{guide=it}
+            android.util.Log.i("JA_IPTV_PERF", "GUIDE_CACHE hit=${cachedGuide != null} ms=${SystemClock.elapsedRealtime() - cacheStart}")
+            val guideStart = SystemClock.elapsedRealtime()
+            try{
+                guide=repository.guide(channels,force){partial->guide=partial}
+                android.util.Log.i("JA_IPTV_PERF", "GUIDE_READY ms=${SystemClock.elapsedRealtime() - guideStart}")
+            }
             catch(e:CancellationException){throw e}
             catch(_:Exception){guideError="Guide unavailable. Channels can still be played."}
             finally{guideLoading=false}
@@ -261,17 +292,9 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         (!state.catalogReady || !state.playerAttached)
     LaunchedEffect(automaticRefreshAllowed) {
         if (automaticRefreshAllowed) while (isActive) {
+            withFrameNanos {}
             state.refresh()
             delay(900_000)
-        }
-    }
-    LaunchedEffect(state.channels,state.fullscreen,state.catalogReady){
-        if(state.catalogReady&&!state.fullscreen&&state.channels.isNotEmpty()&&
-            (state.previewChannel==null||state.channels.none{it.id==state.previewChannel?.id})){
-            val target=state.channels.firstOrNull{it.id==state.lastChannelId}
-                ?:state.favoriteOrder.firstNotNullOfOrNull{id->state.channels.firstOrNull{it.id==id}}
-                ?:state.channels.first()
-            state.tune(target,false)
         }
     }
     var now by remember{mutableLongStateOf(System.currentTimeMillis())}
@@ -279,11 +302,8 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val programs=remember(state.guide,now/1_800_000,weather.zip){state.guide?.byChannel.orEmpty()+mapOf(JA_WEATHER_CHANNEL to jaWeatherPrograms(now,weather.zip))}
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
-    val groups=remember(state.channels){JaLiveTvRules.views(state.channels.flatMap{it.categories}.toSet())}
-    // Index categories once per catalog update so switching Groups filters only that group.
-    val channelsByGroup=remember(state.channels,groups){
-        groups.associateWith{group->state.channels.filter{JaLiveTvRules.categoryMatches(group,it.categories)}}
-    }
+    val groups=state.groups
+    val channelsByGroup=state.channelsByGroup
     val candidates=remember(channelsByGroup,state.view){channelsByGroup[state.view].orEmpty()}
     val epgTimeBucket=if(state.view=="With EPG")now/30_000 else 0L
     val available=remember(candidates,state.query,state.view,state.favorites,state.guide,epgTimeBucket){candidates.filter{channel->
@@ -302,13 +322,17 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     }
     var entryFocusRestored by remember { mutableStateOf(false) }
     LaunchedEffect(state.catalogReady,state.channels,state.fullscreen){
-        if(!state.catalogReady||entryFocusRestored||state.fullscreen)return@LaunchedEffect
+        if(!state.catalogReady||state.fullscreen)return@LaunchedEffect
+        val restoreEntryFocus = !entryFocusRestored
+        if(!restoreEntryFocus && state.channels.any { it.id == state.previewChannel?.id }) return@LaunchedEffect
         val target=state.channels.firstOrNull{it.id==state.lastChannelId}
             ?:state.favoriteOrder.firstNotNullOfOrNull{id->state.channels.firstOrNull{it.id==id}}
             ?:state.channels.firstOrNull()
             ?:return@LaunchedEffect
-        entryFocusRestored=true
+        withFrameNanos {}
         state.tune(target,false)
+        if(!restoreEntryFocus) return@LaunchedEffect
+        entryFocusRestored=true
         val targetGroup=if(target.id==JA_WEATHER_CHANNEL)"Favorites"
             else state.view.takeIf{JaLiveTvRules.categoryMatches(it,target.categories)}
                 ?:groups.firstOrNull{JaLiveTvRules.categoryMatches(it,target.categories)}

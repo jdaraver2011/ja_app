@@ -1,0 +1,14 @@
+name: Build JA 2.8.2 candidate
+on:
+  push:
+    branches: [v2.8.2]
+permissions:
+  contents: write
+jobs:
+  build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      run_checks: true
+      publish_update: false
+      build_variant: debug
+    secrets: inherit

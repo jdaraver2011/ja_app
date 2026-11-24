@@ -22,14 +22,14 @@
     const names = Object.keys(presets);
     if (!names.length) throw Error('No presets');
     const nativePresentation = window.JaWave && typeof window.JaWave.present === 'function';
-    // Match detail to the active screen, bounded to 960x540 for native ImageView transfer performance.
-    const renderLimitWidth = 960;
-    const renderLimitHeight = 540;
+    // Use a 720p backing surface for 16:9, fitting other aspect ratios inside it.
+    const renderLimitWidth = 1280;
+    const renderLimitHeight = 720;
     const size = () => {
       const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
       const screenWidth = Math.max(64, Math.round(innerWidth * pixelRatio));
       const screenHeight = Math.max(64, Math.round(innerHeight * pixelRatio));
-      const scale = Math.min(1, renderLimitWidth / screenWidth, renderLimitHeight / screenHeight);
+      const scale = Math.min(renderLimitWidth / screenWidth, renderLimitHeight / screenHeight);
       return [Math.max(64, Math.round(screenWidth * scale)), Math.max(64, Math.round(screenHeight * scale))];
     };
     const [w,h] = size();
@@ -42,6 +42,7 @@
     status.textContent = names[index];
     addEventListener('resize', () => {
       const [width,height] = size();
+      if (canvas.width === width && canvas.height === height) return;
       canvas.width = renderCanvas.width = width;
       canvas.height = renderCanvas.height = height;
       visual.setRendererSize(width,height);
@@ -52,8 +53,8 @@
       timeByteArrayL:new Uint8Array(1024).fill(128),
       timeByteArrayR:new Uint8Array(1024).fill(128)
     };
-    let lastAudioSample = 0;
-    let lastPresented = 0;
+    const frameInterval = 1000 / 30;
+    let nextFrame = 0;
     let heartbeat = 0;
     let heartbeatFrames = 0;
     report('READY_' + w + 'x' + h);
@@ -61,15 +62,16 @@
     function render(now) {
       if (canvas.dataset.error) return;
       requestAnimationFrame(render);
-      if (document.hidden || (nativePresentation && !window.JaWave.isPlaying())) return;
+      if (document.hidden) return;
       try {
-        // Reuse fixed buffers and query native PCM at 30 Hz, while Butterchurn renders on vsync.
-        if (nativePresentation && now - lastAudioSample >= 1000 / 30) {
+        if (nativePresentation) {
+          // Skip expensive work while the previous bitmap is still in flight.
+          if (now + 0.5 < nextFrame || !window.JaWave.isPlaying() || !window.JaWave.ready()) return;
+          nextFrame = now - nextFrame >= frameInterval ? now + frameInterval : nextFrame + frameInterval;
           const data = JSON.parse(window.JaWave.samples());
           audioLevels.timeByteArray.set(data.mix);
           audioLevels.timeByteArrayL.set(data.left);
           audioLevels.timeByteArrayR.set(data.right);
-          lastAudioSample = now;
         }
         visual.render({audioLevels});
         frames++;
@@ -77,13 +79,8 @@
 
         // Retain the working WebGL -> 2D canvas -> Android ImageView path.
         // Transfer at most 30 frames/s and keep one native bitmap in flight.
-        if (!nativePresentation || (now - lastPresented >= 1000 / 30 && window.JaWave.ready())) {
-          presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);
-          if (nativePresentation) {
-            window.JaWave.present(canvas.toDataURL('image/jpeg', 0.55), names[index]);
-            lastPresented = now;
-          }
-        }
+        presenter.drawImage(renderCanvas, 0, 0, canvas.width, canvas.height);
+        if (nativePresentation) window.JaWave.present(canvas.toDataURL('image/jpeg', 0.55), names[index]);
         if (now - heartbeat >= 5000) {
           const elapsed = now - heartbeat;
           const fps = heartbeat === 0 ? 0 : Math.round((frames - heartbeatFrames) * 1000 / elapsed);

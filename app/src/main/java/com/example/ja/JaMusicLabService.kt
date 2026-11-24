@@ -56,7 +56,7 @@ class JaMusicLabService : MediaLibraryService() {
             instance?.let { it.connectJob?.cancel(); it.searchJob?.cancel(); it.player.stop(); it.player.clearMediaItems() }
             try { JaMusicLabVault(context).save(value) }
             catch (_: Exception) { mutable.value = mutable.value.copy(message = "Could not securely save the session."); return }
-            launch(context, "CONNECT")
+            launch(context, "CONNECT", replaceConnection = true)
         }
         fun playSearch(context: Context, query: String) {
             JaMusicService.stop(context)
@@ -89,8 +89,9 @@ class JaMusicLabService : MediaLibraryService() {
                 else Regex("(?:/[a-z]{2})?/track/([1-9][0-9]{0,18})/?").matchEntire(uri.path)?.groupValues?.get(1)
             } catch (_: Exception) { null }
         }
-        private fun launch(context: Context, action: String) {
-            context.startService(Intent(context, JaMusicLabService::class.java).setAction(action).putExtra("ja.music.internal", commandNonce))
+        private fun launch(context: Context, action: String, replaceConnection: Boolean = false) {
+            context.startService(Intent(context, JaMusicLabService::class.java).setAction(action)
+                .putExtra("ja.music.internal", commandNonce).putExtra("replaceConnection", replaceConnection))
         }
         fun playPause() { instance?.let { if (it.player.isPlaying) it.player.pause() else if (!videoActive) it.player.play() } }
         fun toggleShuffle() { instance?.player?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
@@ -253,6 +254,7 @@ class JaMusicLabService : MediaLibraryService() {
         val result = super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             "CONNECT" -> {
+                if (connectJob?.isActive == true && intent?.getBooleanExtra("replaceConnection", false) != true) return result
                 connectJob?.cancel()
                 mutable.value = mutable.value.copy(busy = true, message = "Checking Deezer session…")
                 connectJob = scope.launch {

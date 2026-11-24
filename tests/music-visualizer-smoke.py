@@ -37,8 +37,8 @@ try:
         page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
         page.wait_for_function('Number(document.querySelector("#visual").dataset.frames) > 10', timeout=30000)
         page.wait_for_function('window.JaWave.presented > 3', timeout=30000)
-        assert page.evaluate('document.querySelector("#visual").width') <= 960
-        assert page.evaluate('document.querySelector("#visual").height') <= 540
+        assert page.evaluate('document.querySelector("#visual").width') == 1280
+        assert page.evaluate('document.querySelector("#visual").height') == 720
         assert page.evaluate('window.JaWave.lastFrame.startsWith("data:image/jpeg;base64,")'), 'Native bridge must receive JPEG frames'
         visible_pixels = page.evaluate("""
           async () => {
@@ -65,7 +65,7 @@ try:
         page.set_viewport_size({'width': 390, 'height': 760})
         page.wait_for_function('(previous) => window.JaWave.presented > previous', arg=previous_presented, timeout=30000)
         size = page.evaluate('({width: document.querySelector("#visual").width, height: document.querySelector("#visual").height})')
-        assert size['width'] <= 960 and size['height'] <= 540, f'Portrait size exceeded native bitmap bounds: {size}'
+        assert size['width'] <= 1280 and size['height'] <= 720, f'Portrait size exceeded native bitmap bounds: {size}'
         assert size['width'] > 0 and size['height'] > 0
         assert not errors, errors
         (ROOT / 'test-results').mkdir(exist_ok=True)

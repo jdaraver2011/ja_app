@@ -18,6 +18,7 @@ import android.os.Message
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
@@ -416,6 +417,8 @@ class MainActivity : ComponentActivity() {
     val mainRequesters = remember { listOf("Movies","TV","IPTV","Music","Search","Settings").associateWith { FocusRequester() } }
     val subRequester = remember { FocusRequester() }
     var navigationLevel by remember { mutableIntStateOf(0) }
+    var initialNavigationFocused by remember { mutableStateOf(false) }
+    if (openMusicRequest == 0) ReportDrawnWhen { initialNavigationFocused }
     fun focusMain() { exitGate.reset(); scope.launch {
         val index = mainTabs.indexOf(tab)
         navigationRowState.animateScrollToItem(index.coerceAtLeast(0)); withFrameNanos { }
@@ -460,14 +463,15 @@ class MainActivity : ComponentActivity() {
     val searchGridState = rememberLazyGridState() // Keep search position while viewing title/person details.
     // A new activity starts at the beginning. Returning from details keeps in-session positions.
     LaunchedEffect(Unit) {
+        navigationRowState.scrollToItem(0);titleReturnFocus.clear()
+        if(openMusicRequest==0){weatherOpen=false;weatherReturnFocus=false}
+        withFrameNanos{};withFrameNanos{};if(openMusicRequest==0)runCatching{mainRequesters.getValue("Movies").requestFocus()}
+        withFrameNanos {}
         listOf(continueMovieGridState,continueTvGridState,popularGridState,otherGridState,tvPopularGridState,
             favoriteMovieGridState,favoriteTvGridState,searchGridState).forEach{it.scrollToItem(0)}
         sectionScrollStates.values.forEach{it.scrollToItem(0)};genreScrollStates.values.forEach{it.scrollToItem(0)}
         networksState.listState.scrollToItem(0);networksState.rowStates.values.forEach{it.scrollToItem(0)}
         liveTv.list.scrollToItem(0);liveTv.groupList.scrollToItem(0);liveTv.timeline.scrollTo(0)
-        navigationRowState.scrollToItem(0);titleReturnFocus.clear()
-        if(openMusicRequest==0){weatherOpen=false;weatherReturnFocus=false}
-        withFrameNanos{};withFrameNanos{};if(openMusicRequest==0)runCatching{mainRequesters.getValue("Movies").requestFocus()}
         Log.i("JA_STARTUP","LISTS_RESET main=Movies index=0")
     }
     // Lazy grids can restore a saved index before async Popular results arrive.
@@ -1250,7 +1254,12 @@ class MainActivity : ComponentActivity() {
                 TvFocusButton(
                     modifier = Modifier.focusRequester(mainRequesters.getValue(t))
                         .then(if(t=="IPTV") Modifier.focusRequester(liveTv.mainFocus) else if(t=="Settings") Modifier.focusRequester(weather.navigationFocus).onGloballyPositioned { weatherHeader.settings=it.boundsInRoot() } else Modifier)
-                        .onFocusChanged { if(it.isFocused) navigationLevel=0 }
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                navigationLevel = 0
+                                initialNavigationFocused = true
+                            }
+                        }
                         .onPreviewKeyEvent { event ->
                             if(event.key==Key.DirectionDown && selected==null && selectedPerson==null && (tab in listOf("Movies","TV","IPTV","Search"))) {
                                 if(event.type==KeyEventType.KeyDown) { if(tab=="IPTV") liveTv.focusPreview() else focusSub() }; true

@@ -51,7 +51,7 @@ internal class MusicWaveBridge(
             val bytes = Base64.decode(data.substringAfter(','), Base64.NO_WRAP)
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            if (bounds.outWidth !in 1..960 || bounds.outHeight !in 1..540) { pending.set(false); return }
+            if (bounds.outWidth !in 1..1280 || bounds.outHeight !in 1..720) { pending.set(false); return }
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
                 BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 })
             if (bitmap == null) { pending.set(false); return }
