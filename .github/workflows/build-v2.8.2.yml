@@ -1,7 +1,9 @@
-name: Build JA 2.8.2 candidate
+name: Publish JA 2.8.2 device update
 on:
   push:
     branches: [v2.8.2]
+    paths:
+      - .github/workflows/build-v2.8.2.yml
 permissions:
   contents: write
 jobs:
@@ -9,6 +11,6 @@ jobs:
     uses: ./.github/workflows/build-apk.yml
     with:
       run_checks: true
-      publish_update: false
+      publish_update: true
       build_variant: debug
     secrets: inherit

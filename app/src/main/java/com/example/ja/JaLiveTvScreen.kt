@@ -170,7 +170,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         CatalogIndex(listOf(jaWeatherChannel()), JaLiveTvRules.views(), emptyMap())
     )
     val channels get() = catalogIndex.channels
-    val groups get() = catalogIndex.groups
+    val indexedGroups get() = catalogIndex.groups
     val channelsByGroup get() = catalogIndex.channelsByGroup
     var catalogReady by mutableStateOf(false)
     var guide by mutableStateOf<JaLiveGuide?>(null)
@@ -302,7 +302,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val programs=remember(state.guide,now/1_800_000,weather.zip){state.guide?.byChannel.orEmpty()+mapOf(JA_WEATHER_CHANNEL to jaWeatherPrograms(now,weather.zip))}
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
-    val groups=state.groups
+    val groups=state.indexedGroups
     val channelsByGroup=state.channelsByGroup
     val candidates=remember(channelsByGroup,state.view){channelsByGroup[state.view].orEmpty()}
     val epgTimeBucket=if(state.view=="With EPG")now/30_000 else 0L
