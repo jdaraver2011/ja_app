@@ -36,6 +36,10 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
     private var lastBitmapLog = 0L
     private var bitmapCount = 0
     private var lastBitmapCount = 0
+    fun attachTo(webView: WebView) {
+        webView.addJavascriptInterface(this, "JaWave")
+    }
+
     @JavascriptInterface fun ready(): Boolean = active && !closed && !pending.get()
     fun close() { closed = true; active = false }
     @JavascriptInterface fun present(data: String, preset: String) {
@@ -116,7 +120,7 @@ internal class MusicWaveBridge(private val onFrame: (Bitmap, String) -> Unit = {
                     return true
                 }
             }
-            addJavascriptInterface(bridge, "JaWave")
+            bridge.attachTo(this)
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(v: WebView?, request: WebResourceRequest?) = true
                 override fun onPageFinished(v: WebView?, url: String?) { android.util.Log.i("JA_MUSIC_VIS", "PAGE_READY hardware=${v?.isHardwareAccelerated}") }
