@@ -398,10 +398,15 @@ jobs:
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
           if-no-files-found: ignore
+      - name: Set installable APK artifact name
+        id: apk-artifact
+        run: |
+          ref_name=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
+          echo "ref_name=$ref_name" >> "$GITHUB_OUTPUT"
       - name: Upload installable APK
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: JA-${{ github.ref_name }}-${{ inputs.build_variant || 'debug' }}
+          name: JA-${{ steps.apk-artifact.outputs.ref_name }}-${{ inputs.build_variant || 'debug' }}
           path: app/build/outputs/apk/${{ inputs.build_variant || 'debug' }}/*.apk
           if-no-files-found: error
           retention-days: 30
