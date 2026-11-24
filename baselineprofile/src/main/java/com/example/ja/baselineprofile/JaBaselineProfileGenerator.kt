@@ -1,5 +1,6 @@
 package com.example.ja.baselineprofile
 
+import android.content.Intent
 import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
@@ -61,8 +62,9 @@ class JaBaselineProfileGenerator {
             check(device.wait(Until.hasObject(By.text("Popular")), 15_000)) { "TV navigation did not appear" }
             clickTab("IPTV")
             check(device.wait(Until.hasObject(By.text("JA IPTV")), 15_000)) { "IPTV did not open" }
-            device.pressBack()
-            clickTab("Music")
+            startActivityAndWait(Intent().setClassName("com.example.ja", "com.example.ja.MainActivity")
+                .putExtra("ja.open.music", true)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
             check(device.wait(Until.hasObject(By.text("JA Music")), 15_000)) { "Music did not open" }
         }
     }
