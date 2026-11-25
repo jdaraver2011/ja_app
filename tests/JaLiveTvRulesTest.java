@@ -33,9 +33,14 @@ public final class JaLiveTvRulesTest {
         check(!JaLiveTvRules.isNcaafEvent("American Football","Green Bay Packers at Los Angeles Rams"));
         check(!JaLiveTvRules.isNcaafEvent("American Football","NFL Network"));
         java.util.List<String> ntvGroups=JaLiveTvRules.groupsForSource("NTV",
-            new java.util.HashSet<>(java.util.Arrays.asList("ntv-sport-nfl","ntv-sport-ncaaf")));
+            new java.util.HashSet<>(java.util.Arrays.asList("ntv-sport-nfl","ntv-sport-ncaaf",
+                "ntv-nfl-usa","ntv-basketball-usa","ntv-sport-baseball","ntv-sport-baseball-usa")));
         check(JaLiveTvRules.category("NCAAF").equals("ntv-sport-ncaaf"));
         check(ntvGroups.indexOf("NCAAF")==ntvGroups.indexOf("NFL")+1);
+        check(!ntvGroups.contains("NFL USA")&&!ntvGroups.contains("NTV NFL USA"));
+        check(!ntvGroups.contains("Basketball USA")&&!ntvGroups.contains("NTV Basketball USA"));
+        check(ntvGroups.contains("Baseball")&&!ntvGroups.contains("Baseball USA"));
+        check(JaLiveTvRules.category("Baseball").equals("ntv-sport-baseball"));
         check(JaLiveTvRules.category("Documentaries").equals("documentary"));
         check(JaLiveTvRules.category("Auto and Motoring").equals("auto"));
         java.util.Set<String> groups=new java.util.HashSet<>(java.util.Arrays.asList("news","weather"));

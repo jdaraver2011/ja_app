@@ -154,14 +154,15 @@ public final class JaLiveTvRules {
         } else if("NTV".equals(source)) {
             groups.addAll(Arrays.asList("Raptor","Falcon","Phoenix","Titan","Scorpion","Other Servers",
                 "All Sports","Soccer","NFL","NCAAF","NCAA","Basketball","Golf","Motorsport","UFC","WWE","MMA","Badminton",
-                "NFL USA","Basketball USA","Baseball USA"));
+                "Baseball"));
             if(cats.contains("ntv-adult-only"))groups.add("Adult Only");
             addExtraGroups(groups,cats,setOf("source-ntv","country-us","country-uk","test",
                 "ntv-adult-only","18-plus","adult","adult-only","ntv-server-raptor","ntv-server-falcon","ntv-server-phoenix","ntv-server-titan",
                 "ntv-server-scorpion","ntv-server-other","ntv-sport-all","ntv-sport-soccer",
                 "ntv-sport-nfl","ntv-sport-ncaaf","ntv-sport-ncaa","ntv-sport-basketball","ntv-sport-golf",
                 "ntv-sport-motorsport","ntv-sport-ufc","ntv-sport-wwe","ntv-sport-mma",
-                "ntv-sport-badminton","ntv-sport-baseball","ntv-sport-baseball-usa","ntv-channel"));
+                "ntv-sport-badminton","ntv-sport-baseball","ntv-sport-baseball-usa",
+                "ntv-nfl-usa","ntv-basketball-usa","ntv-channel"));
         }
         return groups;
     }
@@ -201,7 +202,7 @@ public final class JaLiveTvRules {
         if("WWE".equals(view))return "ntv-sport-wwe";
         if("MMA".equals(view))return "ntv-sport-mma";
         if("Badminton".equals(view))return "ntv-sport-badminton";
-        if("Baseball USA".equals(view))return "ntv-sport-baseball-usa";
+        if("Baseball".equals(view))return "ntv-sport-baseball";
         if("Adult Only".equals(view))return "ntv-adult-only";
         if("NFL USA".equals(view))return "ntv-nfl-usa";
         if("Basketball USA".equals(view))return "ntv-basketball-usa";
