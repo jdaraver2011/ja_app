@@ -190,9 +190,12 @@ internal class JaLiveTvRepository(private val context:Context) {
         Log.i("JA_LIVE_TV","NTV_CATALOG_READY channels=${channels.size} host=$primary mirrors=${domains.size-1}")
         return channels.distinctBy{it.id}.map{channel->
             val urls=playerHosts.map{host->ntvChannelUrl(host,channel)}
+            val categories=mutableSetOf("source-ntv","ntv-channel")
+            if(JaLiveTvRules.isNtvAdultOnly(channel.name,emptySet()))categories+="ntv-adult-only"
+            else categories+=ntvServerCategory(channel.server)
             JaLiveChannel(
                 id="ntv:${channel.id}",name=channel.name,logo=channel.logo,urls=emptyList(),
-                categories=setOf("source-ntv",ntvServerCategory(channel.server),"ntv-channel"),
+                categories=categories,
                 embeddedPlayerUrl=urls.first(),embeddedPlayerFallbackUrls=urls.drop(1)
             )
         }
@@ -387,6 +390,11 @@ internal class JaLiveTvRepository(private val context:Context) {
             if(categories.any{it.startsWith("ntv-")}||c.optString("id").startsWith("ntv:" )||c.optString("id").startsWith("ntv-event:")){
                 categories.add("source-ntv")
                 if(c.optString("id").startsWith("ntv-event:"))categories.add("ntv-sport-all")
+            }
+            if("source-ntv" in categories&&JaLiveTvRules.isNtvAdultOnly(c.optString("name"),categories)){
+                categories.removeAll{it.startsWith("ntv-server-")||it.startsWith("ntv-sport-")||it in setOf("ntv-nfl-usa","ntv-basketball-usa","ntv-sport-baseball-usa")}
+                categories.removeAll{it.equals("18-plus",true)||it.equals("adult",true)||it.equals("adult-only",true)||it.startsWith("18-plus-")||it.startsWith("adult-only-")}
+                categories.add("ntv-adult-only")
             }
             if("country-us" !in categories&&"country-uk" !in categories&&"test" !in categories&&"source-ntv" !in categories)categories.add("country-us")
             if((urls.isEmpty()&&embeddedUrl==null)||("test" in categories&&"country-us" !in categories&&"country-uk" !in categories))null

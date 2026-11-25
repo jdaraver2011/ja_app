@@ -20,6 +20,21 @@
     },
     {
       "matches": [
+        "https://ntv.cx/*",
+        "https://*.ntv.cx/*",
+        "https://ntv.st/*",
+        "https://*.ntv.st/*",
+        "https://ntvs.cx/*",
+        "https://*.ntvs.cx/*",
+        "https://ntvstream.cx/*",
+        "https://*.ntvstream.cx/*"
+      ],
+      "js": ["ntv-ui.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
         "http://*/*",
         "https://*/*"
       ],

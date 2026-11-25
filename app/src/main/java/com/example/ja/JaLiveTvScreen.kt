@@ -48,6 +48,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -108,7 +111,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     val groupList=LazyListState()
     val sourceFocus=FocusRequester()
     val sourceList=LazyListState()
-    var source by mutableStateOf("All Sources")
+    var source by mutableStateOf("Favorites")
     var previewChannel by mutableStateOf<JaLiveChannel?>(null)
     var playingChannelId by mutableStateOf<String?>(null)
     var timelineScale=0f
@@ -119,11 +122,12 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         if(!prefs.getBoolean("weather-channel-added",false)){
             favorites=favorites+JA_WEATHER_CHANNEL;favoriteOrder=listOf(JA_WEATHER_CHANNEL)+favoriteOrder.filter{it!=JA_WEATHER_CHANNEL}
             prefs.edit().putStringSet("ids",favorites).putString("order",org.json.JSONArray(favoriteOrder).toString())
-                .putString("group-order:Favorites",org.json.JSONArray(favoriteOrder).toString()).putBoolean("weather-channel-added",true).apply()
+                .putString("group-order:All Favorites",org.json.JSONArray(favoriteOrder).toString()).putBoolean("weather-channel-added",true).apply()
         }
         JaLiveTvRules.views().forEach{group->
             val stored=runCatching { val a=org.json.JSONArray(prefs.getString("group-order:$group","[]"));(0 until a.length()).map{a.getString(it)} }.getOrDefault(emptyList())
-            groupOrders[group]=if(group=="Favorites"&&stored.isEmpty())favoriteOrder else stored
+            val legacy=if(group=="All Favorites")runCatching{val a=org.json.JSONArray(prefs.getString("group-order:Favorites","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList()) else emptyList()
+            groupOrders[group]=if(group=="All Favorites"&&stored.isEmpty())favoriteOrder.ifEmpty{legacy} else stored
         }
     }
     fun order(group:String,available:List<String>):List<String> {
@@ -144,16 +148,17 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         if(movingId==null)return
         val id=movingId
         if(save){
-            val available=channels.filter{JaLiveTvRules.categoryMatches(movingGroup,it.categories)&&(movingGroup!="Favorites"||it.id in favorites)}.map{it.id}
+            val available=channels.filter{JaLiveTvRules.categoryMatches(movingGroup,it.categories)&&(movingGroup!="All Favorites"||it.id in favorites)}.map{it.id}
             val merged=JaLiveTvMoveSession.merge(groupOrders[movingGroup].orEmpty(),available,draftOrder)
             groupOrders[movingGroup]=merged
             val edit=prefs.edit().putString("group-order:$movingGroup",org.json.JSONArray(merged).toString())
-            if(movingGroup=="Favorites"){favoriteOrder=merged;edit.putString("order",org.json.JSONArray(merged).toString())}
+            if(movingGroup=="All Favorites"){favoriteOrder=merged;edit.putString("order",org.json.JSONArray(merged).toString())}
             edit.apply()
         }
         moveSession.clear();movingId=null;draftOrder=emptyList();suppressPickUpRelease=false;returnChannel=id
     }
     fun stopPlayback(){
+        adultOnlyUnlocked=false
         fullscreen=false
         previewChannel=null
         playingChannelId=null
@@ -164,12 +169,17 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         playingChannelId=channel.id
         if(lastChannelId!=channel.id){lastChannelId=channel.id;prefs.edit().putString("last-channel",channel.id).apply()}
     }
+    fun lockAdultOnly(){
+        adultOnlyUnlocked=false
+        if(previewChannel?.categories?.contains("ntv-adult-only")==true)stopPlayback()
+    }
     fun tune(channel:JaLiveChannel,full:Boolean){
         finishMove(false);if(previewChannel?.id!=channel.id)playingChannelId=null;previewChannel=channel;fullscreen=full;focusedChannel=channel.id
         if(lastChannelId!=channel.id){lastChannelId=channel.id;prefs.edit().putString("last-channel",channel.id).apply()}
     }
     var appliedView:String?=null
-    var view by mutableStateOf("United States")
+    var view by mutableStateOf("All Favorites")
+    var adultOnlyUnlocked by mutableStateOf(false)
     private data class CatalogIndex(
         val channels: List<JaLiveChannel>,
         val groupsBySource: Map<String,List<String>>,
@@ -203,14 +213,15 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         groupOrders.clear()
         JaLiveTvRules.views().forEach{group->
             val saved=runCatching{val a=org.json.JSONArray(prefs.getString("group-order:$group","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList())
-            groupOrders[group]=if(group=="Favorites"&&saved.isEmpty())favoriteOrder else saved
+            val legacy=if(group=="All Favorites")runCatching{val a=org.json.JSONArray(prefs.getString("group-order:Favorites","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList()) else emptyList()
+            groupOrders[group]=if(group=="All Favorites"&&saved.isEmpty())favoriteOrder.ifEmpty{legacy} else saved
         }
     }
     fun favorite(id:String){
         favorites=if(id in favorites)favorites-id else favorites+id
         favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id})
-        groupOrders["Favorites"]=favoriteOrder
-        prefs.edit().putString("group-order:Favorites",org.json.JSONArray(favoriteOrder).toString()).apply()
+        groupOrders["All Favorites"]=favoriteOrder
+        prefs.edit().putString("group-order:All Favorites",org.json.JSONArray(favoriteOrder).toString()).apply()
         saveOrder()
     }
     fun refresh(force:Boolean=false){
@@ -236,7 +247,8 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                             val channelGroups=sourceGroups.flatMap{(sourceName,sourceViews)->sourceViews.map{sourceName to it}}
                             val sourceIndex=channelGroups.associateWith{(sourceName,group)->channels.filter{channel->
                                 JaLiveTvRules.sourceMatches(sourceName,channel.categories)&&
-                                    (group=="Favorites"||group=="With EPG"||JaLiveTvRules.categoryMatches(group,channel.categories))
+                                    (sourceName=="Favorites"&&group=="All Favorites"||
+                                        sourceName!="Favorites"&&(group=="With EPG"||JaLiveTvRules.categoryMatches(group,channel.categories)))
                             }}
                             CatalogIndex(channels,sourceGroups,sourceIndex)
                         }
@@ -252,8 +264,8 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                 }
                 applyCatalog(result)
                 favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id})
-                groupOrders["Favorites"]=favoriteOrder
-                prefs.edit().putString("group-order:Favorites",org.json.JSONArray(favoriteOrder).toString()).apply()
+                groupOrders["All Favorites"]=favoriteOrder
+                prefs.edit().putString("group-order:All Favorites",org.json.JSONArray(favoriteOrder).toString()).apply()
                 saveOrder()
             }catch(e:CancellationException){throw e}catch(_:Exception){error="Channel catalog unavailable. Check your connection and retry."}
             finally{loading=false;catalogReady=true}
@@ -278,6 +290,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
 private val ColorGold=Color(0xFFE5A43B)
 private val liveTimeFormat=DateTimeFormatter.ofPattern("h:mm a",Locale.US)
 private fun time(value:Long):String=liveTimeFormat.withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
+private enum class JaNtvPinDialog { CREATE, UNLOCK_ADULT }
 
 @Composable
 internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,
@@ -290,6 +303,8 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,modifier:Modifier) {
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
+    val appContext=LocalContext.current
+    val pinStore=remember(appContext){JaIptvPinStore(appContext)}
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     var groupsFocused by remember{mutableStateOf(false)}
     var sourcesFocused by remember{mutableStateOf(false)}
@@ -300,12 +315,16 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     var focusedSource by remember{mutableIntStateOf(0)}
     var searchOpen by remember{mutableStateOf(false)}
     var menuChannel by remember{mutableStateOf<JaLiveChannel?>(null)}
+    var pinDialog by remember{mutableStateOf<JaNtvPinDialog?>(null)}
     val menuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
     val searchFocus=remember{FocusRequester()}
     val jaButtonFocus=remember{FocusRequester()}
     val returnFocus=remember{FocusRequester()}
-    DisposableEffect(state){onDispose{state.stopPlayback()}}
-    DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)}
+    DisposableEffect(state){onDispose{state.lockAdultOnly();state.stopPlayback()}}
+    DisposableEffect(owner){val observer=LifecycleEventObserver{_,_->
+        resumed=owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        if(!resumed)state.lockAdultOnly()
+    }
         owner.lifecycle.addObserver(observer);onDispose{owner.lifecycle.removeObserver(observer)}}
     // Give a new guide its first load, then wait for playback to release the player.
     val automaticRefreshAllowed = resumed && !state.fullscreen &&
@@ -327,9 +346,10 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         state.channelsBySourceGroup[state.source to state.view].orEmpty()
     }
     val epgTimeBucket=if(state.view=="With EPG")now/30_000 else 0L
-    val available=remember(candidates,state.query,state.view,state.favorites,state.guide,epgTimeBucket){candidates.filter{channel->
-        (channel.id!=JA_WEATHER_CHANNEL||state.view=="Favorites")
-            &&(state.view!="Favorites"||channel.id in state.favorites)
+    val available=remember(candidates,state.query,state.view,state.source,state.adultOnlyUnlocked,state.favorites,state.guide,epgTimeBucket){candidates.filter{channel->
+        (channel.id!=JA_WEATHER_CHANNEL||state.view=="All Favorites")
+            &&(state.view!="All Favorites"||channel.id in state.favorites)
+            &&(!channel.categories.contains("ntv-adult-only")||state.source=="NTV"&&state.view=="Adult Only"&&state.adultOnlyUnlocked)
             &&(state.view!="With EPG"||programs[channel.id].orEmpty().any{JaLiveTvRules.hasGuide(it.start,it.end,it.title,now,finish)})
             &&channel.name.contains(state.query,true)}}
     val channelMap=remember(available){available.associateBy{it.id}}
@@ -338,7 +358,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val visible=remember(channelMap,visibleIds){visibleIds.mapNotNull{channelMap[it]}}
     fun focusPlaying(){
         val id=state.playingChannelId?:state.previewChannel?.id?:JA_WEATHER_CHANNEL
-        if(id !in channelMap){state.query="";state.view=if(id==JA_WEATHER_CHANNEL)"Favorites" else "United States"}
+        if(id !in channelMap){state.query="";state.view=if(id==JA_WEATHER_CHANNEL)"All Favorites" else "United States"}
         state.returnChannel=id
     }
     var entryFocusRestored by remember { mutableStateOf(false) }
@@ -346,15 +366,17 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         if(!state.catalogReady||state.fullscreen)return@LaunchedEffect
         val restoreEntryFocus = !entryFocusRestored
         if(!restoreEntryFocus && state.channels.any { it.id == state.previewChannel?.id }) return@LaunchedEffect
-        val target=state.channels.firstOrNull{it.id==state.lastChannelId}
-            ?:state.favoriteOrder.firstNotNullOfOrNull{id->state.channels.firstOrNull{it.id==id}}
-            ?:state.channels.firstOrNull()
+        fun allowedToRestore(channel:JaLiveChannel)=!channel.categories.contains("ntv-adult-only")&&
+            (state.source!="Favorites"||channel.id in state.favorites)
+        val target=state.channels.firstOrNull{it.id==state.lastChannelId&&allowedToRestore(it)}
+            ?:state.favoriteOrder.firstNotNullOfOrNull{id->state.channels.firstOrNull{it.id==id&&allowedToRestore(it)}}
+            ?:state.channels.firstOrNull{allowedToRestore(it)}
             ?:return@LaunchedEffect
         withFrameNanos {}
         state.tune(target,false)
         if(!restoreEntryFocus) return@LaunchedEffect
         entryFocusRestored=true
-        val targetGroup=if(target.id==JA_WEATHER_CHANNEL)"Favorites"
+        val targetGroup=if(target.id==JA_WEATHER_CHANNEL)"All Favorites"
             else state.view.takeIf{JaLiveTvRules.categoryMatches(it,target.categories)}
                 ?:groups.firstOrNull{JaLiveTvRules.categoryMatches(it,target.categories)}
                 ?: "United States"
@@ -367,10 +389,20 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         state.returnChannel=state.focusedChannel?.takeIf{it in channelMap}?:visible.firstOrNull()?.id
     }
     fun selectGroup(group:String){
+        if(state.source=="NTV"&&group=="Adult Only"&&!state.adultOnlyUnlocked){
+            if(pinDialog==null)pinDialog=JaNtvPinDialog.UNLOCK_ADULT
+            return
+        }
+        if(group!="Adult Only")state.lockAdultOnly()
         if(state.view!=group){state.finishMove(false);state.view=group;state.returnChannel=null}
     }
     fun selectSource(source:String){
+        if(source=="NTV"&&!pinStore.hasPin()){
+            if(pinDialog==null)pinDialog=JaNtvPinDialog.CREATE
+            return
+        }
         if(state.source==source)return
+        state.lockAdultOnly()
         state.finishMove(false);state.source=source;state.query="";state.returnChannel=null
         scope.launch{withFrameNanos{};withFrameNanos{};runCatching{state.groupFocus.requestFocus()}}
     }
@@ -391,7 +423,13 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         state.finishMove(false);menuGuard.open(remote);menuChannel=channel
     }
     fun closeMenu(){val channel=menuChannel;menuChannel=null;state.returnChannel=channel?.id}
-    fun play(channel:JaLiveChannel){state.tune(channel, channel.embeddedPlayerUrl != null || state.previewChannel?.id == channel.id)}
+    fun play(channel:JaLiveChannel){
+        if(channel.categories.contains("ntv-adult-only")&&!(state.source=="NTV"&&state.view=="Adult Only"&&state.adultOnlyUnlocked)){
+            if(state.source=="NTV")selectGroup("Adult Only")
+            return
+        }
+        state.tune(channel, channel.embeddedPlayerUrl != null || state.previewChannel?.id == channel.id)
+    }
     LaunchedEffect(state.view){if(state.appliedView!=state.view){
         if(state.returnChannel==null)state.list.scrollToItem(0);state.appliedView=state.view
     }}
@@ -525,7 +563,8 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                             .onFocusChanged{if(it.isFocused){focusedGroup=groups.indexOf(group);searchFocused=false;selectGroup(group)}},
                             colors=ButtonDefaults.buttonColors(containerColor=if(state.view==group)ColorGold else Color(0xFF263747),
                                 contentColor=if(state.view==group)Color.Black else Color.White)){
-                            Text(group,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                            Text(if(group=="Adult Only"&&!state.adultOnlyUnlocked)"Adult Only · PIN" else group,
+                                fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -637,6 +676,12 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                 keyboardActions=androidx.compose.foundation.text.KeyboardActions(onSearch={searchOpen=false;focusGroups()}))
         }},confirmButton={TextButton(onClick={searchOpen=false;focusGroups()}){Text("Done")}},
         dismissButton={TextButton(onClick={state.query="";state.returnChannel=null}){Text("Clear")}})
+    pinDialog?.let{mode->
+        JaNtvPinPrompt(mode,pinStore,
+            onDismiss={pinDialog=null},
+            onCreated={pinDialog=null;selectSource("NTV")},
+            onUnlocked={pinDialog=null;state.adultOnlyUnlocked=true;selectGroup("Adult Only")})
+    }
     menuChannel?.let{channel->
         JaLiveChannelMenu(channel,state.favorites.contains(channel.id),menuGuard,
             canReorder=channel.id in visibleIds,canRefresh=!state.loading&&!state.guideLoading,
@@ -645,6 +690,68 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
             onReorder={menuChannel=null;state.beginMove(channel.id,visibleIds,false)},
             onRefresh={closeMenu();state.refresh(true)})
     }
+}
+
+@Composable
+private fun JaNtvPinPrompt(
+    mode:JaNtvPinDialog,
+    store:JaIptvPinStore,
+    onDismiss:()->Unit,
+    onCreated:()->Unit,
+    onUnlocked:()->Unit
+) {
+    val scope=rememberCoroutineScope()
+    val inputFocus=remember{FocusRequester()}
+    var pin by remember(mode){mutableStateOf("")}
+    var confirmation by remember(mode){mutableStateOf("")}
+    var error by remember(mode){mutableStateOf("")}
+    var working by remember(mode){mutableStateOf(false)}
+    val creating=mode==JaNtvPinDialog.CREATE
+    val valid=pin.length==6&&(!creating||confirmation.length==6)
+    LaunchedEffect(mode){withFrameNanos{};runCatching{inputFocus.requestFocus()}}
+    AlertDialog(
+        onDismissRequest=onDismiss,
+        properties=DialogProperties(securePolicy=androidx.compose.ui.window.SecureFlagPolicy.SecureOn),
+        title={Text(if(creating)"Create NTV PIN" else "Adult Only")},
+        text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+            Text(if(creating)"Create a six-digit PIN to enable NTV." else "Enter your six-digit PIN to open Adult Only channels.")
+            OutlinedTextField(
+                value=pin,
+                onValueChange={value->pin=value.filter(Char::isDigit).take(6);error=""},
+                modifier=Modifier.fillMaxWidth().focusRequester(inputFocus),
+                label={Text(if(creating)"New PIN" else "6-digit PIN")},
+                singleLine=true,
+                visualTransformation=PasswordVisualTransformation(),
+                keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword)
+            )
+            if(creating)OutlinedTextField(
+                value=confirmation,
+                onValueChange={value->confirmation=value.filter(Char::isDigit).take(6);error=""},
+                modifier=Modifier.fillMaxWidth(),
+                label={Text("Confirm PIN")},
+                singleLine=true,
+                visualTransformation=PasswordVisualTransformation(),
+                keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword)
+            )
+            if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
+        }},
+        confirmButton={TextButton(enabled=valid&&!working,onClick={
+            if(creating&&pin!=confirmation){error="PIN entries do not match.";return@TextButton}
+            working=true
+            val submittedPin=pin
+            scope.launch{
+                val result=runCatching{withContext(Dispatchers.Default){
+                    if(creating){store.save(submittedPin);true}else store.verify(submittedPin)
+                }}
+                working=false
+                result.onSuccess{accepted->
+                    if(!accepted)error="That PIN is incorrect. Try again."
+                    else if(creating)onCreated() else onUnlocked()
+                }.onFailure{error="Could not save the PIN. Try again."}
+            }
+        }){Text(if(working)"Checking…" else if(creating)"Create PIN" else "Unlock")}},
+        dismissButton={TextButton(onClick=onDismiss){Text("Cancel")}}
+    )
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)

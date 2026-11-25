@@ -66,7 +66,7 @@ public final class JaLiveTvRules {
         CATEGORIES=Collections.unmodifiableMap(map);
     }
     public static List<String> views() {
-        List<String> result=new ArrayList<>();result.add("Favorites");result.add("With EPG");result.add("United States");
+        List<String> result=new ArrayList<>();result.add("All Favorites");result.add("With EPG");result.add("United States");
         result.addAll(CATEGORIES.keySet());
         return result;
     }
@@ -98,7 +98,7 @@ public final class JaLiveTvRules {
         return result;
     }
     public static List<String> sources() {
-        return Arrays.asList("All Sources","iptv-org.com","DaddyLive TV","NTV");
+        return Arrays.asList("Favorites","iptv-org.com","DaddyLive TV","NTV");
     }
     public static String sourceCategory(String source) {
         if("iptv-org.com".equals(source))return "source-iptv-org";
@@ -107,12 +107,23 @@ public final class JaLiveTvRules {
         return "";
     }
     public static boolean sourceMatches(String source,Set<String> categories) {
+        if("Favorites".equals(source))return true;
         String key=sourceCategory(source);
-        return key.isEmpty()||categories.contains(key);
+        return !key.isEmpty()&&categories.contains(key);
+    }
+    public static boolean isNtvAdultOnly(String name,Collection<String> categories) {
+        if(name!=null&&Pattern.compile("(?i)(?:^|[^a-z0-9])18\\s*\\+").matcher(name).find())return true;
+        if(categories==null)return false;
+        for(String value:categories)if(value!=null){
+            String category=value.toLowerCase(Locale.ROOT).replace('_','-');
+            if(category.equals("18-plus")||category.startsWith("18-plus-")||category.equals("adult")
+                ||category.equals("adult-only")||category.startsWith("adult-only-"))return true;
+        }
+        return false;
     }
     public static List<String> groupsForSource(String source,Set<String> availableCategories) {
-        if("All Sources".equals(source))return views(availableCategories);
-        List<String> groups=new ArrayList<>(Arrays.asList("Favorites","With EPG"));
+        if("Favorites".equals(source))return Collections.singletonList("All Favorites");
+        List<String> groups=new ArrayList<>(Collections.singletonList("With EPG"));
         Set<String> cats=availableCategories==null?Collections.emptySet():availableCategories;
         if("iptv-org.com".equals(source)) {
             if(cats.contains("country-us"))groups.add("United States");
@@ -124,8 +135,9 @@ public final class JaLiveTvRules {
             groups.addAll(Arrays.asList("Raptor","Falcon","Phoenix","Titan","Scorpion","Other Servers",
                 "All Sports","Soccer","NFL","NCAA","Basketball","Golf","Motorsport","UFC","WWE","MMA","Badminton",
                 "NFL USA","Basketball USA","Baseball USA"));
+            if(cats.contains("ntv-adult-only"))groups.add("Adult Only");
             addExtraGroups(groups,cats,setOf("source-ntv","country-us","country-uk","test",
-                "ntv-server-raptor","ntv-server-falcon","ntv-server-phoenix","ntv-server-titan",
+                "ntv-adult-only","18-plus","adult","adult-only","ntv-server-raptor","ntv-server-falcon","ntv-server-phoenix","ntv-server-titan",
                 "ntv-server-scorpion","ntv-server-other","ntv-sport-all","ntv-sport-soccer",
                 "ntv-sport-nfl","ntv-sport-ncaa","ntv-sport-basketball","ntv-sport-golf",
                 "ntv-sport-motorsport","ntv-sport-ufc","ntv-sport-wwe","ntv-sport-mma",
@@ -147,7 +159,7 @@ public final class JaLiveTvRules {
         return out.toString();
     }
     public static String category(String view){
-        if("Favorites".equals(view)||"With EPG".equals(view))return "";
+        if("Favorites".equals(view)||"All Favorites".equals(view)||"With EPG".equals(view))return "";
         if("United States".equals(view))return "country-us";
         if("United Kingdom".equals(view))return "country-uk";
         if("DaddyLive USA".equals(view))return "daddylive-usa";
@@ -169,6 +181,7 @@ public final class JaLiveTvRules {
         if("MMA".equals(view))return "ntv-sport-mma";
         if("Badminton".equals(view))return "ntv-sport-badminton";
         if("Baseball USA".equals(view))return "ntv-sport-baseball-usa";
+        if("Adult Only".equals(view))return "ntv-adult-only";
         if("NFL USA".equals(view))return "ntv-nfl-usa";
         if("Basketball USA".equals(view))return "ntv-basketball-usa";
         String known=CATEGORIES.get(view);if(known!=null)return known;
