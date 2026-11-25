@@ -14,6 +14,18 @@ public final class JaLiveTvRulesTest {
         check(JaLiveTvRules.views().get(1).equals("With EPG"));
         check(JaLiveTvRules.views().get(2).equals("United States"));
         check(JaLiveTvRules.views().size()==21);
+        String[] nflTeams={"Arizona Cardinals","Atlanta Falcons","Baltimore Ravens","Buffalo Bills",
+            "Carolina Panthers","Chicago Bears","Cincinnati Bengals","Cleveland Browns","Dallas Cowboys",
+            "Denver Broncos","Detroit Lions","Green Bay Packers","Houston Texans","Indianapolis Colts",
+            "Jacksonville Jaguars","Kansas City Chiefs","Las Vegas Raiders","Los Angeles Chargers",
+            "Los Angeles Rams","Miami Dolphins","Minnesota Vikings","New England Patriots","New Orleans Saints",
+            "New York Giants","New York Jets","Philadelphia Eagles","Pittsburgh Steelers","San Francisco 49ers",
+            "Seattle Seahawks","Tampa Bay Buccaneers","Tennessee Titans","Washington Commanders"};
+        check(nflTeams.length==32);
+        for(String team:nflTeams)check(JaLiveTvRules.isNflChannelName(team+" vs opponent"));
+        check(JaLiveTvRules.isNflChannelName("NFL Network HD"));
+        check(!JaLiveTvRules.isNflChannelName("NFLX Network"));
+        check(!JaLiveTvRules.isNflChannelName("International cricket"));
         check(JaLiveTvRules.category("Documentaries").equals("documentary"));
         check(JaLiveTvRules.category("Auto and Motoring").equals("auto"));
         java.util.Set<String> groups=new java.util.HashSet<>(java.util.Arrays.asList("news","weather"));

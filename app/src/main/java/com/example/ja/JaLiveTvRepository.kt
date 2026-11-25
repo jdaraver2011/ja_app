@@ -93,12 +93,13 @@ internal class JaLiveTvRepository(private val context:Context) {
         val due=cached==null||cachedFile!=file||refreshDueAfterSix(cachedAt,now)
         val prefs=context.getSharedPreferences("ja_live_tv_refresh",Context.MODE_PRIVATE)
         val attemptedToday=prefs.getString("automatic_attempt_date","")==localDate.toString()
-        val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<1
+        // Refresh once after the NFL name matcher changes so cached NTV data is re-tagged.
+        val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<2
         val shouldRefresh=force||sourceGroupsUpgradeDue||(due&&!attemptedToday)
         if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
         if(cached==null&&!shouldRefresh)throw IOException("No catalog cache is available; automatic refresh was already attempted today")
         if(cached!=null)withContext(Dispatchers.Main){onCached(cached)}
-        if(sourceGroupsUpgradeDue)prefs.edit().putInt("source_groups_schema",1).apply()
+        if(sourceGroupsUpgradeDue)prefs.edit().putInt("source_groups_schema",2).apply()
         // Record the daily attempt before starting the request so failed network calls do not repeat on every app open.
         // A first install can fetch before 6:00 AM and still counts as today's automatic attempt.
         // A manual refresh after 6:00 AM also counts as today's attempt.
@@ -106,7 +107,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         try {
             val raw=downloadDirectCatalog()
             val parsed=parseCatalog(raw,false)
-            write(file,raw);prefs.edit().putInt("source_groups_schema",1).apply()
+            write(file,raw);prefs.edit().putInt("source_groups_schema",2).apply()
             memoryCatalog=parsed to file.lastModified();parsed
         }catch(e:CancellationException){throw e}catch(e:Exception){
             cached?.copy(saved=true)?.also{memoryCatalog=it to cachedAt}?:throw e
@@ -147,6 +148,10 @@ internal class JaLiveTvRepository(private val context:Context) {
         }
         val channels=mergeM3uChannels(loaded)+ntvChannels+ntvEvents
         if(channels.isEmpty())throw IOException("No live TV sources could be loaded")
+        val nflChannels=channels.count{"source-ntv" in it.categories&&"ntv-sport-nfl" in it.categories}
+        val nflGames=ntvEvents.count{"ntv-sport-nfl" in it.categories}
+        val nflNetwork=ntvChannels.count{it.name.contains("NFL Network",ignoreCase=true)}
+        Log.i("JA_LIVE_TV","NTV_NFL_GROUP_COMPILED channels=$nflChannels games=$nflGames networkFeeds=$nflNetwork")
         val failed=sources.filterIndexed{index,_->results[index]==null}.joinToString(","){it.id}
         if(failed.isNotBlank())Log.w("JA_LIVE_TV","CATALOG_PARTIAL sources=${loaded.size} failed=$failed channels=${channels.size}")
         catalogJson(channels)
@@ -192,7 +197,12 @@ internal class JaLiveTvRepository(private val context:Context) {
             val urls=playerHosts.map{host->ntvChannelUrl(host,channel)}
             val categories=mutableSetOf("source-ntv","ntv-channel")
             if(JaLiveTvRules.isNtvAdultOnly(channel.name,emptySet()))categories+="ntv-adult-only"
-            else categories+=ntvServerCategory(channel.server)
+            else {
+                categories+=ntvServerCategory(channel.server)
+                val sportTags=ntvSportCategories("",channel.name)
+                categories+=sportTags
+                if("ntv-sport-nfl" in sportTags)categories+="ntv-sport-all"
+            }
             JaLiveChannel(
                 id="ntv:${channel.id}",name=channel.name,logo=channel.logo,urls=emptyList(),
                 categories=categories,
@@ -279,8 +289,9 @@ internal class JaLiveTvRepository(private val context:Context) {
         val text="$category $title".lowercase(Locale.ROOT)
         val tags=mutableSetOf<String>()
         fun has(vararg words:String)=words.any{text.contains(it)}
+        val isNfl=Regex("\\bnfl\\b").containsMatchIn(text)||JaLiveTvRules.isNflChannelName(text)
         if(has("soccer","football","epl","premier league","champions league","la liga","serie a","bundesliga"))tags+="ntv-sport-soccer"
-        if(Regex("\\bnfl\\b").containsMatchIn(text))tags+="ntv-sport-nfl"
+        if(isNfl)tags+="ntv-sport-nfl"
         if(has("ncaa","college football","college basketball","ncaaf","ncaab"))tags+="ntv-sport-ncaa"
         if(has("basketball","nba","wnba","ncaab"))tags+="ntv-sport-basketball"
         if(has("golf","pga","lpga","liv golf"))tags+="ntv-sport-golf"
@@ -293,7 +304,7 @@ internal class JaLiveTvRepository(private val context:Context) {
             tags+="ntv-sport-baseball"
             if(has("mlb","usa","united states","american league","national league"))tags+="ntv-sport-baseball-usa"
         }
-        if(Regex("\\bnfl\\b").containsMatchIn(text))tags+="ntv-nfl-usa"
+        if(isNfl)tags+="ntv-nfl-usa"
         if(has("nba","wnba","united states","usa" )&&has("basketball","nba","wnba"))tags+="ntv-basketball-usa"
         return tags
     }

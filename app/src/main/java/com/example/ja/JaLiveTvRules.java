@@ -9,6 +9,21 @@ import java.util.regex.*;
 public final class JaLiveTvRules {
     private JaLiveTvRules() {}
     private static final DateTimeFormatter XML_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT);
+    private static final Pattern NFL_TEAM_OR_NETWORK = Pattern.compile(
+        "(?i)(?:^|[^a-z0-9])(?:arizona\\s+cardinals|atlanta\\s+falcons|baltimore\\s+ravens|buffalo\\s+bills|"+
+        "carolina\\s+panthers|chicago\\s+bears|cincinnati\\s+bengals|cleveland\\s+browns|dallas\\s+cowboys|"+
+        "denver\\s+broncos|detroit\\s+lions|green\\s+bay\\s+packers|houston\\s+texans|indianapolis\\s+colts|"+
+        "jacksonville\\s+jaguars|kansas\\s+city\\s+chiefs|las\\s+vegas\\s+raiders|los\\s+angeles\\s+chargers|"+
+        "los\\s+angeles\\s+rams|miami\\s+dolphins|minnesota\\s+vikings|new\\s+england\\s+patriots|"+
+        "new\\s+orleans\\s+saints|new\\s+york\\s+giants|new\\s+york\\s+jets|philadelphia\\s+eagles|"+
+        "pittsburgh\\s+steelers|san\\s+francisco\\s+49ers|seattle\\s+seahawks|tampa\\s+bay\\s+buccaneers|"+
+        "tennessee\\s+titans|washington\\s+commanders|cardinals|falcons|ravens|bills|panthers|bears|bengals|"+
+        "browns|cowboys|broncos|lions|packers|texans|colts|jaguars|chiefs|raiders|chargers|rams|dolphins|vikings|"+
+        "patriots|saints|giants|jets|eagles|steelers|49ers|seahawks|buccaneers|titans|commanders|nfl[\\s_-]*network)"
+        + "(?:$|[^a-z0-9])");
+    public static boolean isNflChannelName(String value) {
+        return value != null && NFL_TEAM_OR_NETWORK.matcher(value).find();
+    }
     public static String attribute(String line, String name) {
         Matcher m=Pattern.compile("(?:^|\\s)"+Pattern.quote(name)+"=\"([^\"]*)\"").matcher(line);
         return m.find()?m.group(1):"";

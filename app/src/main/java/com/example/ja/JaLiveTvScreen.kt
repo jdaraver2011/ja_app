@@ -560,7 +560,15 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                     items(groups, key = { it }, contentType = { "channel-group" }){group->
                         TvFocusButton(onClick={selectGroup(group)},modifier=Modifier.fillMaxWidth()
                             .then(if(state.view==group)Modifier.focusRequester(state.groupFocus) else Modifier)
-                            .onFocusChanged{if(it.isFocused){focusedGroup=groups.indexOf(group);searchFocused=false;selectGroup(group)}},
+                            .onFocusChanged{
+                                if(it.isFocused){
+                                    focusedGroup=groups.indexOf(group)
+                                    searchFocused=false
+                                    // Protected group selection is an explicit OK action.
+                                    // Moving focus across this row must not open a PIN dialog.
+                                    if(group!="Adult Only")selectGroup(group)
+                                }
+                            },
                             colors=ButtonDefaults.buttonColors(containerColor=if(state.view==group)ColorGold else Color(0xFF263747),
                                 contentColor=if(state.view==group)Color.Black else Color.White)){
                             Text(if(group=="Adult Only"&&!state.adultOnlyUnlocked)"Adult Only · PIN" else group,
