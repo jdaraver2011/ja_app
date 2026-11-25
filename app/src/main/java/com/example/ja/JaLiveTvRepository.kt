@@ -40,7 +40,8 @@ import java.util.zip.GZIPInputStream
 @androidx.compose.runtime.Immutable
 internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>,
     val headers:Map<String,Map<String,String>> = emptyMap(),val categories:Set<String> = emptySet(),
-    val embeddedPlayerUrl: String? = null, val xmlTvGuideId: String? = null)
+    val embeddedPlayerUrl: String? = null, val xmlTvGuideId: String? = null,
+    val embeddedPlayerFallbackUrls: List<String> = emptyList())
 @androidx.compose.runtime.Immutable
 internal data class JaLiveProgram(val channel:String,val start:Long,val end:Long,val title:String)
 @androidx.compose.runtime.Immutable
@@ -92,10 +93,12 @@ internal class JaLiveTvRepository(private val context:Context) {
         val due=cached==null||cachedFile!=file||refreshDueAfterSix(cachedAt,now)
         val prefs=context.getSharedPreferences("ja_live_tv_refresh",Context.MODE_PRIVATE)
         val attemptedToday=prefs.getString("automatic_attempt_date","")==localDate.toString()
-        val shouldRefresh=force||(due&&!attemptedToday)
+        val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<1
+        val shouldRefresh=force||sourceGroupsUpgradeDue||(due&&!attemptedToday)
         if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
         if(cached==null&&!shouldRefresh)throw IOException("No catalog cache is available; automatic refresh was already attempted today")
         if(cached!=null)withContext(Dispatchers.Main){onCached(cached)}
+        if(sourceGroupsUpgradeDue)prefs.edit().putInt("source_groups_schema",1).apply()
         // Record the daily attempt before starting the request so failed network calls do not repeat on every app open.
         // A first install can fetch before 6:00 AM and still counts as today's automatic attempt.
         // A manual refresh after 6:00 AM also counts as today's attempt.
@@ -103,7 +106,8 @@ internal class JaLiveTvRepository(private val context:Context) {
         try {
             val raw=downloadDirectCatalog()
             val parsed=parseCatalog(raw,false)
-            write(file,raw);memoryCatalog=parsed to file.lastModified();parsed
+            write(file,raw);prefs.edit().putInt("source_groups_schema",1).apply()
+            memoryCatalog=parsed to file.lastModified();parsed
         }catch(e:CancellationException){throw e}catch(e:Exception){
             cached?.copy(saved=true)?.also{memoryCatalog=it to cachedAt}?:throw e
         }
@@ -114,11 +118,14 @@ internal class JaLiveTvRepository(private val context:Context) {
         return lastDownload<=0L||(now>=todaySix&&lastDownload<todaySix)
     }
     private data class M3uEntry(val id:String,val name:String,val logo:String,val groups:String,val url:String)
-    private data class M3uSource(val id:String,val category:String,val url:String)
+    private data class M3uSource(val id:String,val category:String,val sourceCategory:String,val url:String)
+    private data class NtvSourceChannel(
+        val id:String, val name:String, val logo:String, val server:String, val code:String
+    )
     private suspend fun downloadDirectCatalog():String = supervisorScope {
         val sources=listOf(
-            M3uSource("us","country-us","https://iptv-org.github.io/iptv/countries/us.m3u"),
-            M3uSource("uk","country-uk","https://iptv-org.github.io/iptv/countries/uk.m3u"),
+            M3uSource("us","country-us","source-iptv-org","https://iptv-org.github.io/iptv/countries/us.m3u"),
+            M3uSource("uk","country-uk","source-iptv-org","https://iptv-org.github.io/iptv/countries/uk.m3u"),
         )
         val results=sources.map{source->async {
             try{source to downloadSource(source)}
@@ -126,11 +133,166 @@ internal class JaLiveTvRepository(private val context:Context) {
             catch(e:Exception){Log.w("JA_LIVE_TV","CATALOG_SOURCE_FAILED source=${source.id} error=${e.message}",e);null}
         }}.awaitAll()
         val loaded=results.filterNotNull().map{it.second}
-        val channels=mergeM3uChannels(loaded)
+        val ntvChannels=try{downloadNtvChannels()}catch(e:CancellationException){throw e}catch(e:Exception){
+            Log.w("JA_LIVE_TV","NTV_CATALOG_FAILED usingCached=true error=${e.message}")
+            runCatching{parseCatalog(File(root,"direct-catalog.json").readText(),true).channels
+                .filter{it.categories.contains("source-ntv")}}
+                .getOrDefault(emptyList())
+        }
+        val ntvEvents=try{downloadNtvEvents()}catch(e:CancellationException){throw e}catch(e:Exception){
+            Log.w("JA_LIVE_TV","NTV_EVENTS_FAILED usingCached=true error=${e.message}")
+            runCatching{parseCatalog(File(root,"direct-catalog.json").readText(),true).channels
+                .filter{it.categories.contains("source-ntv")&&it.categories.contains("ntv-sport-all")}}
+                .getOrDefault(emptyList())
+        }
+        val channels=mergeM3uChannels(loaded)+ntvChannels+ntvEvents
         if(channels.isEmpty())throw IOException("No live TV sources could be loaded")
         val failed=sources.filterIndexed{index,_->results[index]==null}.joinToString(","){it.id}
         if(failed.isNotBlank())Log.w("JA_LIVE_TV","CATALOG_PARTIAL sources=${loaded.size} failed=$failed channels=${channels.size}")
         catalogJson(channels)
+    }
+    private fun downloadNtvChannels():List<JaLiveChannel> {
+        val domains=listOf("ntv.cx","ntv.st","ntvs.cx","ntvstream.cx")
+        val channels=mutableListOf<NtvSourceChannel>()
+        var offset=0
+        var selectedHost:String?=null
+        while(offset<5000){
+            var response:JSONObject?=null
+            var responseHost:String?=null
+            val hosts=(listOfNotNull(selectedHost)+domains).distinct()
+            for(host in hosts){
+                try{
+                    val url="https://$host/api/get-channels?limit=100&offset=$offset"
+                    val json=JSONObject(text(url,2_000_000,20))
+                    if(!json.optBoolean("success")||!json.has("channels"))throw IOException("Invalid channel API response")
+                    response=json;responseHost=host;break
+                }catch(e:CancellationException){throw e}
+                catch(e:Exception){Log.w("JA_LIVE_TV","NTV_CATALOG_HOST_FAILED host=$host offset=$offset error=${e.message}")}
+            }
+            val page=response?:throw IOException("NTV channel API unavailable on all configured domains")
+            selectedHost=responseHost
+            val entries=page.getJSONArray("channels")
+            if(entries.length()==0)break
+            for(index in 0 until entries.length()){
+                val entry=entries.optJSONObject(index)?:continue
+                val id=entry.optString("channel_id").trim()
+                val name=entry.optString("channel_name").trim()
+                val server=entry.optString("server").trim().lowercase(Locale.ROOT)
+                if(id.isBlank()||name.isBlank())continue
+                channels+=NtvSourceChannel(id,name,entry.optString("channel_image"),server,entry.optString("channel_code"))
+            }
+            offset+=entries.length()
+            if(!page.optBoolean("has_more")||offset>=page.optInt("total",offset))break
+        }
+        if(channels.isEmpty())throw IOException("NTV channel API returned no channels")
+        val primary=selectedHost?:domains.first()
+        val playerHosts=(listOf(primary)+domains.filterNot{it==primary}).distinct()
+        Log.i("JA_LIVE_TV","NTV_CATALOG_READY channels=${channels.size} host=$primary mirrors=${domains.size-1}")
+        return channels.distinctBy{it.id}.map{channel->
+            val urls=playerHosts.map{host->ntvChannelUrl(host,channel)}
+            JaLiveChannel(
+                id="ntv:${channel.id}",name=channel.name,logo=channel.logo,urls=emptyList(),
+                categories=setOf("source-ntv",ntvServerCategory(channel.server),"ntv-channel"),
+                embeddedPlayerUrl=urls.first(),embeddedPlayerFallbackUrls=urls.drop(1)
+            )
+        }
+    }
+    private fun ntvServerCategory(server:String):String=when(server.lowercase(Locale.ROOT)){
+        "cdnlive","titan"->"ntv-server-titan"
+        "hesgoales","falcon"->"ntv-server-falcon"
+        "scorpion"->"ntv-server-scorpion"
+        "raptor"->"ntv-server-raptor"
+        "dlhd","phoenix"->"ntv-server-phoenix"
+        else->"ntv-server-other"
+    }
+    private fun ntvChannelUrl(host:String,channel:NtvSourceChannel):String {
+        val encodedId=java.net.URLEncoder.encode(channel.id,"UTF-8")
+        val path=when(channel.server){
+            "cdnlive"->{
+                val slug=channel.name.trim().replace(Regex("\\s+"),"-").replace(Regex("[^A-Za-z0-9-]"),"")
+                "/channel/titan/$slug?code=${java.net.URLEncoder.encode(channel.code.ifBlank{"us"},"UTF-8")}"
+            }
+            "scorpion"->"/channel/scorpion/${java.net.URLEncoder.encode(channel.name,"UTF-8")}"
+            "hesgoales"->{
+                val slug=channel.name.trim().replace(Regex("\\s+"),"-").replace(Regex("[^A-Za-z0-9-]"),"")
+                "/channel/falcon/$slug"
+            }
+            "dlhd","phoenix"->"/channel/phoenix/$encodedId"
+            "raptor"->"/channel/raptor/$encodedId"
+            "titan"->"/channel/titan/$encodedId"
+            "falcon"->"/channel/falcon/$encodedId"
+            else->"/channel/${channel.server.ifBlank { "phoenix" }}/$encodedId"
+        }
+        return "https://$host$path"
+    }
+    private fun downloadNtvEvents():List<JaLiveChannel> {
+        val domains=listOf("ntv.cx","ntv.st","ntvs.cx","ntvstream.cx")
+        var response:JSONObject?=null
+        var selectedHost:String?=null
+        for(host in domains){
+            try{
+                val json=JSONObject(text("https://$host/api/get-matches?server=all&type=both",12_000_000,25))
+                if(!json.optBoolean("success"))throw IOException("Invalid event API response")
+                response=json;selectedHost=host;break
+            }catch(e:CancellationException){throw e}
+            catch(e:Exception){Log.w("JA_LIVE_TV","NTV_EVENTS_HOST_FAILED host=$host error=${e.message}")}
+        }
+        val data=response?:throw IOException("NTV events API unavailable on all configured domains")
+        val entries=JSONArray().apply{
+            listOfNotNull(data.optJSONArray("live"),data.optJSONArray("all")).forEach{rows->
+                for(index in 0 until rows.length())rows.optJSONObject(index)?.let{entry->put(entry)}
+            }
+        }
+        val mirrorHosts=(listOf(selectedHost?:domains.first())+domains.filterNot{it==selectedHost}).distinct()
+        val seen=mutableSetOf<String>()
+        val result=mutableListOf<JaLiveChannel>()
+        for(index in 0 until entries.length()){
+            val event=entries.optJSONObject(index)?:continue
+            val id=event.optString("id").trim()
+            val title=event.optString("title").trim()
+            if(id.isBlank()||title.isBlank()||!seen.add(id))continue
+            val category=event.optString("category").lowercase(Locale.ROOT)
+            val sportTags=ntvSportCategories(category,title)
+            val sources=event.optJSONArray("sources")?:continue
+            if(sources.length()==0)continue
+            val server=event.optString("server").ifBlank{"titan"}
+            val watchServer=when(server.lowercase(Locale.ROOT)){
+                "cdnlive"->"titan";"hesgoales"->"falcon";"dlhd"->"phoenix";else->server.lowercase(Locale.ROOT)
+            }
+            val urls=mirrorHosts.flatMap{host->(0 until sources.length()).map{sourceIndex->
+                "https://$host/watch/$watchServer/$id?source=$sourceIndex"
+            }}.distinct()
+            result+=JaLiveChannel(
+                id="ntv-event:$id",name=title,logo=event.optString("poster"),urls=emptyList(),
+                categories=setOf("source-ntv",ntvServerCategory(server),"ntv-sport-all")+sportTags,
+                embeddedPlayerUrl=urls.first(),
+                embeddedPlayerFallbackUrls=urls.drop(1)
+            )
+        }
+        Log.i("JA_LIVE_TV","NTV_EVENTS_READY events=${result.size} host=${selectedHost?:"none"}")
+        return result
+    }
+    private fun ntvSportCategories(category:String,title:String):Set<String> {
+        val text="$category $title".lowercase(Locale.ROOT)
+        val tags=mutableSetOf<String>()
+        fun has(vararg words:String)=words.any{text.contains(it)}
+        if(has("soccer","football","epl","premier league","champions league","la liga","serie a","bundesliga"))tags+="ntv-sport-soccer"
+        if(Regex("\\bnfl\\b").containsMatchIn(text))tags+="ntv-sport-nfl"
+        if(has("ncaa","college football","college basketball","ncaaf","ncaab"))tags+="ntv-sport-ncaa"
+        if(has("basketball","nba","wnba","ncaab"))tags+="ntv-sport-basketball"
+        if(has("golf","pga","lpga","liv golf"))tags+="ntv-sport-golf"
+        if(has("motorsport","motor sport","formula 1","formula one","f1","nascar","indycar","motogp","racing"))tags+="ntv-sport-motorsport"
+        if(Regex("\\bufc\\b").containsMatchIn(text))tags+="ntv-sport-ufc"
+        if(Regex("\\bwwe\\b").containsMatchIn(text))tags+="ntv-sport-wwe"
+        if(has("mma","mixed martial"))tags+="ntv-sport-mma"
+        if(has("badminton"))tags+="ntv-sport-badminton"
+        if(has("baseball","mlb","world series")){
+            tags+="ntv-sport-baseball"
+            if(has("mlb","usa","united states","american league","national league"))tags+="ntv-sport-baseball-usa"
+        }
+        if(Regex("\\bnfl\\b").containsMatchIn(text))tags+="ntv-nfl-usa"
+        if(has("nba","wnba","united states","usa" )&&has("basketball","nba","wnba"))tags+="ntv-basketball-usa"
+        return tags
     }
     private fun downloadSource(source:M3uSource):List<JaLiveChannel> {
         return parseM3u(text(source.url,30_000_000,120),source)
@@ -168,7 +330,7 @@ internal class JaLiveTvRepository(private val context:Context) {
             val stableId=if(tvgId.isNotBlank())tvgId else "${source.id}-${slug(name)}"
             val groups=row.groups.split(Regex("[|;]" )).map{slug(decodeHtml(it))}.filter{it.isNotBlank()
                 &&it !in setOf("us","usa","united-states","uk","gb","united-kingdom")}
-            val categories=(groups+source.category).toSet()
+            val categories=(groups+source.category+source.sourceCategory).toSet()
             val old=merged[key]
             merged[key]=if(old==null)JaLiveChannel(stableId,name,row.logo,listOf(row.url),categories=categories)
                 else old.copy(name=old.name.ifBlank{ name },logo=old.logo.ifBlank{row.logo},urls=(old.urls+row.url).distinct(),categories=old.categories+categories)
@@ -188,7 +350,9 @@ internal class JaLiveTvRepository(private val context:Context) {
             val streams=JSONArray();channel.urls.forEach{streams.put(JSONObject().put("url",it))}
             val groups=JSONArray();channel.categories.sorted().forEach{groups.put(it);counts.put(it,counts.optInt(it)+1)}
             entries.put(JSONObject().put("id",channel.id).put("name",channel.name).put("logo",channel.logo)
-                .put("categories",groups).put("streams",streams))
+                .put("categories",groups).put("streams",streams)
+                .put("embeddedPlayerUrl",channel.embeddedPlayerUrl)
+                .put("embeddedPlayerFallbackUrls",JSONArray(channel.embeddedPlayerFallbackUrls)))
         }
         return JSONObject().put("schema",1).put("generatedAt",Instant.now().toString()).put("channels",entries)
             .put("counts",JSONObject().put("categories",counts)).toString()
@@ -215,10 +379,19 @@ internal class JaLiveTvRepository(private val context:Context) {
             }.distinct()
             val groups=c.optJSONArray("categories")
             val categories=if(groups==null)mutableSetOf<String>() else (0 until groups.length()).map{groups.optString(it)}.filter{it.isNotBlank()}.toMutableSet()
+            val embeddedUrl=c.optString("embeddedPlayerUrl").takeIf{webUrl(it)}
+            val fallbackArray=c.optJSONArray("embeddedPlayerFallbackUrls")
+            val embeddedFallbacks=if(fallbackArray==null)emptyList() else (0 until fallbackArray.length())
+                .map{fallbackArray.optString(it)}.filter{webUrl(it)}.distinct()
             // Older cached catalogs were US-only and did not carry an explicit source-country tag.
-            if("country-us" !in categories&&"country-uk" !in categories&&"test" !in categories)categories.add("country-us")
-            if(urls.isEmpty()||("test" in categories&&"country-us" !in categories&&"country-uk" !in categories))null
-            else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers,categories)
+            if(categories.any{it.startsWith("ntv-")}||c.optString("id").startsWith("ntv:" )||c.optString("id").startsWith("ntv-event:")){
+                categories.add("source-ntv")
+                if(c.optString("id").startsWith("ntv-event:"))categories.add("ntv-sport-all")
+            }
+            if("country-us" !in categories&&"country-uk" !in categories&&"test" !in categories&&"source-ntv" !in categories)categories.add("country-us")
+            if((urls.isEmpty()&&embeddedUrl==null)||("test" in categories&&"country-us" !in categories&&"country-uk" !in categories))null
+            else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers,categories,
+                embeddedPlayerUrl=embeddedUrl,embeddedPlayerFallbackUrls=embeddedFallbacks)
         }.distinctBy{it.id}.sortedBy{it.name.lowercase()}
         require(channels.isNotEmpty())
         return JaLiveChannels(channels,saved,verified,doc.optJSONObject("counts")?.has("categories")==true)

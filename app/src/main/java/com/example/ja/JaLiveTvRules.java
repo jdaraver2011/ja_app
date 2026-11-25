@@ -75,14 +75,68 @@ public final class JaLiveTvRules {
         List<String> result=views();
         result.add(3,"United Kingdom");
         Set<String> known=new HashSet<>(CATEGORIES.values());
-        known.add("country-us");known.add("country-uk");known.add("test");
+        known.addAll(Arrays.asList("country-us","country-uk","test","source-iptv-org","source-daddylive","source-ntv"));
         Set<String> extras=new TreeSet<>();
         if(availableCategories!=null)for(String value:availableCategories)
             if(value!=null&&!value.isBlank()&&!known.contains(value))extras.add(value);
         Set<String> labels=new HashSet<>();for(String view:result)labels.add(view.toLowerCase(Locale.ROOT));
         if(extras.remove("daddylive-usa"))result.add(3,"DaddyLive USA");
+        if(extras.remove("ntv-usa"))result.add(Math.min(4,result.size()),"NTV USA");
+        if(extras.remove("ntv-nfl-usa"))result.add(Math.min(5,result.size()),"NTV NFL USA");
+        if(extras.remove("ntv-basketball-usa"))result.add(Math.min(6,result.size()),"NTV Basketball USA");
+        if(extras.remove("ntv-baseball-usa"))result.add(Math.min(7,result.size()),"NTV Baseball USA");
+        String[][] ntvGroups={{"ntv-server-raptor","Raptor"},{"ntv-server-falcon","Falcon"},
+            {"ntv-server-phoenix","Phoenix"},{"ntv-server-titan","Titan"},
+            {"ntv-server-scorpion","Scorpion"},{"ntv-server-other","Other Servers"},
+            {"ntv-sport-all","All Sports"},{"ntv-sport-soccer","Soccer"},
+            {"ntv-sport-nfl","NFL"},{"ntv-sport-ncaa","NCAA"},{"ntv-sport-basketball","Basketball"},
+            {"ntv-sport-golf","Golf"},{"ntv-sport-motorsport","Motorsport"},{"ntv-sport-ufc","UFC"},
+            {"ntv-sport-wwe","WWE"},{"ntv-sport-mma","MMA"},{"ntv-sport-badminton","Badminton"}};
+        for(String[] group:ntvGroups)if(extras.remove(group[0]))result.add(group[1]);
+        extras.remove("ntv-sport-baseball");extras.remove("ntv-channel");
         for(String value:extras){String label=displayCategory(value);if(labels.add(label.toLowerCase(Locale.ROOT)))result.add(label);}
         return result;
+    }
+    public static List<String> sources() {
+        return Arrays.asList("All Sources","iptv-org.com","DaddyLive TV","NTV");
+    }
+    public static String sourceCategory(String source) {
+        if("iptv-org.com".equals(source))return "source-iptv-org";
+        if("DaddyLive TV".equals(source))return "source-daddylive";
+        if("NTV".equals(source))return "source-ntv";
+        return "";
+    }
+    public static boolean sourceMatches(String source,Set<String> categories) {
+        String key=sourceCategory(source);
+        return key.isEmpty()||categories.contains(key);
+    }
+    public static List<String> groupsForSource(String source,Set<String> availableCategories) {
+        if("All Sources".equals(source))return views(availableCategories);
+        List<String> groups=new ArrayList<>(Arrays.asList("Favorites","With EPG"));
+        Set<String> cats=availableCategories==null?Collections.emptySet():availableCategories;
+        if("iptv-org.com".equals(source)) {
+            if(cats.contains("country-us"))groups.add("United States");
+            if(cats.contains("country-uk"))groups.add("United Kingdom");
+            addExtraGroups(groups,cats,setOf("source-iptv-org","country-us","country-uk","test"));
+        } else if("DaddyLive TV".equals(source)) {
+            if(cats.contains("daddylive-usa"))groups.add("DaddyLive USA");
+        } else if("NTV".equals(source)) {
+            groups.addAll(Arrays.asList("Raptor","Falcon","Phoenix","Titan","Scorpion","Other Servers",
+                "All Sports","Soccer","NFL","NCAA","Basketball","Golf","Motorsport","UFC","WWE","MMA","Badminton",
+                "NFL USA","Basketball USA","Baseball USA"));
+            addExtraGroups(groups,cats,setOf("source-ntv","country-us","country-uk","test",
+                "ntv-server-raptor","ntv-server-falcon","ntv-server-phoenix","ntv-server-titan",
+                "ntv-server-scorpion","ntv-server-other","ntv-sport-all","ntv-sport-soccer",
+                "ntv-sport-nfl","ntv-sport-ncaa","ntv-sport-basketball","ntv-sport-golf",
+                "ntv-sport-motorsport","ntv-sport-ufc","ntv-sport-wwe","ntv-sport-mma",
+                "ntv-sport-badminton","ntv-sport-baseball","ntv-sport-baseball-usa","ntv-channel"));
+        }
+        return groups;
+    }
+    private static Set<String> setOf(String... values) {return new HashSet<>(Arrays.asList(values));}
+    private static void addExtraGroups(List<String> groups,Set<String> categories,Set<String> excluded) {
+        Set<String> extras=new TreeSet<>(categories);extras.removeAll(excluded);
+        for(String value:extras)groups.add(displayCategory(value));
     }
     private static String displayCategory(String value) {
         String[] words=value.replace('_','-').split("-");StringBuilder out=new StringBuilder();
@@ -96,6 +150,27 @@ public final class JaLiveTvRules {
         if("Favorites".equals(view)||"With EPG".equals(view))return "";
         if("United States".equals(view))return "country-us";
         if("United Kingdom".equals(view))return "country-uk";
+        if("DaddyLive USA".equals(view))return "daddylive-usa";
+        if("Raptor".equals(view))return "ntv-server-raptor";
+        if("Falcon".equals(view))return "ntv-server-falcon";
+        if("Phoenix".equals(view))return "ntv-server-phoenix";
+        if("Titan".equals(view))return "ntv-server-titan";
+        if("Scorpion".equals(view))return "ntv-server-scorpion";
+        if("Other Servers".equals(view))return "ntv-server-other";
+        if("All Sports".equals(view))return "ntv-sport-all";
+        if("Soccer".equals(view))return "ntv-sport-soccer";
+        if("NFL".equals(view))return "ntv-sport-nfl";
+        if("NCAA".equals(view))return "ntv-sport-ncaa";
+        if("Basketball".equals(view))return "ntv-sport-basketball";
+        if("Golf".equals(view))return "ntv-sport-golf";
+        if("Motorsport".equals(view))return "ntv-sport-motorsport";
+        if("UFC".equals(view))return "ntv-sport-ufc";
+        if("WWE".equals(view))return "ntv-sport-wwe";
+        if("MMA".equals(view))return "ntv-sport-mma";
+        if("Badminton".equals(view))return "ntv-sport-badminton";
+        if("Baseball USA".equals(view))return "ntv-sport-baseball-usa";
+        if("NFL USA".equals(view))return "ntv-nfl-usa";
+        if("Basketball USA".equals(view))return "ntv-basketball-usa";
         String known=CATEGORIES.get(view);if(known!=null)return known;
         return view==null?"":view.toLowerCase(Locale.ROOT).trim().replaceAll("[^a-z0-9]+","-").replaceAll("^-|-$","");
     }

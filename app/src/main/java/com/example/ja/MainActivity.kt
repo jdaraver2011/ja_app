@@ -1239,6 +1239,9 @@ class MainActivity : ComponentActivity() {
     if (showIptvTab && tab == "IPTV" && selected == null && selectedPerson == null) {
         JaLiveTvScreen(liveTv, weather,
             onMainMenu = { tab = "Movies"; navigationLevel = 0; focusMain() },
+            matchTvFrameRate = matchTvFrameRate,
+            matchTvResolution = matchTvResolution,
+            matchStreamQuality = matchStreamQuality,
             modifier = Modifier.fillMaxSize())
         return
     }
@@ -1618,6 +1621,9 @@ class MainActivity : ComponentActivity() {
                 )
             } else if (tab == "IPTV") {
                 JaLiveTvScreen(liveTv, weather, onMainMenu = { focusMain() },
+                    matchTvFrameRate = matchTvFrameRate,
+                    matchTvResolution = matchTvResolution,
+                    matchStreamQuality = matchStreamQuality,
                     modifier = Modifier.fillMaxWidth().weight(1f))
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"

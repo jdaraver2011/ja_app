@@ -9,22 +9,23 @@ import android.os.SystemClock
 import android.os.Looper
 import android.util.Log
 import android.view.Display
+import android.view.Window
 import kotlin.math.abs
 
 /**
- * TV-only experimental refresh-rate preference for GeckoView embedded videos.
+ * TV-only experimental refresh-rate preference for video playback in JA.
  *
- * Receives frame statistics from the existing JA TV remote WebExtension.
- * Does not depend on guessed episode metadata, modify the Gecko surface, or
- * request modes on phone hardware. A confirmed foreground VIDEO_STARTED signal
- * is required by PlayerScreen before observe() is called.
+ * Receives rendered-frame statistics from GeckoView's JA bridge or Media3's
+ * decoder counters. Does not depend on guessed metadata or request modes on
+ * phone hardware. Callers only observe the active foreground video session.
  *
  * Android may ignore window mode preferences. The actual display.mode is logged
  * after the request; this class never equates a requested mode with an applied one.
  */
 class JaTvFrameRateMatcher(
     private val activity: Activity,
-    private val preferSourceResolution: Boolean = false
+    private val preferSourceResolution: Boolean = false,
+    private val window: Window = activity.window
 ) {
     private val tag = "JA_FRAME_RATE"
     private val handler = Handler(Looper.getMainLooper())
@@ -32,8 +33,8 @@ class JaTvFrameRateMatcher(
     private val enabled =
         (activity.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
             Configuration.UI_MODE_TYPE_TELEVISION
-    private val originalModePreference = activity.window.attributes.preferredDisplayModeId
-    private val originalRefreshPreference = activity.window.attributes.preferredRefreshRate
+    private val originalModePreference = window.attributes.preferredDisplayModeId
+    private val originalRefreshPreference = window.attributes.preferredRefreshRate
     @Suppress("DEPRECATION")
     private val outputDisplay: Display = activity.windowManager.defaultDisplay
     private val displayId = outputDisplay.displayId
@@ -75,8 +76,8 @@ class JaTvFrameRateMatcher(
         if (!enabled || closed || totalFrames <= 0 || positionSeconds < 0.0) return
         if (videoWidth < 480 || videoHeight < 270) return
         requestedMode?.let { mode ->
-            if (!activity.hasWindowFocus()) return
-            val attrs = activity.window.attributes
+            if (!window.decorView.hasWindowFocus()) return
+            val attrs = window.attributes
             val matched = outputDisplay.mode.modeId == mode.modeId &&
                 attrs.preferredDisplayModeId == mode.modeId &&
                 abs(attrs.preferredRefreshRate - mode.refreshRate) < 0.12f
@@ -155,10 +156,10 @@ class JaTvFrameRateMatcher(
         }
         val mode = candidates.minByOrNull { abs(it.refreshRate - rate) } ?: return
         try {
-            val attrs = activity.window.attributes
+            val attrs = window.attributes
             attrs.preferredDisplayModeId = mode.modeId
             attrs.preferredRefreshRate = mode.refreshRate
-            activity.window.attributes = attrs
+            window.attributes = attrs
             requestedMode = mode
             recovery.requested(SystemClock.elapsedRealtime())
             Log.i(tag, "FRAME_RATE_REQUESTED previousId=${current.modeId} targetId=${mode.modeId} " +
@@ -172,24 +173,24 @@ class JaTvFrameRateMatcher(
 
     /** Reassert the verified target after a pause or surface/display reset. */
     private fun restoreMatchedMode(mode: Display.Mode) {
-        if (closed || !activity.hasWindowFocus() || outputDisplay.supportedModes.none { it.modeId == mode.modeId }) return
+        if (closed || !window.decorView.hasWindowFocus() || outputDisplay.supportedModes.none { it.modeId == mode.modeId }) return
         try {
-            val attrs = activity.window.attributes
+            val attrs = window.attributes
             val lostMode = outputDisplay.mode.modeId != mode.modeId
             // Changing an already-identical LayoutParams value can be ignored.
             // Release the stale preference briefly only when the physical mode was lost.
             if (lostMode && attrs.preferredDisplayModeId == mode.modeId) {
                 attrs.preferredDisplayModeId = 0
                 attrs.preferredRefreshRate = 0f
-                activity.window.attributes = attrs
+                window.attributes = attrs
             }
             handler.postDelayed({
-                if (!closed && activity.hasWindowFocus()) {
+                if (!closed && window.decorView.hasWindowFocus()) {
                     try {
-                        val current = activity.window.attributes
+                        val current = window.attributes
                         current.preferredDisplayModeId = mode.modeId
                         current.preferredRefreshRate = mode.refreshRate
-                        activity.window.attributes = current
+                        window.attributes = current
                         Log.i(tag, "FRAME_RATE_REASSERTED targetModeId=${mode.modeId} targetHz=${mode.refreshRate}")
                         handler.postDelayed({ if (!closed) logActiveMode("FRAME_RATE_RECOVERY_CHECK") }, 3000L)
                     } catch (error: Exception) { Log.w(tag, "FRAME_RATE_RECOVERY_FAILED", error) }
@@ -208,7 +209,7 @@ class JaTvFrameRateMatcher(
 
     /** A requested mode alone is insufficient: stream quality follows verified physical output. */
     fun confirmedQualityHeight(): Int? {
-        if (!enabled || closed || !preferSourceResolution || !activity.hasWindowFocus()) return null
+        if (!enabled || closed || !preferSourceResolution || !window.decorView.hasWindowFocus()) return null
         val desired = requestedMode ?: return null
         val active = outputDisplay.mode
         if (active.modeId != desired.modeId) return null
@@ -224,10 +225,10 @@ class JaTvFrameRateMatcher(
         if (enabled) manager?.unregisterDisplayListener(listener)
         if (requestedMode != null) {
             try {
-                val attrs = activity.window.attributes
+                val attrs = window.attributes
                 attrs.preferredDisplayModeId = originalModePreference
                 attrs.preferredRefreshRate = originalRefreshPreference
-                activity.window.attributes = attrs
+                window.attributes = attrs
                 Log.i(tag, "FRAME_RATE_RESTORED previousPreference=$originalModePreference refreshPreference=$originalRefreshPreference")
             } catch (error: Exception) {
                 Log.w(tag, "FRAME_RATE_RESTORE_FAILED", error)

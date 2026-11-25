@@ -1,5 +1,6 @@
 package com.example.ja
 
+import android.app.Activity
 import android.view.ViewGroup
 import android.os.SystemClock
 import android.util.Log
@@ -65,6 +66,10 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DecoderCounters
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
@@ -101,6 +106,9 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     fun focusPreview(){previewRequest++}
     val groupFocus=FocusRequester()
     val groupList=LazyListState()
+    val sourceFocus=FocusRequester()
+    val sourceList=LazyListState()
+    var source by mutableStateOf("All Sources")
     var previewChannel by mutableStateOf<JaLiveChannel?>(null)
     var playingChannelId by mutableStateOf<String?>(null)
     var timelineScale=0f
@@ -164,15 +172,15 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     var view by mutableStateOf("United States")
     private data class CatalogIndex(
         val channels: List<JaLiveChannel>,
-        val groups: List<String>,
-        val channelsByGroup: Map<String, List<JaLiveChannel>>
+        val groupsBySource: Map<String,List<String>>,
+        val channelsBySourceGroup: Map<Pair<String,String>,List<JaLiveChannel>>
     )
     private var catalogIndex by mutableStateOf(
-        CatalogIndex(listOf(jaWeatherChannel()), JaLiveTvRules.views(), emptyMap())
+        CatalogIndex(listOf(jaWeatherChannel()),emptyMap(),emptyMap())
     )
     val channels get() = catalogIndex.channels
-    val indexedGroups get() = catalogIndex.groups
-    val channelsByGroup get() = catalogIndex.channelsByGroup
+    val sourceGroups get() = catalogIndex.groupsBySource[source].orEmpty()
+    val channelsBySourceGroup get() = catalogIndex.channelsBySourceGroup
     var catalogReady by mutableStateOf(false)
     var guide by mutableStateOf<JaLiveGuide?>(null)
     var loading by mutableStateOf(false)
@@ -220,11 +228,17 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                         val indexStart = SystemClock.elapsedRealtime()
                         catalogIndex = withContext(Dispatchers.Default) {
                             val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL } +
-                                jaDaddyLiveUsPilot
-                            val groups = JaLiveTvRules.views(channels.flatMap { it.categories }.toSet())
-                            CatalogIndex(channels, groups, groups.associateWith { group ->
-                                channels.filter { JaLiveTvRules.categoryMatches(group, it.categories) }
-                            })
+                                jaDaddyLiveUsPilot.map{it.copy(categories=it.categories+"source-daddylive")}
+                            val sourceGroups=JaLiveTvRules.sources().associateWith{sourceName->
+                                val sourceChannels=channels.filter{JaLiveTvRules.sourceMatches(sourceName,it.categories)}
+                                JaLiveTvRules.groupsForSource(sourceName,sourceChannels.flatMap{it.categories}.toSet())
+                            }
+                            val channelGroups=sourceGroups.flatMap{(sourceName,sourceViews)->sourceViews.map{sourceName to it}}
+                            val sourceIndex=channelGroups.associateWith{(sourceName,group)->channels.filter{channel->
+                                JaLiveTvRules.sourceMatches(sourceName,channel.categories)&&
+                                    (group=="Favorites"||group=="With EPG"||JaLiveTvRules.categoryMatches(group,channel.categories))
+                            }}
+                            CatalogIndex(channels,sourceGroups,sourceIndex)
                         }
                         indexedChannels = result.channels
                         android.util.Log.i("JA_IPTV_PERF", "CATALOG_INDEX ms=${SystemClock.elapsedRealtime() - indexStart}")
@@ -266,20 +280,24 @@ private val liveTimeFormat=DateTimeFormatter.ofPattern("h:mm a",Locale.US)
 private fun time(value:Long):String=liveTimeFormat.withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
 @Composable
-internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,modifier:Modifier=Modifier) {
-    JaScaledUi { JaLiveTvScreenContent(state,weather,onMainMenu,modifier) }
+internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,
+    matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,matchStreamQuality:Boolean=false,modifier:Modifier=Modifier) {
+    JaScaledUi { JaLiveTvScreenContent(state,weather,onMainMenu,matchTvFrameRate,matchTvResolution,matchStreamQuality,modifier) }
 }
 
 @Composable
-private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,modifier:Modifier) {
+private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,
+    matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,modifier:Modifier) {
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     var groupsFocused by remember{mutableStateOf(false)}
+    var sourcesFocused by remember{mutableStateOf(false)}
     var guideFocused by remember{mutableStateOf(false)}
     var previewFocused by remember { mutableStateOf(false) }
     var searchFocused by remember{mutableStateOf(false)}
     var focusedGroup by remember{mutableIntStateOf(0)}
+    var focusedSource by remember{mutableIntStateOf(0)}
     var searchOpen by remember{mutableStateOf(false)}
     var menuChannel by remember{mutableStateOf<JaLiveChannel?>(null)}
     val menuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
@@ -304,9 +322,10 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val programs=remember(state.guide,now/1_800_000,weather.zip){state.guide?.byChannel.orEmpty()+mapOf(JA_WEATHER_CHANNEL to jaWeatherPrograms(now,weather.zip))}
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
-    val groups=state.indexedGroups
-    val channelsByGroup=state.channelsByGroup
-    val candidates=remember(channelsByGroup,state.view){channelsByGroup[state.view].orEmpty()}
+    val groups=state.sourceGroups
+    val candidates=remember(state.channelsBySourceGroup,state.source,state.view){
+        state.channelsBySourceGroup[state.source to state.view].orEmpty()
+    }
     val epgTimeBucket=if(state.view=="With EPG")now/30_000 else 0L
     val available=remember(candidates,state.query,state.view,state.favorites,state.guide,epgTimeBucket){candidates.filter{channel->
         (channel.id!=JA_WEATHER_CHANNEL||state.view=="Favorites")
@@ -350,9 +369,14 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     fun selectGroup(group:String){
         if(state.view!=group){state.finishMove(false);state.view=group;state.returnChannel=null}
     }
+    fun selectSource(source:String){
+        if(state.source==source)return
+        state.finishMove(false);state.source=source;state.query="";state.returnChannel=null
+        scope.launch{withFrameNanos{};withFrameNanos{};runCatching{state.groupFocus.requestFocus()}}
+    }
     fun focusGroups(first:Boolean=false){
         state.sidebarOpen=true
-        if(first)selectGroup(groups.first())
+        if(first)selectGroup(groups.firstOrNull()?:"Favorites")
         scope.launch{
             state.groupList.scrollToItem(groups.indexOf(state.view).coerceAtLeast(0))
             withFrameNanos{};withFrameNanos{};runCatching{state.groupFocus.requestFocus()}
@@ -380,8 +404,18 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         withFrameNanos{};withFrameNanos{}
         if(runCatching{returnFocus.requestFocus();true}.getOrDefault(false))state.returnChannel=null
     }
-    BackHandler(!state.fullscreen&&menuChannel==null&&!searchOpen&&state.movingId==null&&(groupsFocused||guideFocused)){
-        if(state.sidebarOpen&&groupsFocused){state.sidebarOpen=false;onMainMenu()} else focusGroups()
+    BackHandler(!state.fullscreen&&menuChannel==null&&!searchOpen&&state.movingId==null&&(groupsFocused||sourcesFocused||guideFocused)){
+        if(state.sidebarOpen&&(groupsFocused||sourcesFocused)){state.sidebarOpen=false;onMainMenu()} else focusGroups()
+    }
+    LaunchedEffect(state.source,groups){
+        if(state.catalogReady&&state.view !in groups){
+            val next=when{
+                groups.contains("United States")&&state.source=="iptv-org.com"->"United States"
+                groups.contains("DaddyLive USA")->"DaddyLive USA"
+                else->groups.firstOrNull() ?: "Favorites"
+            }
+            state.view=next;state.returnChannel=null
+        }
     }
     BackHandler(state.movingId!=null){state.finishMove(false)}
     val scroll=state.timeline
@@ -405,8 +439,9 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
             else->false
         }
     }){
-        val sidebarWidth=if(state.sidebarOpen)minOf(180.dp,maxWidth*0.32f) else 0.dp
-        val guideWidth=(maxWidth-sidebarWidth-if(state.sidebarOpen)8.dp else 0.dp).coerceAtLeast(100.dp)
+        val sourceWidth=if(state.sidebarOpen)minOf(126.dp,maxWidth*0.14f) else 0.dp
+        val sidebarWidth=if(state.sidebarOpen)minOf(170.dp,maxWidth*0.20f) else 0.dp
+        val guideWidth=(maxWidth-sourceWidth-sidebarWidth-if(state.sidebarOpen)16.dp else 0.dp).coerceAtLeast(100.dp)
         val channelWidth=(guideWidth*0.28f).coerceIn(140.dp,250.dp)
         val timelineWidth=(guideWidth-channelWidth).coerceAtLeast(1.dp)
         val minuteWidth=JaLiveTvGuideRules.pixelsPerMinute(timelineWidth.value.toDouble()).toFloat().dp
@@ -424,10 +459,37 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         val previewWidth=minOf(300.dp,guideWidth*0.52f,maxHeight*0.28f*(16f/9))
         val previewHeight=previewWidth*(9f/16)
         Row(Modifier.fillMaxSize(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            if(state.sidebarOpen)Column(Modifier.width(sourceWidth).fillMaxHeight().background(Color(0xFF17212D),RoundedCornerShape(6.dp))
+                .onFocusChanged{sourcesFocused=it.hasFocus}.focusGroup()
+                .onPreviewKeyEvent{event->
+                    val key=event.nativeKeyEvent
+                    if(key.action!=KeyEvent.ACTION_DOWN)false else when(key.keyCode){
+                        KeyEvent.KEYCODE_DPAD_UP->{if(focusedSource==0)focusJaButton();focusedSource==0}
+                        KeyEvent.KEYCODE_DPAD_LEFT->{focusJaButton();true}
+                        else->false
+                    }
+                }){
+                Text("Source",Modifier.padding(start=10.dp,top=12.dp,bottom=8.dp),color=ColorGold,fontSize=15.sp)
+                LazyColumn(state=state.sourceList,modifier=Modifier.fillMaxWidth().weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp),contentPadding=PaddingValues(horizontal=5.dp,vertical=4.dp)){
+                    items(JaLiveTvRules.sources(),key={it},contentType={"iptv-source"}){source->
+                        TvFocusButton(onClick={selectSource(source)},modifier=Modifier.fillMaxWidth()
+                            .then(if(state.source==source)Modifier.focusRequester(state.sourceFocus) else Modifier)
+                            .onFocusChanged{if(it.isFocused)focusedSource=JaLiveTvRules.sources().indexOf(source)},
+                            colors=ButtonDefaults.buttonColors(containerColor=if(state.source==source)ColorGold else Color(0xFF263747),
+                                contentColor=if(state.source==source)Color.Black else Color.White)){
+                            Text(source,fontSize=11.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
             if(state.sidebarOpen)Column(Modifier.width(sidebarWidth).fillMaxHeight().background(Color(0xFF1B2735),RoundedCornerShape(6.dp))
                 .onFocusChanged{groupsFocused=it.hasFocus}.focusGroup()
                 .onPreviewKeyEvent{event->
                     val key=event.nativeKeyEvent
+                    if(key.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){
+                        if(key.action==KeyEvent.ACTION_DOWN)scope.launch{state.sourceList.scrollToItem(JaLiveTvRules.sources().indexOf(state.source).coerceAtLeast(0));withFrameNanos{};runCatching{state.sourceFocus.requestFocus()}}
+                        true
+                    }else
                     if(key.keyCode==KeyEvent.KEYCODE_DPAD_UP&&!searchFocused&&focusedGroup==0){
                         if(key.action==KeyEvent.ACTION_DOWN)focusJaButton()
                         true
@@ -495,12 +557,16 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                                         state.returnChannel = channel.id
                                     },
                                     onPlaying = { state.playbackStarted(channel) },
-                                    onAttached = { state.playerAttached = it }
+                                    onAttached = { state.playerAttached = it },
+                                    fallbackUrls = channel.embeddedPlayerFallbackUrls,
+                                    matchTvFrameRate=matchTvFrameRate,matchTvResolution=matchTvResolution,
+                                    matchStreamQuality=matchStreamQuality
                                 )
                             } else Text("Select the channel to watch", Modifier.align(Alignment.Center),
                                 color = Color.LightGray, fontSize = 12.sp)
                         }
                         else key(channel.id){JaLiveTvPlayback(channel,state.repository,state.fullscreen,
+                            matchTvFrameRate,matchTvResolution,matchStreamQuality,
                             onFullscreen={state.fullscreen=it;if(!it)state.returnChannel=channel.id.takeIf{id->id in channelMap}?:visible.firstOrNull()?.id},
                             onPlaying={state.playbackStarted(it)},onAttached={state.playerAttached=it})}
                     }
@@ -667,15 +733,22 @@ private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiv
 
 @Composable
 private fun JaLiveEmbeddedPlayback(
-    url: String, name: String, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit
+    url: String, name: String, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit,
+    fallbackUrls: List<String> = emptyList(),matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,
+    matchStreamQuality:Boolean=false
 ) {
+    var frameMatcher by remember(url){mutableStateOf<JaTvFrameRateMatcher?>(null)}
+    val qualityMatching=matchStreamQuality&&matchTvFrameRate&&matchTvResolution
+    var fallbackIndex by remember(url) { mutableIntStateOf(0) }
+    val activeUrl=(listOf(url)+fallbackUrls).getOrElse(fallbackIndex){url}
     val attached by rememberUpdatedState(onAttached)
     DisposableEffect(Unit) {
         attached(true)
         onDispose { attached(false) }
     }
-    var failed by remember(url) { mutableStateOf(false) }
+    var failed by remember(activeUrl) { mutableStateOf(false) }
     JaLivePresentation(true, onClose) {
+        JaLiveFrameMatcherHost(matchTvFrameRate,matchTvResolution){frameMatcher=it}
         if (failed) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -684,14 +757,17 @@ private fun JaLiveEmbeddedPlayback(
                     TvFocusButton(onClick = onClose) { Text("Back to guide") }
                 }
             }
-        } else GeckoExperimentalPlayer(url = url, diagnosticsLabel = name,
-            onMediaStarted = onPlaying, onFatalError = { failed = true })
+        } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name,
+            onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
+                if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
+            })
     }
 }
 
 /** A single session owns playback; fullscreen only changes the view hosting that session. */
 @Composable
 private fun JaLiveTvPlayback(channel:JaLiveChannel,repository:JaLiveTvRepository,fullscreen:Boolean,
+    matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,
     onFullscreen:(Boolean)->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit) {
     var revision by remember(channel.id){mutableIntStateOf(0)}
     var resolved by remember(channel.id){mutableStateOf<JaLiveChannel?>(null)}
@@ -712,6 +788,7 @@ private fun JaLiveTvPlayback(channel:JaLiveChannel,repository:JaLiveTvRepository
             }
         }
     }else key(revision){JaLiveTvSession(ready,fullscreen,onRetry={revision++},
+        matchTvFrameRate=matchTvFrameRate,matchTvResolution=matchTvResolution,matchStreamQuality=matchStreamQuality,
         onClose={onFullscreen(false)},onFullscreen={onFullscreen(true)},onPlaying=onPlaying,onAttached=onAttached)}
 }
 
@@ -733,6 +810,20 @@ internal fun JaLivePresentation(fullscreen:Boolean,onClose:()->Unit,content:@Com
     }else content()
 }
 
+@Composable
+private fun JaLiveFrameMatcherHost(enabled:Boolean,preferSourceResolution:Boolean,onMatcher:(JaTvFrameRateMatcher?)->Unit){
+    val context=LocalContext.current
+    val activity=context as? Activity
+    val view=LocalView.current
+    val window=(view.parent as? DialogWindowProvider)?.window?:activity?.window
+    val callback by rememberUpdatedState(onMatcher)
+    val matcher=remember(activity,window,enabled,preferSourceResolution){
+        if(enabled&&activity!=null&&window!=null)JaTvFrameRateMatcher(activity,preferSourceResolution,window) else null
+    }
+    SideEffect{callback(matcher)}
+    DisposableEffect(matcher){onDispose{matcher?.close();callback(null)}}
+}
+
 private data class JaLiveReconnect(val target:Int,val reason:String,val delayMs:Long)
 
 internal enum class JaIptvBuffer(
@@ -748,9 +839,12 @@ internal enum class JaIptvBuffer(
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()->Unit,onClose:()->Unit,
+    matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,
     onFullscreen:()->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit) {
     val context=LocalContext.current
     val buffer = remember(context) { PlayerControlSettings(context).iptvBuffer }
+    var frameMatcher by remember(channel){mutableStateOf<JaTvFrameRateMatcher?>(null)}
+    val qualityMatching=fullscreen&&matchStreamQuality&&matchTvFrameRate&&matchTvResolution
     val owner=LocalLifecycleOwner.current
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     var wantsPlayback by remember(channel){mutableStateOf(true)}
@@ -762,11 +856,26 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
     var error by remember(channel){mutableStateOf<String?>(null)}
     val reportPlaying by rememberUpdatedState(onPlaying)
     val reportAttached by rememberUpdatedState(onAttached)
+    val trackSelector=remember(channel,source,generation){DefaultTrackSelector(context)}
+    var decoderCounters by remember(channel,source,generation){mutableStateOf<DecoderCounters?>(null)}
+    var videoWidth by remember(channel,source,generation){mutableIntStateOf(0)}
+    var videoHeight by remember(channel,source,generation){mutableIntStateOf(0)}
+    val analyticsListener=remember(channel,source,generation){object:AnalyticsListener{
+        override fun onVideoEnabled(eventTime:AnalyticsListener.EventTime,counters:DecoderCounters){decoderCounters=counters}
+        override fun onVideoDisabled(eventTime:AnalyticsListener.EventTime,counters:DecoderCounters){
+            if(decoderCounters===counters)decoderCounters=null
+        }
+        override fun onVideoSizeChanged(eventTime:AnalyticsListener.EventTime,videoSize:VideoSize){
+            videoWidth=videoSize.width;videoHeight=videoSize.height
+            Log.i("JA_IPTV_PLAYER","VIDEO_SIZE channel=${channel.id} size=${videoSize.width}x${videoSize.height}")
+        }
+    }}
     val player=remember(channel,source,generation){
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
             .setUserAgent(headers["User-Agent"]?:"JA/2.5.0").setDefaultRequestProperties(headers)
         val builder = ExoPlayer.Builder(context)
+            .setTrackSelector(trackSelector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http)))
         if (buffer != JaIptvBuffer.DEFAULT) {
             val loadControl = DefaultLoadControl.Builder()
@@ -776,10 +885,36 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
             builder.setLoadControl(loadControl)
         }
         builder.build().apply{
+        addAnalyticsListener(analyticsListener)
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)
         setMediaItem(MediaItem.fromUri(channel.urls[source]));prepare();playWhenReady=wantsPlayback&&resumed
     }}
+    LaunchedEffect(player,frameMatcher,qualityMatching,decoderCounters,videoWidth,videoHeight){
+        var lastFrames=-1
+        var appliedHeight=0
+        while(isActive){
+            delay(1000)
+            val counters=decoderCounters
+            if(fullscreen&&player.isPlaying&&counters!=null&&videoWidth>=480&&videoHeight>=270){
+                counters.ensureUpdated()
+                val frames=counters.renderedOutputBufferCount
+                if(frames>0&&frames!=lastFrames){
+                    frameMatcher?.observe(frames,player.currentPosition.coerceAtLeast(0L)/1000.0,videoWidth,videoHeight)
+                    lastFrames=frames
+                }
+            }
+            val requestedHeight=if(qualityMatching)frameMatcher?.confirmedQualityHeight() else null
+            val targetHeight=requestedHeight?:Int.MAX_VALUE
+            if(appliedHeight!=targetHeight){
+                trackSelector.setParameters(trackSelector.buildUponParameters()
+                    .setMaxVideoSize(Int.MAX_VALUE,targetHeight).build())
+                appliedHeight=targetHeight
+                Log.i("JA_IPTV_PLAYER","QUALITY_LIMIT channel=${channel.id} outputHeight=${requestedHeight?:0} " +
+                    "active=${requestedHeight!=null}")
+            }
+        }
+    }
     fun reconnect(reason:String,finished:Boolean=false) {
         if(recovery!=null||error!=null)return
         failures[source]++
@@ -832,7 +967,8 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
         }
         player.addListener(listener);owner.lifecycle.addObserver(observer)
         Log.i("JA_LIVE_TV","OPEN channel=${channel.id} source=$source generation=$generation buffer=${buffer.name}")
-        onDispose{owner.lifecycle.removeObserver(observer);player.removeListener(listener);player.release();reportAttached(false);JaMusicService.setVideoActive(false)}
+        onDispose{owner.lifecycle.removeObserver(observer);player.removeListener(listener);player.removeAnalyticsListener(analyticsListener)
+            player.release();reportAttached(false);JaMusicService.setVideoActive(false)}
     }
     LaunchedEffect(player){
         var lastPosition=player.currentPosition
@@ -857,6 +993,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
         }
     }
     JaLivePresentation(fullscreen,onClose){
+    JaLiveFrameMatcherHost(fullscreen&&matchTvFrameRate,matchTvResolution){frameMatcher=it}
     Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)){
         AndroidView(factory={PlayerView(it).apply{
             layoutParams=ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
