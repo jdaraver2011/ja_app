@@ -1,0 +1,15 @@
+name: Build JA DaddyLive USA pilot
+on:
+  push:
+    branches: [pilot/daddylive-us]
+permissions:
+  contents: write
+jobs:
+  build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      run_checks: false
+      publish_update: false
+      build_variant: release
+      daddylive_us_pilot: true
+    secrets: inherit

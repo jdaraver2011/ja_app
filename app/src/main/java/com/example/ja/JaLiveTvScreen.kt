@@ -218,7 +218,8 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                     if (indexedChannels !== result.channels) {
                         val indexStart = SystemClock.elapsedRealtime()
                         catalogIndex = withContext(Dispatchers.Default) {
-                            val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL }
+                            val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL } +
+                                jaDaddyLiveUsPilot
                             val groups = JaLiveTvRules.views(channels.flatMap { it.categories }.toSet())
                             CatalogIndex(channels, groups, groups.associateWith { group ->
                                 channels.filter { JaLiveTvRules.categoryMatches(group, it.categories) }
@@ -232,7 +233,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                 }
                 val result=repository.channels(force){cached->
                     applyCatalog(cached)
-                    repository.cachedGuide(channels)?.let{guide=it}
+                    repository.cachedGuide(channels.filter { it.embeddedPlayerUrl == null })?.let{guide=it}
                 }
                 applyCatalog(result)
                 favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id})
@@ -242,14 +243,15 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
             }catch(e:CancellationException){throw e}catch(_:Exception){error="Channel catalog unavailable. Check your connection and retry."}
             finally{loading=false;catalogReady=true}
             if(channels.isEmpty())return@launch
+            val guideChannels = channels.filter { it.embeddedPlayerUrl == null }
             guideLoading=true;guideError=null
             val cacheStart = SystemClock.elapsedRealtime()
-            val cachedGuide = repository.cachedGuide(channels)
+            val cachedGuide = repository.cachedGuide(guideChannels)
             cachedGuide?.let{guide=it}
             android.util.Log.i("JA_IPTV_PERF", "GUIDE_CACHE hit=${cachedGuide != null} ms=${SystemClock.elapsedRealtime() - cacheStart}")
             val guideStart = SystemClock.elapsedRealtime()
             try{
-                guide=repository.guide(channels,force){partial->guide=partial}
+                guide=repository.guide(guideChannels,force){partial->guide=partial}
                 android.util.Log.i("JA_IPTV_PERF", "GUIDE_READY ms=${SystemClock.elapsedRealtime() - guideStart}")
             }
             catch(e:CancellationException){throw e}
@@ -365,7 +367,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         state.finishMove(false);menuGuard.open(remote);menuChannel=channel
     }
     fun closeMenu(){val channel=menuChannel;menuChannel=null;state.returnChannel=channel?.id}
-    fun play(channel:JaLiveChannel){state.tune(channel, state.previewChannel?.id == channel.id)}
+    fun play(channel:JaLiveChannel){state.tune(channel, channel.embeddedPlayerUrl != null || state.previewChannel?.id == channel.id)}
     LaunchedEffect(state.view){if(state.appliedView!=state.view){
         if(state.returnChannel==null)state.list.scrollToItem(0);state.appliedView=state.view
     }}
@@ -483,6 +485,20 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                             JaLivePresentation(state.fullscreen,{state.fullscreen=false;state.returnChannel=channel.id}){
                                 JaWeatherStarView(weather,Modifier.fillMaxSize(),onReady={state.playbackStarted(channel)})
                             }
+                        }
+                        else if (channel.embeddedPlayerUrl != null) {
+                            if (state.fullscreen) key(channel.id) {
+                                JaLiveEmbeddedPlayback(
+                                    channel.embeddedPlayerUrl, channel.name,
+                                    onClose = {
+                                        state.fullscreen = false
+                                        state.returnChannel = channel.id
+                                    },
+                                    onPlaying = { state.playbackStarted(channel) },
+                                    onAttached = { state.playerAttached = it }
+                                )
+                            } else Text("Select the channel to watch", Modifier.align(Alignment.Center),
+                                color = Color.LightGray, fontSize = 12.sp)
                         }
                         else key(channel.id){JaLiveTvPlayback(channel,state.repository,state.fullscreen,
                             onFullscreen={state.fullscreen=it;if(!it)state.returnChannel=channel.id.takeIf{id->id in channelMap}?:visible.firstOrNull()?.id},
@@ -646,6 +662,30 @@ private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiv
                 TvFocusButton(onClick=onClose,modifier=Modifier.fillMaxWidth(),colors=colors){Text("Close")}
             }
         }
+    }
+}
+
+@Composable
+private fun JaLiveEmbeddedPlayback(
+    url: String, name: String, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit
+) {
+    val attached by rememberUpdatedState(onAttached)
+    DisposableEffect(Unit) {
+        attached(true)
+        onDispose { attached(false) }
+    }
+    var failed by remember(url) { mutableStateOf(false) }
+    JaLivePresentation(true, onClose) {
+        if (failed) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Channel unavailable", color = Color.White)
+                    TvFocusButton(onClick = { failed = false }) { Text("Retry") }
+                    TvFocusButton(onClick = onClose) { Text("Back to guide") }
+                }
+            }
+        } else GeckoExperimentalPlayer(url = url, diagnosticsLabel = name,
+            onMediaStarted = onPlaying, onFatalError = { failed = true })
     }
 }
 

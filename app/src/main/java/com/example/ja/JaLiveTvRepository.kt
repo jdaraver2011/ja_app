@@ -32,7 +32,17 @@ import java.util.zip.GZIPInputStream
 
 @androidx.compose.runtime.Immutable
 internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>,
-    val headers:Map<String,Map<String,String>> = emptyMap(),val categories:Set<String> = emptySet())
+    val headers:Map<String,Map<String,String>> = emptyMap(),val categories:Set<String> = emptySet(),
+    val embeddedPlayerUrl: String? = null)
+
+// Explicit USA labels and IDs from the provider's public 24/7 lineup.
+internal val jaDaddyLiveUsPilot = if (BuildConfig.JA_DADDYLIVE_US_PILOT) {
+    listOf("51" to "ABC USA", "302" to "A&E USA", "303" to "AMC USA", "283" to "Antenna TV USA")
+        .map { (id, name) ->
+            JaLiveChannel("daddylive:$id", name, "", emptyList(), categories = setOf("daddylive-usa"),
+                embeddedPlayerUrl = "https://thedaddy.li/stream/stream-$id.php")
+        }
+} else emptyList()
 @androidx.compose.runtime.Immutable
 internal data class JaLiveProgram(val channel:String,val start:Long,val end:Long,val title:String)
 @androidx.compose.runtime.Immutable

@@ -80,6 +80,7 @@ public final class JaLiveTvRules {
         if(availableCategories!=null)for(String value:availableCategories)
             if(value!=null&&!value.isBlank()&&!known.contains(value))extras.add(value);
         Set<String> labels=new HashSet<>();for(String view:result)labels.add(view.toLowerCase(Locale.ROOT));
+        if(extras.remove("daddylive-usa"))result.add(3,"DaddyLive USA");
         for(String value:extras){String label=displayCategory(value);if(labels.add(label.toLowerCase(Locale.ROOT)))result.add(label);}
         return result;
     }
