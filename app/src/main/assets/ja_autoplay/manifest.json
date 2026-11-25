@@ -20,18 +20,30 @@
     },
     {
       "matches": [
+        "http://ntv.cx/*",
         "https://ntv.cx/*",
+        "http://*.ntv.cx/*",
         "https://*.ntv.cx/*",
+        "http://ntv.st/*",
         "https://ntv.st/*",
+        "http://*.ntv.st/*",
         "https://*.ntv.st/*",
+        "http://ntvs.cx/*",
         "https://ntvs.cx/*",
+        "http://*.ntvs.cx/*",
         "https://*.ntvs.cx/*",
+        "http://ntvstream.cx/*",
         "https://ntvstream.cx/*",
-        "https://*.ntvstream.cx/*"
+        "http://*.ntvstream.cx/*",
+        "https://*.ntvstream.cx/*",
+        "http://cryptotiptv.pro/*",
+        "https://cryptotiptv.pro/*",
+        "http://*.cryptotiptv.pro/*",
+        "https://*.cryptotiptv.pro/*"
       ],
       "js": ["ntv-ui.js"],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": true
     },
     {
       "matches": [
