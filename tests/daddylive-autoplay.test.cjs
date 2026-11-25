@@ -112,3 +112,48 @@ assert.equal(video.volume, 1);
 assert.equal(onProgress, null);
 assert.deepEqual(reports, ['DEFAULT_AUDIO_UNMUTE_REQUESTED']);
 console.log('PASS: DaddyLive unmutes on first playback progress after a paused startup');
+
+const ntvUi = fs.readFileSync(root + 'ntv-ui.js', 'utf8');
+let scan;
+let observerDisconnected = false;
+function pageNode(text, rect) {
+  const styles = {};
+  const attributes = {};
+  return {
+    innerText: text, textContent: text, title: '', dataset: {}, isConnected: true,
+    style: {setProperty(name, value) { styles[name] = value; }},
+    setAttribute(name, value) { attributes[name] = value; },
+    getAttribute(name) { return attributes[name] || null; },
+    querySelector() { return null; },
+    getBoundingClientRect() { return rect; },
+    _styles: styles, _attributes: attributes
+  };
+}
+const promo = pageNode('Want a clean ad experience? Watch without interruptions on cryptotiptv.pro Try it',
+  {left: 0, top: 0, width: 1920, height: 120});
+const nav = pageNode('Raptor Channels Discord Favorites Menu',
+  {left: 0, top: 910, width: 1920, height: 150});
+const promoTextNode = {nodeValue: 'Want a clean ad experience?', parentElement: promo};
+const ntvWindow = {addEventListener() {}};
+const ntvDocument = {
+  hidden: false, body: {}, documentElement: {setAttribute() {}},
+  querySelectorAll() { return [promo, nav]; },
+  createTreeWalker() {
+    let visited = false;
+    return {nextNode() { if (visited) return false; visited = true; this.currentNode = promoTextNode; return true; }};
+  }
+};
+let ntvTimer;
+vm.runInNewContext(ntvUi, {
+  globalThis: {}, window: ntvWindow, document: ntvDocument,
+  NodeFilter: {SHOW_TEXT: 4}, innerHeight: 1080, innerWidth: 1920,
+  getComputedStyle() { return {display: 'block', visibility: 'visible', opacity: '1'}; },
+  setTimeout(callback) { ntvTimer = callback; return 1; }, clearTimeout() {},
+  MutationObserver: class { observe() {} disconnect() { observerDisconnected = true; } }
+});
+assert.equal(typeof ntvTimer, 'function');
+ntvTimer();
+assert.equal(promo._styles.display, 'none');
+assert.equal(nav._styles.display, 'none');
+assert.equal(observerDisconnected, true);
+console.log('PASS: NTV promo and bottom site navigation are removed to expose player controls');

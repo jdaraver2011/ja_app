@@ -8,7 +8,7 @@
   let scanTimer = 0;
   let scanCount = 0;
   let promoRemoved = false;
-  let bottomNavigationPinned = false;
+  let bottomNavigationHidden = false;
   let observer = null;
 
   const textOf = node => `${node.innerText || node.textContent || ''} ${node.getAttribute?.('aria-label') || ''} ${node.title || ''}`
@@ -38,51 +38,46 @@
     return Array.from(document.querySelectorAll('header, nav, [role="banner"], [role="navigation"], section, footer, div'));
   }
 
-  function hidePromo(nodes) {
-    const matches = [];
-    for (const node of nodes) {
-      if (hidden.has(node) || containsMedia(node)) continue;
-      const text = textOf(node);
-      if (!promoText.test(text)) continue;
-      const rect = visibleRect(node);
-      if (!rect || rect.top > innerHeight * 0.24 || rect.width < innerWidth * 0.58 ||
-          rect.height > innerHeight * 0.30) continue;
-      matches.push({node, area: rect.width * rect.height});
+  function hidePromo() {
+    const detailed = [];
+    const fallback = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const textNode = walker.currentNode;
+      if (!promoText.test((textNode.nodeValue || '').replace(/\s+/g, ' ').trim())) continue;
+      let node = textNode.parentElement;
+      for (let depth = 0; node && depth < 7; depth++, node = node.parentElement) {
+        if (node === document.body || node === document.documentElement || hidden.has(node) || containsMedia(node)) continue;
+        const rect = visibleRect(node);
+        if (!rect || rect.top > innerHeight * 0.24 || rect.width < innerWidth * 0.42 ||
+            rect.height > innerHeight * 0.30) continue;
+        const match = {node, area: rect.width * rect.height};
+        fallback.push(match);
+        if (/cryptotiptv\.pro|\btry\s+it\b/i.test(textOf(node))) detailed.push(match);
+      }
     }
-    matches.sort((a, b) => a.area - b.area);
+    const matches = detailed.length ? detailed : fallback;
+    matches.sort((a, b) => b.area - a.area);
     return matches.length ? hide(matches[0].node, 'promo') : false;
   }
 
-  function pinBottomNavigation(nodes) {
+  function hideBottomNavigation(nodes) {
     const terms = ['channels', 'discord', 'favorites', 'menu'];
     const matches = [];
     for (const node of nodes) {
       if (hidden.has(node)) continue;
-      const text = textOf(node);
-      if (!terms.every(term => text.includes(term))) continue;
       const rect = visibleRect(node);
       if (!rect || rect.width < innerWidth * 0.35 || rect.height > innerHeight * 0.36 ||
           rect.top < innerHeight * 0.55) continue;
+      const text = textOf(node);
+      if (!terms.every(term => text.includes(term))) continue;
       matches.push({node, area: rect.width * rect.height});
     }
     matches.sort((a, b) => a.area - b.area);
     const node = matches[0]?.node;
-    if (!node || node.dataset.jaNtvNavPinned === 'true') return false;
-    node.dataset.jaNtvNavPinned = 'true';
-    node.style.setProperty('position', 'fixed', 'important');
-    node.style.setProperty('left', '50%', 'important');
-    node.style.setProperty('right', 'auto', 'important');
-    node.style.setProperty('top', 'auto', 'important');
-    node.style.setProperty('bottom', '0', 'important');
-    node.style.setProperty('transform', 'translateX(-50%)', 'important');
-    node.style.setProperty('z-index', '2147483647', 'important');
-    node.style.setProperty('max-width', '100vw', 'important');
-    node.style.setProperty('box-sizing', 'border-box', 'important');
-    node.style.setProperty('max-height', '45vh', 'important');
-    node.style.setProperty('visibility', 'visible', 'important');
-    node.style.setProperty('opacity', '1', 'important');
-    document.documentElement.setAttribute('data-ja-ntv-nav-pinned', 'true');
-    return true;
+    const didHide = hide(node, 'navigation');
+    if (didHide) document.documentElement.setAttribute('data-ja-ntv-nav-hidden', 'true');
+    return didHide;
   }
 
   function scan() {
@@ -90,17 +85,17 @@
     if (!document.body || document.hidden) return;
     scanCount++;
     const nodes = candidates();
-    promoRemoved = hidePromo(nodes) || promoRemoved;
-    bottomNavigationPinned = pinBottomNavigation(nodes) || bottomNavigationPinned;
+    promoRemoved = hidePromo() || promoRemoved;
+    bottomNavigationHidden = hideBottomNavigation(nodes) || bottomNavigationHidden;
     if (promoRemoved) document.documentElement.setAttribute('data-ja-ntv-chrome-trimmed', 'true');
-    if ((promoRemoved && bottomNavigationPinned) || scanCount >= 120) {
+    if ((promoRemoved && bottomNavigationHidden) || scanCount >= 120) {
       observer?.disconnect();
       observer = null;
     }
   }
 
   function schedule() {
-    if (scanTimer || document.hidden || scanCount >= 120 || (promoRemoved && bottomNavigationPinned)) return;
+    if (scanTimer || document.hidden || scanCount >= 120 || (promoRemoved && bottomNavigationHidden)) return;
     scanTimer = setTimeout(scan, 250);
   }
 
