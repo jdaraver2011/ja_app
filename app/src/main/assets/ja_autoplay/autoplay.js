@@ -7,6 +7,8 @@
   window.__jaAutoStart11 = true;
   const label = '[JA_AUTOSTART]';
   const frame = window === window.top ? 'top' : 'iframe';
+  const daddyFrame = frame === 'iframe' && location.protocol === 'https:' &&
+    location.hostname === 'dembed.st' && location.pathname === '/premiumtv/daddy.php';
   const selectors = [
     '.vjs-big-play-button', '.jw-display-icon-container .jw-icon-display',
     '.plyr__control--overlaid', '.fp-play',
@@ -14,6 +16,7 @@
     'button[aria-label="Start playback"]', '.play-button[role="button"]'
   ];
   let tries = 0, activated = false, finished = false;
+  let daddyVideoAttempted = false;
   const maxTries = 15;
   const log = (...args) => console.info(label, frame, location.hostname, ...args);
   function visible(el) {
@@ -29,11 +32,47 @@
     clearInterval(timer);
     log(reason);
   }
+  function daddyPlayControl() {
+    const player = document.querySelector('#player');
+    if (!player) return null;
+    const known = player.querySelectorAll(
+      '.play-wrapper[data-poster], .jw-display-icon-container .jw-icon-display, .vjs-big-play-button'
+    );
+    const labelled = [...player.querySelectorAll('button, [role="button"]')].filter(control =>
+      [control.getAttribute('aria-label'), control.getAttribute('title'), control.textContent]
+        .some(text => /^(?:tap to play|click to play|play|start playback)$/i.test(text?.trim() || ''))
+    );
+    return [...known, ...labelled].find(control => {
+      if (!visible(control) || control.disabled || control.getAttribute('aria-disabled') === 'true') return false;
+      const bounds = control.getBoundingClientRect();
+      const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+      return !!hit && control.contains(hit);
+    });
+  }
+  function tryDaddyStart(videos) {
+    const control = daddyPlayControl();
+    if (control) {
+      log('Trying DaddyLive play control');
+      try { control.click(); } catch (error) { log('Control click failed:', error.name || 'unknown'); }
+      stop('Control attempt complete; manual Play remains available');
+      return;
+    }
+    const video = videos.find(video => video.currentSrc && video.paused && !video.ended && visible(video));
+    if (!daddyVideoAttempted && video) {
+      daddyVideoAttempted = true;
+      try {
+        video.play()?.then(() => stop('video.play succeeded'))
+          .catch(error => log('video.play rejected:', error.name || 'unknown'));
+      } catch (error) { log('video.play error:', error.name || 'unknown'); }
+    }
+    if (tries >= maxTries) stop('No recognized DaddyLive play control');
+  }
   function tick() {
     if (finished) return;
     tries++;
     const videos = [...document.querySelectorAll('video')];
     if (videos.some(v => !v.paused && v.readyState >= 2)) return stop('Playback detected');
+    if (daddyFrame) return tryDaddyStart(videos);
     // First try a real HTML5 video in this frame.
     for (const video of videos) {
       if (!visible(video) || !video.paused || video.ended) continue;

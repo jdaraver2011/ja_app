@@ -120,6 +120,7 @@ jobs:
           done < <(find app/src/main/assets -name '*.js' -print0)
           node tests/music-canvas-size.test.cjs
           node tests/movy-landing.test.cjs
+          node tests/daddylive-autoplay.test.cjs
           node tests/source-status.test.cjs
           node tests/video-lookup.test.cjs
           node tests/vidfast-api.test.cjs
