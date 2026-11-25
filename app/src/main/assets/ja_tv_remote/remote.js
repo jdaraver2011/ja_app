@@ -1818,6 +1818,18 @@
     }
   }
 
+  const daddyLiveFrame = window !== window.top && location.origin === 'https://dembed.st' &&
+    location.pathname === '/premiumtv/daddy.php';
+  if (daddyLiveFrame) {
+    // Live streams can first start after the generic preferences timer ends.
+    document.addEventListener('timeupdate', function unmuteDaddyLive(event) {
+      const video = event.target;
+      if (video !== currentVideo() || video.paused || video.readyState < 2 || video.currentTime <= 0) return;
+      document.removeEventListener('timeupdate', unmuteDaddyLive, true);
+      audioChecked = startupRequestUnmute(video);
+    }, true);
+  }
+
   function finishStartupPreferences(complete, reason='') {
     if (defaultsTimer) clearInterval(defaultsTimer);
     defaultsTimer = null;
@@ -1972,6 +1984,10 @@
         if (!controlMode && !video.paused) hideWhenPlaying(400);
         return;
       case 'audio':
+        if (daddyLiveFrame) {
+          advanceStartup('done');
+          return;
+        }
         if (startupRequestUnmute(video)) {
           audioChecked=true;
           advanceStartup('done');

@@ -1,6 +1,6 @@
 // JA Experimental Auto-Start v1.1 — installed only when Settings enables it.
 // Executes in each HTTP(S) frame, including cross-origin player iframes.
-// No coordinate clicks, links, overlays, or repeated synthetic clicks.
+// Only activate recognized player controls, with no coordinate clicks or links.
 (() => {
   'use strict';
   if (window.__jaAutoStart11) return;
@@ -17,6 +17,8 @@
   ];
   let tries = 0, activated = false, finished = false;
   let daddyVideoAttempted = false;
+  const daddyControlsAttempted = new WeakSet();
+  let daddyControlAttempts = 0;
   const maxTries = 15;
   const log = (...args) => console.info(label, frame, location.hostname, ...args);
   function visible(el) {
@@ -33,39 +35,49 @@
     log(reason);
   }
   function daddyPlayControl() {
+    const prompt = /^(?:tap|click) to play$/i;
+    const labels = control => [
+      control.getAttribute('aria-label'), control.getAttribute('title'),
+      control.textContent?.trim().replace(/\s+/g, ' ')
+    ];
+    // A provider prompt may be a plain element outside the JW player.
+    const prompts = [...document.querySelectorAll('button, [role="button"], [aria-label], [title], div, span')]
+      .filter(control => labels(control).some(text => prompt.test(text?.trim() || '')))
+      .reverse();
     const player = document.querySelector('#player');
-    if (!player) return null;
-    const known = player.querySelectorAll(
-      '.play-wrapper[data-poster], .jw-display-icon-container .jw-icon-display, .vjs-big-play-button'
-    );
-    const labelled = [...player.querySelectorAll('button, [role="button"]')].filter(control =>
-      [control.getAttribute('aria-label'), control.getAttribute('title'), control.textContent]
-        .some(text => /^(?:tap to play|click to play|play|start playback)$/i.test(text?.trim() || ''))
-    );
-    return [...known, ...labelled].find(control => {
-      if (!visible(control) || control.disabled || control.getAttribute('aria-disabled') === 'true') return false;
+    const controls = [...(player?.querySelectorAll(
+      '.play-wrapper[data-poster], .jw-icon-display, .vjs-big-play-button, button, [role="button"]'
+    ) || [])].filter(control => control.matches('.play-wrapper[data-poster], .vjs-big-play-button') ||
+      labels(control).some(text => /^(?:play|start playback)$/i.test(text?.trim() || '')));
+    return [...prompts, ...controls].find(control => {
+      if (daddyControlsAttempted.has(control) || !visible(control) ||
+          control.disabled || control.getAttribute('aria-disabled') === 'true') return false;
       const bounds = control.getBoundingClientRect();
       const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
       return !!hit && control.contains(hit);
     });
   }
   function tryDaddyStart(videos) {
-    const control = daddyPlayControl();
+    const control = daddyControlAttempts < 2 && daddyPlayControl();
     if (control) {
-      log('Trying DaddyLive play control');
+      // A click can reveal a second prompt. Do not click its original subtree again.
+      for (let node = control; node && /^(?:tap|click) to play$/i.test(node.textContent?.trim().replace(/\s+/g, ' ')); node = node.parentElement) {
+        daddyControlsAttempted.add(node);
+      }
+      daddyControlsAttempted.add(control);
+      daddyControlAttempts++;
+      log('DaddyLive play control detected; activating', daddyControlAttempts);
       try { control.click(); } catch (error) { log('Control click failed:', error.name || 'unknown'); }
-      stop('Control attempt complete; manual Play remains available');
       return;
     }
     const video = videos.find(video => video.currentSrc && video.paused && !video.ended && visible(video));
     if (!daddyVideoAttempted && video) {
       daddyVideoAttempted = true;
       try {
-        video.play()?.then(() => stop('video.play succeeded'))
-          .catch(error => log('video.play rejected:', error.name || 'unknown'));
+        video.play()?.catch(error => log('video.play rejected:', error.name || 'unknown'));
       } catch (error) { log('video.play error:', error.name || 'unknown'); }
     }
-    if (tries >= maxTries) stop('No recognized DaddyLive play control');
+    if (tries >= 30) stop('DaddyLive startup window ended');
   }
   function tick() {
     if (finished) return;
