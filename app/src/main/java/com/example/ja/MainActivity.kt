@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.input.key.onKeyEvent
@@ -71,6 +72,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -331,6 +333,7 @@ class MainActivity : ComponentActivity() {
     // Match frame rate by default on televisions; phones remain disabled.
     // Explicit prior choices persist. Both matching options default on for TV.
     var matchTvFrameRate by remember { mutableStateOf(settings.matchTvFrameRate) }
+    var iptvBuffer by remember { mutableStateOf(settings.iptvBuffer) }
     var matchTvResolution by remember { mutableStateOf(settings.matchTvResolution) }
     var matchStreamQuality by remember { mutableStateOf(settings.matchStreamQuality) }
     var adBlockerMode by remember { mutableStateOf(settings.adBlockerMode) }
@@ -804,6 +807,19 @@ class MainActivity : ComponentActivity() {
     }
     val musicActive by musicPlayback.collectAsState(initial = false)
     val playbackBusy = playback != null || playbackLoading || liveActive || musicActive || weatherOpen
+    val idleCheckChannels = liveTv.channels
+    val idleChecksAllowed = !playbackBusy && !exiting && (tab != "IPTV" || liveTv.previewChannel == null)
+    LaunchedEffect(lifecycleOwner, idleChecksAllowed, idleCheckChannels) {
+        if (idleChecksAllowed && idleCheckChannels.any { it.urls.isNotEmpty() }) {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                delay(15_000)
+                while (isActive) {
+                    liveTv.repository.checkIdleSources(idleCheckChannels)
+                    delay(45_000)
+                }
+            }
+        }
+    }
     LaunchedEffect(playbackBusy, catalogueGeneration, catalogueDate) {
         JaVidSrcCatalog.playbackBusy(playbackBusy)
         if (!playbackBusy) {
@@ -1367,6 +1383,17 @@ class MainActivity : ComponentActivity() {
                                 blockerToolsError?.let { Text(it, color = Color(0xFFFFC48A), textAlign = TextAlign.Center) }
                             }
                             "Player" -> {
+                                Text("IPTV buffer size", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                Text("Applies the next time you open a native IPTV channel. Larger buffers may help intermittent stalls.",
+                                    color = Color.LightGray, textAlign = TextAlign.Center)
+                                JaIptvBuffer.entries.forEach { option ->
+                                    TvSettingsToggle(option.label, iptvBuffer == option) { selected ->
+                                        if (selected) {
+                                            iptvBuffer = option
+                                            settings.iptvBuffer = option
+                                        }
+                                    }
+                                }
                                 Text("Player controls", style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 Text("Choose which controls appear over GeckoView. Android's system Back action still exits playback.",
                                     color = Color.LightGray, textAlign = TextAlign.Center)
@@ -2108,6 +2135,12 @@ internal class PlayerControlSettings(context: Context) {
     var showIptvTab: Boolean
         get() = prefs.getBoolean("show_iptv_tab", true)
         set(value) { prefs.edit().putBoolean("show_iptv_tab", value).apply() }
+    var iptvBuffer: JaIptvBuffer
+        get() {
+            val saved = prefs.getString("iptv_buffer", null)
+            return JaIptvBuffer.entries.firstOrNull { it.name == saved } ?: JaIptvBuffer.DEFAULT
+        }
+        set(value) { prefs.edit().putString("iptv_buffer", value.name).apply() }
     var showBack: Boolean
         get() = prefs.getBoolean("back", false)
         set(value) { prefs.edit().putBoolean("back", value).apply() }

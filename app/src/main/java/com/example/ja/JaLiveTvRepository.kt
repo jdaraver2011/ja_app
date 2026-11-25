@@ -13,10 +13,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Request
+import okhttp3.Response
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
@@ -27,22 +32,15 @@ import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
 import java.util.Locale
 import java.util.zip.GZIPInputStream
 
 @androidx.compose.runtime.Immutable
 internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>,
     val headers:Map<String,Map<String,String>> = emptyMap(),val categories:Set<String> = emptySet(),
-    val embeddedPlayerUrl: String? = null)
-
-// Explicit USA labels and IDs from the provider's public 24/7 lineup.
-internal val jaDaddyLiveUsPilot = if (BuildConfig.JA_DADDYLIVE_US_PILOT) {
-    listOf("51" to "ABC USA", "302" to "A&E USA", "303" to "AMC USA", "283" to "Antenna TV USA")
-        .map { (id, name) ->
-            JaLiveChannel("daddylive:$id", name, "", emptyList(), categories = setOf("daddylive-usa"),
-                embeddedPlayerUrl = "https://thedaddy.li/stream/stream-$id.php")
-        }
-} else emptyList()
+    val embeddedPlayerUrl: String? = null, val xmlTvGuideId: String? = null)
 @androidx.compose.runtime.Immutable
 internal data class JaLiveProgram(val channel:String,val start:Long,val end:Long,val title:String)
 @androidx.compose.runtime.Immutable
@@ -60,6 +58,13 @@ internal class JaLiveTvRepository(private val context:Context) {
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
     private val client=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS)
         .callTimeout(120,TimeUnit.SECONDS).build()
+    private val idleProbeClient by lazy {
+        client.newBuilder().followRedirects(false).followSslRedirects(false)
+            .callTimeout(5, TimeUnit.SECONDS).build()
+    }
+    private enum class ProbeResult { REACHABLE, MISSING, UNKNOWN }
+    private data class RecentProbe(val result: ProbeResult, val expiresAt: Long)
+    private val idleProbes = ConcurrentHashMap<String, RecentProbe>()
     private fun request(url:String)=Request.Builder().url(url).header("User-Agent","JA/2.4.6 (https://github.com/jdaraver2011/ja_app)").build()
     private fun text(url:String,limit:Long,timeoutSeconds:Long=120):String = client.newCall(request(url)).also{it.timeout().timeout(timeoutSeconds,TimeUnit.SECONDS)}.execute().use { r ->
         if(!r.isSuccessful)throw IOException("HTTP ${r.code}")
@@ -218,13 +223,70 @@ internal class JaLiveTvRepository(private val context:Context) {
         require(channels.isNotEmpty())
         return JaLiveChannels(channels,saved,verified,doc.optJSONObject("counts")?.has("categories")==true)
     }
-    suspend fun playbackChannel(channel:JaLiveChannel,force:Boolean=false):JaLiveChannel =
-        if(!force)memoryCatalog?.first?.channels?.firstOrNull{it.id==channel.id}
+    suspend fun playbackChannel(channel:JaLiveChannel,force:Boolean=false):JaLiveChannel {
+        val resolved=if(!force)memoryCatalog?.first?.channels?.firstOrNull{it.id==channel.id}
             ?:channels(false).channels.firstOrNull{it.id==channel.id}?:throw IOException("Channel no longer verified live")
         else channels(true).channels.firstOrNull{it.id==channel.id}?:throw IOException("Channel no longer verified live")
+        val now=android.os.SystemClock.elapsedRealtime()
+        val urls=resolved.urls.sortedBy { url ->
+            idleProbes[url]?.let { it.result == ProbeResult.MISSING && it.expiresAt > now } == true
+        }
+        return resolved.copy(urls=urls)
+    }
+
+    /** Check a small rotation of native HLS sources, without opening players or hiding channels. */
+    suspend fun checkIdleSources(channels: List<JaLiveChannel>) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val sources = channels.asSequence().filter { it.embeddedPlayerUrl == null }
+            .flatMap { channel -> channel.urls.asSequence().map { channel to it } }
+            .filter { (_, url) ->
+                val parsed = url.toHttpUrlOrNull()
+                parsed?.isHttps == true && parsed.encodedPath.endsWith(".m3u8", ignoreCase = true) &&
+                    (idleProbes[url]?.expiresAt ?: 0) <= now
+            }.distinctBy { it.second }.take(2).toList()
+        for ((channel, url) in sources) {
+            currentCoroutineContext().ensureActive()
+            val builder = request(url).newBuilder()
+            channel.headers[url].orEmpty().forEach { (name, value) -> builder.header(name, value) }
+            val result = probeHls(builder.header("Range", "bytes=0-4095").build())
+            val ttl = if (result == ProbeResult.UNKNOWN) 30 * 60_000L else 6 * 60 * 60_000L
+            idleProbes[url] = RecentProbe(result, android.os.SystemClock.elapsedRealtime() + ttl)
+            Log.i("JA_LIVE_TV", "IDLE_SOURCE_CHECK channel=${channel.id} result=$result")
+        }
+    }
+
+    private suspend fun probeHls(request: Request): ProbeResult = suspendCancellableCoroutine { continuation ->
+        val call = idleProbeClient.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) = continuation.resume(ProbeResult.UNKNOWN)
+            override fun onResponse(call: Call, response: Response) {
+                val result = response.use {
+                    when {
+                        it.code == 404 || it.code == 410 -> ProbeResult.MISSING
+                        !it.isSuccessful -> ProbeResult.UNKNOWN
+                        else -> try {
+                            val source = it.body?.source()
+                            if (source != null && source.request(7) && source.readUtf8(7) == "#EXTM3U")
+                                ProbeResult.REACHABLE else ProbeResult.UNKNOWN
+                        } catch (_: IOException) { ProbeResult.UNKNOWN }
+                    }
+                }
+                continuation.resume(result)
+            }
+        })
+    }
 
     private fun signature(channels:List<JaLiveChannel>):String = java.security.MessageDigest.getInstance("SHA-256")
-        .digest((channels.map{it.id}.sorted().joinToString("\n")+"\npluto-v1").toByteArray()).joinToString(""){"%02x".format(it)}
+        .digest((channels.mapNotNull { channel ->
+            if (channel.embeddedPlayerUrl == null) channel.id
+            else channel.xmlTvGuideId?.let { "${channel.id}:$it" }
+        }.sorted().joinToString("\n")+"\npluto-v1").toByteArray()).joinToString(""){"%02x".format(it)}
+
+    suspend fun cachedGuideForDisplay(channels: List<JaLiveChannel>): JaLiveGuide? =
+        cachedGuide(channels) ?: if (channels.any { it.xmlTvGuideId != null }) {
+            cachedGuide(channels.filter { it.embeddedPlayerUrl == null })
+        } else null
     suspend fun cachedGuide(channels:List<JaLiveChannel>):JaLiveGuide? = withContext(Dispatchers.IO){
         val key=signature(channels)
         memoryGuide?.takeIf{it.first==key}?.let{return@withContext it.second}
@@ -243,13 +305,16 @@ internal class JaLiveTvRepository(private val context:Context) {
     suspend fun guide(channels:List<JaLiveChannel>,force:Boolean=false,onPartial:suspend(JaLiveGuide)->Unit={}):JaLiveGuide = withContext(Dispatchers.IO){guideLock.withLock{
         val began=android.os.SystemClock.elapsedRealtime()
         val now=System.currentTimeMillis();val key=signature(channels)
-        val cached=cachedGuide(channels)
-        if(!force&&cached!=null){
+        val exactCache=cachedGuide(channels)
+        if(!force&&exactCache!=null){
             val rebuiltAt=File(root,"guide-$key.json").lastModified()
-            val coversNow=cached.programs.any{it.start<=now&&it.end>now}
+            val coversNow=exactCache.programs.any{it.start<=now&&it.end>now}
             if((coversNow&&!refreshDueAfterSix(rebuiltAt,now))||
-                (!cached.saved&&JaLiveTvRules.fresh(cached.fetched,now,21_600_000)))return@withContext cached
+                (!exactCache.saved&&JaLiveTvRules.fresh(exactCache.fetched,now,21_600_000)))return@withContext exactCache
         }
+        val cached=exactCache ?: if (channels.any { it.xmlTvGuideId != null }) {
+            cachedGuide(channels.filter { it.embeddedPlayerUrl == null })
+        } else null
         val cancellation=currentCoroutineContext()
         suspend fun loadFeed(url:String,name:String,limit:Long,aliases:Map<String,String>):Feed? {
             val file=File(root,name);var stale=false
@@ -302,9 +367,13 @@ internal class JaLiveTvRepository(private val context:Context) {
         result
     }}
     private fun parseGuide(file:File,channels:List<JaLiveChannel>,now:Long,providerAliases:Map<String,String>,checkActive:()->Unit):List<JaLiveProgram> {
-        val ids=channels.associateBy{it.id}
-        val bases=channels.groupBy{JaLiveTvRules.baseId(it.id)}
-        val names=if(providerAliases.isNotEmpty())emptyMap() else channels.flatMap{channel -> JaLiveTvRules.guideKeys(channel.id,channel.name).map{it to channel}}.groupBy({it.first},{it.second})
+        val nativeChannels=channels.filter { it.embeddedPlayerUrl == null }
+        val ids=nativeChannels.associateBy{it.id}
+        val bases=nativeChannels.groupBy{JaLiveTvRules.baseId(it.id)}
+        val names=if(providerAliases.isNotEmpty())emptyMap() else nativeChannels.flatMap{channel -> JaLiveTvRules.guideKeys(channel.id,channel.name).map{it to channel}}.groupBy({it.first},{it.second})
+        val extraIds=if(providerAliases.isNotEmpty())emptyMap() else channels.mapNotNull { channel ->
+            channel.xmlTvGuideId?.let { it to channel.id }
+        }.groupBy({it.first},{it.second})
         val aliases=providerAliases.toMutableMap();val guideNames=mutableMapOf<String,MutableSet<String>>()
         val candidates=mutableMapOf<String,MutableSet<String>>()
         val keysByGuide=mutableMapOf<String,MutableSet<String>>()
@@ -314,7 +383,7 @@ internal class JaLiveTvRepository(private val context:Context) {
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES,false)
             parser.setInput(input,"UTF-8")
             var event=parser.eventType;var guideId="";var channelMode=false;var schedule=false
-            var start=0L;var end=0L;var programId="";var title=""
+            var start=0L;var end=0L;var programId="";var extraProgramIds=emptyList<String>();var title=""
             while(event!=XmlPullParser.END_DOCUMENT) {
                 checkActive()
                 if(event==XmlPullParser.DOCDECL)throw IOException("Guide DTD unsupported")
@@ -336,19 +405,30 @@ internal class JaLiveTvRepository(private val context:Context) {
                                 if(keys.any{guideNames[it]?.size==1})aliases[id]=targets.first()
                             }};schedule=true
                         }
-                        programId=aliases[parser.getAttributeValue(null,"channel")]?:""
-                        if(programId.isNotEmpty()){
+                        val xmlChannel=parser.getAttributeValue(null,"channel")
+                        programId=aliases[xmlChannel]?:""
+                        extraProgramIds=extraIds[xmlChannel].orEmpty()
+                        if(programId.isNotEmpty()||extraProgramIds.isNotEmpty()){
                             start=JaLiveTvRules.xmlTime(parser.getAttributeValue(null,"start")?:"")
                             end=JaLiveTvRules.xmlTime(parser.getAttributeValue(null,"stop")?:"")
                         }
                         title=""
                     }
-                    "title"->if(programId.isNotEmpty()&&title.isEmpty())title=parser.nextText().take(300)
+                    "title"->if((programId.isNotEmpty()||extraProgramIds.isNotEmpty())&&title.isEmpty())title=parser.nextText().take(300)
                 }
                 if(event==XmlPullParser.END_TAG)when(parser.name){
                     "channel"->channelMode=false
-                    "programme"->{if(programId.isNotEmpty()&&start>=0&&end>start&&end>now&&start<now+172_800_000&&title.isNotBlank()&&programs.size<100_000)
-                        programs.add(JaLiveProgram(programId,start,end,title));programId=""}
+                    "programme"->{
+                        if(start>=0&&end>start&&end>now&&start<now+172_800_000&&title.isNotBlank()){
+                            if(programId.isNotEmpty()&&programs.size<100_000)
+                                programs.add(JaLiveProgram(programId,start,end,title))
+                            for(id in extraProgramIds){
+                                if(programs.size>=100_000)break
+                                programs.add(JaLiveProgram(id,start,end,title))
+                            }
+                        }
+                        programId="";extraProgramIds=emptyList()
+                    }
                 }
                 event=parser.next()
             }

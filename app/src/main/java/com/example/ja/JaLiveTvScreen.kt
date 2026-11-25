@@ -63,6 +63,7 @@ import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
@@ -233,7 +234,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                 }
                 val result=repository.channels(force){cached->
                     applyCatalog(cached)
-                    repository.cachedGuide(channels.filter { it.embeddedPlayerUrl == null })?.let{guide=it}
+                    repository.cachedGuideForDisplay(channels)?.let{guide=it}
                 }
                 applyCatalog(result)
                 favoriteOrder=JaLiveTvOrder.reconcile(favoriteOrder,favorites,channels.map{it.id})
@@ -243,15 +244,14 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
             }catch(e:CancellationException){throw e}catch(_:Exception){error="Channel catalog unavailable. Check your connection and retry."}
             finally{loading=false;catalogReady=true}
             if(channels.isEmpty())return@launch
-            val guideChannels = channels.filter { it.embeddedPlayerUrl == null }
             guideLoading=true;guideError=null
             val cacheStart = SystemClock.elapsedRealtime()
-            val cachedGuide = repository.cachedGuide(guideChannels)
+            val cachedGuide = repository.cachedGuideForDisplay(channels)
             cachedGuide?.let{guide=it}
             android.util.Log.i("JA_IPTV_PERF", "GUIDE_CACHE hit=${cachedGuide != null} ms=${SystemClock.elapsedRealtime() - cacheStart}")
             val guideStart = SystemClock.elapsedRealtime()
             try{
-                guide=repository.guide(guideChannels,force){partial->guide=partial}
+                guide=repository.guide(channels,force){partial->guide=partial}
                 android.util.Log.i("JA_IPTV_PERF", "GUIDE_READY ms=${SystemClock.elapsedRealtime() - guideStart}")
             }
             catch(e:CancellationException){throw e}
@@ -735,11 +735,22 @@ internal fun JaLivePresentation(fullscreen:Boolean,onClose:()->Unit,content:@Com
 
 private data class JaLiveReconnect(val target:Int,val reason:String,val delayMs:Long)
 
+internal enum class JaIptvBuffer(
+    val label: String, val minMs: Int = 0, val maxMs: Int = 0,
+    val startupMs: Int = 0, val rebufferMs: Int = 0
+) {
+    SMALL("Small", 5_000, 15_000, 750, 1_500),
+    DEFAULT("Default"),
+    LARGE("Large", 45_000, 75_000, 1_500, 3_000),
+    EXTRA_LARGE("Extra large", 60_000, 100_000, 2_000, 5_000)
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()->Unit,onClose:()->Unit,
     onFullscreen:()->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit) {
     val context=LocalContext.current
+    val buffer = remember(context) { PlayerControlSettings(context).iptvBuffer }
     val owner=LocalLifecycleOwner.current
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     var wantsPlayback by remember(channel){mutableStateOf(true)}
@@ -755,7 +766,16 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
             .setUserAgent(headers["User-Agent"]?:"JA/2.5.0").setDefaultRequestProperties(headers)
-        ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http))).build().apply{
+        val builder = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http)))
+        if (buffer != JaIptvBuffer.DEFAULT) {
+            val loadControl = DefaultLoadControl.Builder()
+                .setBufferDurationsMsForStreaming(buffer.minMs, buffer.maxMs, buffer.startupMs, buffer.rebufferMs)
+                .setPrioritizeTimeOverSizeThresholdsForStreaming(true)
+                .build()
+            builder.setLoadControl(loadControl)
+        }
+        builder.build().apply{
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),true)
         setHandleAudioBecomingNoisy(true)
         setMediaItem(MediaItem.fromUri(channel.urls[source]));prepare();playWhenReady=wantsPlayback&&resumed
@@ -811,7 +831,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
             internalChange=false
         }
         player.addListener(listener);owner.lifecycle.addObserver(observer)
-        Log.i("JA_LIVE_TV","OPEN channel=${channel.id} source=$source generation=$generation")
+        Log.i("JA_LIVE_TV","OPEN channel=${channel.id} source=$source generation=$generation buffer=${buffer.name}")
         onDispose{owner.lifecycle.removeObserver(observer);player.removeListener(listener);player.release();reportAttached(false);JaMusicService.setVideoActive(false)}
     }
     LaunchedEffect(player){
