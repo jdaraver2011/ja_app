@@ -348,6 +348,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     var searchOpen by remember{mutableStateOf(false)}
     var menuChannel by remember{mutableStateOf<JaLiveChannel?>(null)}
     var groupMenu by remember{mutableStateOf<String?>(null)}
+    val groupMenuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
     var pinDialog by remember{mutableStateOf<JaNtvPinDialog?>(null)}
     val menuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
     val searchFocus=remember{FocusRequester()}
@@ -590,7 +591,8 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                     }
                 }){
                 Row(Modifier.fillMaxWidth().padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically){
-                    Text("Groups",Modifier.weight(1f),color=ColorGold,fontSize=16.sp)
+                    Text(if(state.movingGroupId==null)"Groups" else "Move ${state.movingGroupId} · ↑/↓ move · OK save · Back cancel",
+                        Modifier.weight(1f),color=ColorGold,fontSize=if(state.movingGroupId==null)16.sp else 10.sp,maxLines=2)
                     var focused by remember{mutableStateOf(false)}
                     IconButton(onClick={searchOpen=true},modifier=Modifier.size(40.dp).focusRequester(searchFocus)
                         .onFocusChanged{focused=it.isFocused;searchFocused=it.isFocused}
@@ -607,9 +609,9 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                     items(groups, key = { it }, contentType = { "channel-group" }){group->
                         var focused by remember{mutableStateOf(false)}
                         Row(Modifier.fillMaxWidth()
-                            .then(if(state.view==group)Modifier.focusRequester(state.groupFocus) else Modifier)
+                            .then(if(state.view==group||state.movingGroupId==group)Modifier.focusRequester(state.groupFocus) else Modifier)
                             .jaLiveSelect(onClick={if(state.movingGroupId==null)selectGroup(group)},
-                                onMenu={groupMenu=group},onFocus={hasFocus->
+                                onMenu={remote->groupMenuGuard.open(remote);groupMenu=group},onFocus={hasFocus->
                                     focused=hasFocus
                                     if(hasFocus){
                                         focusedGroup=groups.indexOf(group);searchFocused=false
@@ -749,8 +751,9 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
             onReorder={menuChannel=null;state.beginMove(channel.id,visibleIds,false)},
             onRefresh={closeMenu();state.refresh(true)})
     }
-    groupMenu?.let{group->JaLiveGroupMenu(group,onClose={groupMenu=null},onReorder={
-        groupMenu=null;state.beginGroupMove(group,groups)
+    groupMenu?.let{group->JaLiveGroupMenu(group,groupMenuGuard,onClose={groupMenu=null},onReorder={
+        groupMenu=null
+        scope.launch{withFrameNanos{};state.beginGroupMove(group,groups);withFrameNanos{};runCatching{state.groupFocus.requestFocus()}}
     })}
 }
 
@@ -901,11 +904,15 @@ private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiv
 }
 
 @Composable
-private fun JaLiveGroupMenu(group:String,onClose:()->Unit,onReorder:()->Unit){
+private fun JaLiveGroupMenu(group:String,guard:JaLiveTvGuideRules.MenuKeyGuard,onClose:()->Unit,onReorder:()->Unit){
     val first=remember{FocusRequester()}
     Dialog(onDismissRequest=onClose,properties=DialogProperties(usePlatformDefaultWidth=false)){
         LaunchedEffect(Unit){withFrameNanos{};first.requestFocus()}
-        Box(Modifier.fillMaxSize()){
+        Box(Modifier.fillMaxSize().onPreviewKeyEvent{event->val key=event.nativeKeyEvent
+            if(key.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER))
+                guard.consume(key.action==KeyEvent.ACTION_DOWN,key.action==KeyEvent.ACTION_UP,key.repeatCount)
+            else false
+        }){
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=0.45f)).focusProperties{canFocus=false}.clickable(onClick=onClose))
             Column(Modifier.align(Alignment.CenterStart).widthIn(max=340.dp).fillMaxWidth().background(Color(0xFF1B2735))
                 .padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
