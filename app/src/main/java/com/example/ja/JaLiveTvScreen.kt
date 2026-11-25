@@ -97,9 +97,13 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     }.getOrDefault(emptyList()))
     private val moveSession=JaLiveTvMoveSession()
     private val groupOrders=mutableStateMapOf<String,List<String>>()
+    private val sourceGroupOrders=mutableStateMapOf<String,List<String>>()
     var movingId by mutableStateOf<String?>(null)
     var draftOrder by mutableStateOf<List<String>>(emptyList())
     private var movingGroup=""
+    var movingGroupId by mutableStateOf<String?>(null)
+    var draftGroupOrder by mutableStateOf<List<String>>(emptyList())
+    private var movingGroupSource=""
     var suppressPickUpRelease=false
     var sidebarOpen by mutableStateOf(true)
     var focusedChannel:String?=null
@@ -134,6 +138,29 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         val stored=groupOrders.getOrPut(group){runCatching{val a=org.json.JSONArray(prefs.getString("group-order:$group","[]"));
             (0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList())}
         return JaLiveTvMoveSession.displayed(if(movingId!=null&&movingGroup==group)draftOrder else stored,available)
+    }
+    private fun sourceGroupOrder(source:String):List<String> = sourceGroupOrders.getOrPut(source){runCatching{
+        val a=org.json.JSONArray(prefs.getString("source-group-order:$source","[]"));(0 until a.length()).map{a.getString(it)}
+    }.getOrDefault(emptyList())}
+    fun beginGroupMove(id:String,visible:List<String>){
+        if(movingGroupId!=null||id !in visible)return
+        movingGroupId=id;draftGroupOrder=visible.toList();movingGroupSource=source
+    }
+    fun moveGroup(direction:Int){
+        val id=movingGroupId?:return
+        draftGroupOrder=JaLiveTvOrder.move(draftGroupOrder,id,direction)
+    }
+    fun finishGroupMove(save:Boolean){
+        val id=movingGroupId?:return
+        val source=movingGroupSource
+        if(save){
+            val available=catalogIndex.groupsBySource[source].orEmpty()
+            val merged=JaLiveTvMoveSession.merge(sourceGroupOrder(source),available,draftGroupOrder)
+            sourceGroupOrders[source]=merged
+            prefs.edit().putString("source-group-order:$source",org.json.JSONArray(merged).toString()).apply()
+        }
+        movingGroupId=null;draftGroupOrder=emptyList();movingGroupSource=""
+        if(id in sourceGroups)scope.launch{groupList.scrollToItem(sourceGroups.indexOf(id).coerceAtLeast(0))}
     }
     fun beginMove(id:String,visible:List<String>,remote:Boolean){
         if(movingId!=null)return
@@ -189,7 +216,9 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         CatalogIndex(listOf(jaWeatherChannel()),emptyMap(),emptyMap())
     )
     val channels get() = catalogIndex.channels
-    val sourceGroups get() = catalogIndex.groupsBySource[source].orEmpty()
+    val sourceGroups get() = JaLiveTvMoveSession.displayed(
+        if(movingGroupId!=null&&movingGroupSource==source)draftGroupOrder else sourceGroupOrder(source),
+        catalogIndex.groupsBySource[source].orEmpty())
     val channelsBySourceGroup get() = catalogIndex.channelsBySourceGroup
     var catalogReady by mutableStateOf(false)
     var guide by mutableStateOf<JaLiveGuide?>(null)
@@ -210,7 +239,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     fun reloadPersonalFavorites(){
         favorites=prefs.getStringSet("ids",emptySet())?.toSet()?:emptySet()
         favoriteOrder=runCatching{val a=org.json.JSONArray(prefs.getString("order","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList())
-        groupOrders.clear()
+        groupOrders.clear();sourceGroupOrders.clear()
         JaLiveTvRules.views().forEach{group->
             val saved=runCatching{val a=org.json.JSONArray(prefs.getString("group-order:$group","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList())
             val legacy=if(group=="All Favorites")runCatching{val a=org.json.JSONArray(prefs.getString("group-order:Favorites","[]"));(0 until a.length()).map{a.getString(it)}}.getOrDefault(emptyList()) else emptyList()
@@ -240,15 +269,18 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                         catalogIndex = withContext(Dispatchers.Default) {
                             val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL } +
                                 jaDaddyLiveUsPilot.map{it.copy(categories=it.categories+"source-daddylive")}
-                            val sourceGroups=JaLiveTvRules.sources().associateWith{sourceName->
+                            val allSourceGroups=JaLiveTvRules.sources().associateWith{sourceName->
                                 val sourceChannels=channels.filter{JaLiveTvRules.sourceMatches(sourceName,it.categories)}
                                 JaLiveTvRules.groupsForSource(sourceName,sourceChannels.flatMap{it.categories}.toSet())
                             }
-                            val channelGroups=sourceGroups.flatMap{(sourceName,sourceViews)->sourceViews.map{sourceName to it}}
+                            val channelGroups=allSourceGroups.flatMap{(sourceName,sourceViews)->sourceViews.map{sourceName to it}}
                             val sourceIndex=channelGroups.associateWith{(sourceName,group)->channels.filter{channel->
                                 JaLiveTvRules.sourceMatches(sourceName,channel.categories)&&
                                     (sourceName=="Favorites"&&group=="All Favorites"||
                                         sourceName!="Favorites"&&(group=="With EPG"||JaLiveTvRules.categoryMatches(group,channel.categories)))
+                            }}
+                            val sourceGroups=allSourceGroups.mapValues{(sourceName,sourceViews)->sourceViews.filter{group->
+                                (sourceName=="Favorites"&&group=="All Favorites")||sourceIndex[sourceName to group].orEmpty().isNotEmpty()
                             }}
                             CatalogIndex(channels,sourceGroups,sourceIndex)
                         }
@@ -315,6 +347,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     var focusedSource by remember{mutableIntStateOf(0)}
     var searchOpen by remember{mutableStateOf(false)}
     var menuChannel by remember{mutableStateOf<JaLiveChannel?>(null)}
+    var groupMenu by remember{mutableStateOf<String?>(null)}
     var pinDialog by remember{mutableStateOf<JaNtvPinDialog?>(null)}
     val menuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
     val searchFocus=remember{FocusRequester()}
@@ -341,7 +374,14 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val programs=remember(state.guide,now/1_800_000,weather.zip){state.guide?.byChannel.orEmpty()+mapOf(JA_WEATHER_CHANNEL to jaWeatherPrograms(now,weather.zip))}
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
-    val groups=state.sourceGroups
+    val groups=remember(state.sourceGroups,state.channelsBySourceGroup,state.source,programs,now/30_000,finish){
+        state.sourceGroups.filter{group->
+            val inGroup=state.channelsBySourceGroup[state.source to group].orEmpty()
+            inGroup.isNotEmpty()&&(group!="With EPG"||inGroup.any{channel->
+                programs[channel.id].orEmpty().any{JaLiveTvRules.hasGuide(it.start,it.end,it.title,now,finish)}
+            })
+        }
+    }
     val candidates=remember(state.channelsBySourceGroup,state.source,state.view){
         state.channelsBySourceGroup[state.source to state.view].orEmpty()
     }
@@ -455,6 +495,8 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
             state.view=next;state.returnChannel=null
         }
     }
+    BackHandler(groupMenu!=null){groupMenu=null}
+    BackHandler(state.movingGroupId!=null){state.finishGroupMove(false)}
     BackHandler(state.movingId!=null){state.finishMove(false)}
     val scroll=state.timeline
     Column(modifier.fillMaxSize().background(Color(0xFF101923)).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp),
@@ -468,7 +510,12 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).onPreviewKeyEvent{event->
         val key=event.nativeKeyEvent
-        if(state.movingId==null)false else when(key.keyCode){
+        if(state.movingGroupId!=null)when(key.keyCode){
+            KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(key.action==KeyEvent.ACTION_DOWN)state.moveGroup(if(key.keyCode==KeyEvent.KEYCODE_DPAD_UP)-1 else 1);true}
+            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER->{if(key.action==KeyEvent.ACTION_UP)state.finishGroupMove(true);true}
+            KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->true
+            else->false
+        } else if(state.movingId==null)false else when(key.keyCode){
             KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(key.action==KeyEvent.ACTION_DOWN)state.moveChannel(if(key.keyCode==KeyEvent.KEYCODE_DPAD_UP)-1 else 1);true}
             KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER->{
                 if(key.action==KeyEvent.ACTION_UP){if(state.suppressPickUpRelease)state.suppressPickUpRelease=false else state.finishMove(true)};true
@@ -558,20 +605,24 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                 }
                 LazyColumn(state=state.groupList,modifier=Modifier.fillMaxWidth().weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp),contentPadding=PaddingValues(6.dp)){
                     items(groups, key = { it }, contentType = { "channel-group" }){group->
-                        TvFocusButton(onClick={selectGroup(group)},modifier=Modifier.fillMaxWidth()
+                        var focused by remember{mutableStateOf(false)}
+                        Row(Modifier.fillMaxWidth()
                             .then(if(state.view==group)Modifier.focusRequester(state.groupFocus) else Modifier)
-                            .onFocusChanged{
-                                if(it.isFocused){
-                                    focusedGroup=groups.indexOf(group)
-                                    searchFocused=false
-                                    // Protected group selection is an explicit OK action.
-                                    // Moving focus across this row must not open a PIN dialog.
-                                    if(group!="Adult Only")selectGroup(group)
-                                }
-                            },
-                            colors=ButtonDefaults.buttonColors(containerColor=if(state.view==group)ColorGold else Color(0xFF263747),
-                                contentColor=if(state.view==group)Color.Black else Color.White)){
+                            .jaLiveSelect(onClick={if(state.movingGroupId==null)selectGroup(group)},
+                                onMenu={groupMenu=group},onFocus={hasFocus->
+                                    focused=hasFocus
+                                    if(hasFocus){
+                                        focusedGroup=groups.indexOf(group);searchFocused=false
+                                        // Protected group selection is an explicit OK action.
+                                        if(state.movingGroupId==null&&group!="Adult Only")selectGroup(group)
+                                    }
+                                })
+                            .background(if(state.movingGroupId==group)Color(0xFF75551E) else if(state.view==group)ColorGold else Color(0xFF263747),RoundedCornerShape(4.dp))
+                            .border(if(focused||state.movingGroupId==group)2.dp else 0.dp,
+                                if(state.movingGroupId==group)ColorGold else Color.White,RoundedCornerShape(4.dp))
+                            .heightIn(min=40.dp).padding(horizontal=12.dp,vertical=9.dp),verticalAlignment=Alignment.CenterVertically){
                             Text(if(group=="Adult Only"&&!state.adultOnlyUnlocked)"Adult Only · PIN" else group,
+                                color=if(state.view==group)Color.Black else Color.White,
                                 fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
                         }
                     }
@@ -698,6 +749,9 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
             onReorder={menuChannel=null;state.beginMove(channel.id,visibleIds,false)},
             onRefresh={closeMenu();state.refresh(true)})
     }
+    groupMenu?.let{group->JaLiveGroupMenu(group,onClose={groupMenu=null},onReorder={
+        groupMenu=null;state.beginGroupMove(group,groups)
+    })}
 }
 
 @Composable
@@ -841,6 +895,26 @@ private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiv
                 TvFocusButton(onClick=onReorder,enabled=canReorder,modifier=Modifier.fillMaxWidth(),colors=colors){Text("Reorder channels")}
                 TvFocusButton(onClick=onRefresh,enabled=canRefresh,modifier=Modifier.fillMaxWidth(),colors=colors){Text("Refresh channels and guide")}
                 TvFocusButton(onClick=onClose,modifier=Modifier.fillMaxWidth(),colors=colors){Text("Close")}
+            }
+        }
+    }
+}
+
+@Composable
+private fun JaLiveGroupMenu(group:String,onClose:()->Unit,onReorder:()->Unit){
+    val first=remember{FocusRequester()}
+    Dialog(onDismissRequest=onClose,properties=DialogProperties(usePlatformDefaultWidth=false)){
+        LaunchedEffect(Unit){withFrameNanos{};first.requestFocus()}
+        Box(Modifier.fillMaxSize()){
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=0.45f)).focusProperties{canFocus=false}.clickable(onClick=onClose))
+            Column(Modifier.align(Alignment.CenterStart).widthIn(max=340.dp).fillMaxWidth().background(Color(0xFF1B2735))
+                .padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+                Text("Group options",color=ColorGold,fontSize=20.sp)
+                Text(group,color=Color.White,fontSize=16.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                TvFocusButton(onClick=onReorder,modifier=Modifier.fillMaxWidth().focusRequester(first),
+                    colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF2A3A4B),contentColor=Color.White)){Text("Reorder groups")}
+                TvFocusButton(onClick=onClose,modifier=Modifier.fillMaxWidth(),
+                    colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF2A3A4B),contentColor=Color.White)){Text("Close")}
             }
         }
     }

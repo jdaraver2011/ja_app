@@ -9,6 +9,7 @@ import java.util.regex.*;
 public final class JaLiveTvRules {
     private JaLiveTvRules() {}
     private static final DateTimeFormatter XML_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss xx",Locale.ROOT);
+    private static final Pattern NFL_WORD = Pattern.compile("\\bnfl\\b",Pattern.CASE_INSENSITIVE);
     private static final Pattern NFL_TEAM_OR_NETWORK = Pattern.compile(
         "(?i)(?:^|[^a-z0-9])(?:arizona\\s+cardinals|atlanta\\s+falcons|baltimore\\s+ravens|buffalo\\s+bills|"+
         "carolina\\s+panthers|chicago\\s+bears|cincinnati\\s+bengals|cleveland\\s+browns|dallas\\s+cowboys|"+
@@ -17,12 +18,16 @@ public final class JaLiveTvRules {
         "los\\s+angeles\\s+rams|miami\\s+dolphins|minnesota\\s+vikings|new\\s+england\\s+patriots|"+
         "new\\s+orleans\\s+saints|new\\s+york\\s+giants|new\\s+york\\s+jets|philadelphia\\s+eagles|"+
         "pittsburgh\\s+steelers|san\\s+francisco\\s+49ers|seattle\\s+seahawks|tampa\\s+bay\\s+buccaneers|"+
-        "tennessee\\s+titans|washington\\s+commanders|cardinals|falcons|ravens|bills|panthers|bears|bengals|"+
-        "browns|cowboys|broncos|lions|packers|texans|colts|jaguars|chiefs|raiders|chargers|rams|dolphins|vikings|"+
-        "patriots|saints|giants|jets|eagles|steelers|49ers|seahawks|buccaneers|titans|commanders|nfl[\\s_-]*network)"
+        "tennessee\\s+titans|washington\\s+commanders|kc\\s+chiefs|lv\\s+raiders|la\\s+chargers|la\\s+rams|"+
+        "ny\\s+giants|ny\\s+jets|sf\\s+49ers|tb\\s+buccaneers|ne\\s+patriots|nfl[\\s_-]*network)"
         + "(?:$|[^a-z0-9])");
     public static boolean isNflChannelName(String value) {
         return value != null && NFL_TEAM_OR_NETWORK.matcher(value).find();
+    }
+    public static boolean isNcaafEvent(String category,String title) {
+        String value=((category==null?"":category)+" "+(title==null?"":title)).toLowerCase(Locale.ROOT);
+        if(NFL_WORD.matcher(value).find()||isNflChannelName(title))return false;
+        return value.contains("ncaaf")||value.contains("college football")||value.contains("american football");
     }
     public static String attribute(String line, String name) {
         Matcher m=Pattern.compile("(?:^|\\s)"+Pattern.quote(name)+"=\"([^\"]*)\"").matcher(line);
@@ -148,13 +153,13 @@ public final class JaLiveTvRules {
             if(cats.contains("daddylive-usa"))groups.add("DaddyLive USA");
         } else if("NTV".equals(source)) {
             groups.addAll(Arrays.asList("Raptor","Falcon","Phoenix","Titan","Scorpion","Other Servers",
-                "All Sports","Soccer","NFL","NCAA","Basketball","Golf","Motorsport","UFC","WWE","MMA","Badminton",
+                "All Sports","Soccer","NFL","NCAAF","NCAA","Basketball","Golf","Motorsport","UFC","WWE","MMA","Badminton",
                 "NFL USA","Basketball USA","Baseball USA"));
             if(cats.contains("ntv-adult-only"))groups.add("Adult Only");
             addExtraGroups(groups,cats,setOf("source-ntv","country-us","country-uk","test",
                 "ntv-adult-only","18-plus","adult","adult-only","ntv-server-raptor","ntv-server-falcon","ntv-server-phoenix","ntv-server-titan",
                 "ntv-server-scorpion","ntv-server-other","ntv-sport-all","ntv-sport-soccer",
-                "ntv-sport-nfl","ntv-sport-ncaa","ntv-sport-basketball","ntv-sport-golf",
+                "ntv-sport-nfl","ntv-sport-ncaaf","ntv-sport-ncaa","ntv-sport-basketball","ntv-sport-golf",
                 "ntv-sport-motorsport","ntv-sport-ufc","ntv-sport-wwe","ntv-sport-mma",
                 "ntv-sport-badminton","ntv-sport-baseball","ntv-sport-baseball-usa","ntv-channel"));
         }
@@ -187,6 +192,7 @@ public final class JaLiveTvRules {
         if("All Sports".equals(view))return "ntv-sport-all";
         if("Soccer".equals(view))return "ntv-sport-soccer";
         if("NFL".equals(view))return "ntv-sport-nfl";
+        if("NCAAF".equals(view))return "ntv-sport-ncaaf";
         if("NCAA".equals(view))return "ntv-sport-ncaa";
         if("Basketball".equals(view))return "ntv-sport-basketball";
         if("Golf".equals(view))return "ntv-sport-golf";

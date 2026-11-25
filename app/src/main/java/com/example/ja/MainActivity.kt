@@ -285,7 +285,7 @@ class MainActivity : ComponentActivity() {
                 val key = changedKey.orEmpty()
                 val included = when (name) {
                     "ja_weather" -> key in setOf("weatherstar", "weatherstar-sound", "weatherstar-volume", "music-choice", "custom-music", "zip")
-                    "ja_live_favorites" -> key == "ids" || key == "order" || key.startsWith("group-order:")
+                    "ja_live_favorites" -> key == "ids" || key == "order" || key.startsWith("group-order:") || key.startsWith("source-group-order:")
                     "ja_favorite_display_order_v1" -> key == "movie-ids" || key == "tv-ids"
                     else -> true
                 }

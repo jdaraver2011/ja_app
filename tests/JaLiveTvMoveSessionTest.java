@@ -17,6 +17,10 @@ public final class JaLiveTvMoveSessionTest {
         equal(JaLiveTvMoveSession.merge(Collections.emptyList(),Arrays.asList("a","c"),Arrays.asList("c","b","a")),Arrays.asList("c","b","a")); // outage during movement
         List<String> news=JaLiveTvMoveSession.merge(Collections.emptyList(),Arrays.asList("a","b"),Arrays.asList("b","a"));
         equal(JaLiveTvMoveSession.displayed(Collections.emptyList(),Arrays.asList("a","b")),Arrays.asList("a","b")); // other groups independent
+        List<String> groupOrder=JaLiveTvMoveSession.merge(Arrays.asList("NFL","NCAAF","Basketball"),
+            Arrays.asList("NFL","Basketball"),Arrays.asList("Basketball","NFL"));
+        equal(groupOrder,Arrays.asList("Basketball","NCAAF","NFL")); // empty groups keep their saved position
+        equal(JaLiveTvMoveSession.displayed(groupOrder,Arrays.asList("NFL","NCAAF","Basketball")),groupOrder); // daily discovery restores a group
         equal(news,Arrays.asList("b","a"));
         try{JaLiveTvMoveSession.merge(stored,Arrays.asList("a","b"),Arrays.asList("a","a"));throw new AssertionError("Duplicate accepted");}catch(IllegalArgumentException expected){}
         move.clear();move.begin(Arrays.asList("a","b"),"nope");equal(move.channel(),null);

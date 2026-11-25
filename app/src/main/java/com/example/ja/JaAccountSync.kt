@@ -261,7 +261,7 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         val musicPrefs = context.getSharedPreferences("ja_music_library", Context.MODE_PRIVATE)
         val music = JSONObject().put("values", prefsJson(musicPrefs.all))
         val iptvPrefs = context.getSharedPreferences("ja_live_favorites", Context.MODE_PRIVATE)
-        val iptv = JSONObject().put("values", prefsJson(iptvPrefs.all.filterKeys { it == "ids" || it == "order" || it.startsWith("group-order:") }))
+        val iptv = JSONObject().put("values", prefsJson(iptvPrefs.all.filterKeys { it == "ids" || it == "order" || it.startsWith("group-order:") || it.startsWith("source-group-order:") }))
         val search = JSONObject().put("values", prefsJson(context.getSharedPreferences(JaSearchHistory.PREFS, Context.MODE_PRIVATE).all))
         val playerControls = prefsJson(context.getSharedPreferences("ja_player_controls", Context.MODE_PRIVATE).all)
         val weather = prefsJson(context.getSharedPreferences("ja_weather", Context.MODE_PRIVATE).all.filterKeys { it in weatherSettingKeys })
@@ -335,7 +335,7 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
     private fun mergeStoredStrings(key: String, local: String, cloud: String): String {
         if (local.isBlank()) return cloud
         if (cloud.isBlank()) return local
-        if (key == "order" || key.startsWith("group-order:")) return mergeOrderedValues(local, cloud)
+        if (key == "order" || key.startsWith("group-order:") || key.startsWith("source-group-order:")) return mergeOrderedValues(local, cloud)
         val localArray = runCatching { JSONArray(local) }.getOrNull()
         val cloudArray = runCatching { JSONArray(cloud) }.getOrNull()
         if (localArray != null && cloudArray != null) return unionArrays(localArray, cloudArray).toString()
@@ -447,7 +447,7 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
 
     private fun applyPrefs(name: String, values: JSONObject?, stringSets: Boolean, keyFilter: (String) -> Boolean = { true }) {
         val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
-        val syncedKey = { key: String -> keyFilter(key) && (!stringSets || key == "ids" || key == "order" || key.startsWith("group-order:")) }
+        val syncedKey = { key: String -> keyFilter(key) && (!stringSets || key == "ids" || key == "order" || key.startsWith("group-order:") || key.startsWith("source-group-order:")) }
         val edit = prefs.edit()
         prefs.all.keys.filter(syncedKey).forEach(edit::remove)
         if (values != null) for (i in 0 until values.length()) {
