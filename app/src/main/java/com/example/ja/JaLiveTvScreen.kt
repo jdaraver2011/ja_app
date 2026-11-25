@@ -586,7 +586,8 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                         true
                     }else
                     if(key.keyCode==KeyEvent.KEYCODE_DPAD_UP&&!searchFocused&&focusedGroup==0){
-                        if(key.action==KeyEvent.ACTION_DOWN)focusJaButton()
+                        // The Groups header owns search; Up from the first group reaches its icon.
+                        if(key.action==KeyEvent.ACTION_DOWN)runCatching{searchFocus.requestFocus()}
                         true
                     }else{
                         val action=JaLiveTvGuideRules.groupKey(key.keyCode,focusedGroup,groups.size,searchFocused)

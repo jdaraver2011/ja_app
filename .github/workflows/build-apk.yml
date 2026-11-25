@@ -329,6 +329,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - name: Build installable APK
+        id: assemble-apk
         env:
           BUILD_VARIANT: ${{ inputs.build_variant || 'debug' }}
           JA_DADDYLIVE_US_PILOT: ${{ inputs.daddylive_us_pilot || false }}
@@ -409,10 +410,12 @@ jobs:
           if-no-files-found: ignore
       - name: Set installable APK artifact name
         id: apk-artifact
+        if: ${{ always() && steps.assemble-apk.outcome == 'success' }}
         run: |
           ref_name=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
           echo "ref_name=$ref_name" >> "$GITHUB_OUTPUT"
       - name: Upload installable APK
+        if: ${{ always() && steps.assemble-apk.outcome == 'success' }}
         uses: actions/upload-artifact@v7.0.2
         with:
           name: JA-${{ steps.apk-artifact.outputs.ref_name }}-${{ inputs.build_variant || 'debug' }}
