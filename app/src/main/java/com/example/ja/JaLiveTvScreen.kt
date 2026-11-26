@@ -1254,7 +1254,9 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
         player.addListener(listener);owner.lifecycle.addObserver(observer)
         Log.i("JA_LIVE_TV","OPEN channel=${channel.id} source=$source generation=$generation buffer=${buffer.name}")
         onDispose{owner.lifecycle.removeObserver(observer);player.removeListener(listener);player.removeAnalyticsListener(analyticsListener)
-            player.release();reportAttached(false);JaMusicService.setVideoActive(false)}
+            player.release()
+            Log.i("JA_LIVE_TV", "RELEASE channel=${channel.id} source=$source generation=$generation")
+            reportAttached(false);JaMusicService.setVideoActive(false)}
     }
     LaunchedEffect(player){
         var lastPosition=player.currentPosition

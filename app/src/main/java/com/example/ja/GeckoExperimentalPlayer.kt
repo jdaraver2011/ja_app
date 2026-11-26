@@ -1131,6 +1131,7 @@ fun GeckoExperimentalPlayer(
             sourceStatusBridge.clear()
             vidFastBridge?.clear()
             overlayGuard.clear()
+            Log.i("JA_GECKO", "SESSION_RELEASE session=${System.identityHashCode(session)}")
             try { session.close() } catch (_: Exception) {}
         }
     }
@@ -1218,7 +1219,14 @@ fun GeckoExperimentalPlayer(
                     Log.i("JA_TV_BRIDGE", "REMOTE_VIEW_BOUND bridge=${System.identityHashCode(remoteBridge)} session=${System.identityHashCode(session)}")
                 }
             },
-            update = { view -> if (view.session !== session) view.setSession(session) }
+            update = { view -> if (view.session !== session) view.setSession(session) },
+            onRelease = { view ->
+                // Detach the view before it is recycled/disposed so GeckoView
+                // cannot keep the old playback session's compositor attached.
+                try { view.releaseSession() } catch (_: Exception) {}
+                view.keepScreenOn = false
+                Log.i("JA_GECKO", "VIEW_RELEASE session=${System.identityHashCode(session)}")
+            }
         )
         }
         // A read-only diagnostics overlay. No WebExtension, touch simulation,
