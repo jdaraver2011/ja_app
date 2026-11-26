@@ -36,13 +36,20 @@ internal object JaGeckoRuntime {
         // This private, fixed configuration cannot accept arbitrary user prefs.
         // Extension background pages use the normal content-script budget.
         // Both limits remain finite; chrome watchdog and request suspension are unchanged.
+        val remoteDebugging = BuildConfig.DEBUG
         val config = File(context.applicationContext.filesDir, "ja-gecko-runtime-v7.yaml")
+        val debuggerSocket = File(context.applicationContext.applicationInfo.dataDir, "firefox-debugger-socket")
         val contents = "prefs:\n  $EXTENSION_SCRIPT_PREF: $EXTENSION_SCRIPT_SECONDS\n" +
-            "  $BACKGROUND_SCRIPT_PREF: $EXTENSION_SCRIPT_SECONDS\n"
+            "  $BACKGROUND_SCRIPT_PREF: $EXTENSION_SCRIPT_SECONDS\n" +
+            if (remoteDebugging) "  devtools.debugger.unix-domain-socket: \"${debuggerSocket.absolutePath}\"\n" else ""
         if (!config.exists() || config.readText() != contents) config.writeText(contents)
-        val settings = GeckoRuntimeSettings.Builder().configFilePath(config.absolutePath).build()
+        val settings = GeckoRuntimeSettings.Builder()
+            .configFilePath(config.absolutePath)
+            .remoteDebuggingEnabled(remoteDebugging)
+            .build()
         return GeckoRuntime.create(context.applicationContext, settings).also {
             instance = it
+            Log.i("JA_STARTUP", "DEVTOOLS_REMOTE_DEBUGGING_ENABLED enabled=$remoteDebugging")
             Log.i("JA_ADBLOCK", "EXTENSION_SCRIPT_BUDGET_CONFIGURED seconds=$EXTENSION_SCRIPT_SECONDS pageWatchdogSeconds=$EXTENSION_SCRIPT_SECONDS")
         }
     }
