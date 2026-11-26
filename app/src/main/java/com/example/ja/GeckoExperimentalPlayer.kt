@@ -169,9 +169,7 @@ private class JaRemoteBridge {
                         onReady(false)
                         return@accept
                     }
-                    session.webExtensionController.setMessageDelegate(
-                        extension,
-                        object : WebExtension.MessageDelegate {
+                    val bridgeDelegate = object : WebExtension.MessageDelegate {
                             override fun onConnect(port: WebExtension.Port) {
                                 ports.add(port)
                                 Log.i("JA_TV_BRIDGE", "FRAME_CONNECTED ports=${ports.size} bridge=${System.identityHashCode(this@JaRemoteBridge)}")
@@ -326,8 +324,11 @@ private class JaRemoteBridge {
                                     }
                                 })
                             }
-                        }, "ja_tv_remote"
-                    )
+                        }
+                    // Background extension pages use the extension-level delegate;
+                    // content scripts use the session-level delegate.
+                    extension.setMessageDelegate(bridgeDelegate, "ja_tv_remote")
+                    session.webExtensionController.setMessageDelegate(extension, bridgeDelegate, "ja_tv_remote")
                     Log.i("JA_TV_BRIDGE", "BRIDGE_INSTALLED_DELEGATE_READY")
                     onReady(true)
                 }, { error ->
