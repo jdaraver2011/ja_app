@@ -178,7 +178,15 @@
   const SLICE_NODES = 160, SLICE_MS = 4, MAX_ROOTS = 64;
   let roots = [], active = null, workTimer = null, sweepTimer = null, metricsTimer = null;
   let overflow = false;
-  const metrics = {slices:0, nodes:0, fullScans:0, mutationRoots:0, scanMs:0, maxSliceMs:0};
+  const metrics = {slices:0, nodes:0, fullScans:0, playbackSkips:0, mutationRoots:0, scanMs:0, maxSliceMs:0};
+
+  // Full-document sweeps are a safety net for missed mutations. During active
+  // media they compete with decoding and rendering, so rely on the observer
+  // until playback pauses or ends. Mutation-driven overlay checks stay active.
+  function videoActive() {
+    try { return [...document.querySelectorAll('video')].some(video => !video.paused && !video.ended); }
+    catch (_) { return false; }
+  }
 
   function inspectText(textNode) {
     const content = (textNode.textContent || '').replace(/\s+/g, ' ').trim();
@@ -210,6 +218,7 @@
   }
   function sweep() {
     if (!live || document.hidden || !document.body || active || roots.length) return;
+    if (videoActive()) { metrics.playbackSkips++; return; }
     metrics.fullScans++;
     enqueue(document.body);
   }
@@ -278,8 +287,9 @@
   function pause() {
     observer.disconnect();
     clearTimeout(workTimer); clearTimeout(reconnectTimer);
+    clearTimeout(mediaStateTimer);
     clearInterval(sweepTimer); clearInterval(metricsTimer);
-    workTimer = sweepTimer = metricsTimer = reconnectTimer = null;
+    workTimer = sweepTimer = metricsTimer = reconnectTimer = mediaStateTimer = null;
     active = null; roots = []; overflow = false; reconnectScheduled = false;
     try { port?.disconnect(); } catch (_) {}
     port = null;
@@ -291,6 +301,17 @@
     sweep();
     sweepTimer = setInterval(sweep, 10000);
     metricsTimer = setInterval(reportMetrics, 30000);
+  }
+  let mediaStateTimer = null;
+  function onMediaStateChange() {
+    clearTimeout(mediaStateTimer);
+    mediaStateTimer = setTimeout(() => {
+      mediaStateTimer = null;
+      if (!videoActive()) sweep();
+    }, 700);
+  }
+  for (const event of ['play', 'playing', 'waiting', 'stalled', 'pause', 'ended', 'emptied']) {
+    document.addEventListener(event, onMediaStateChange, true);
   }
   document.addEventListener('DOMContentLoaded', sweep, {once:true});
   document.addEventListener('visibilitychange', () => document.hidden ? pause() : resume());

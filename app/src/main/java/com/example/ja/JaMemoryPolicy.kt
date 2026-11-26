@@ -20,6 +20,9 @@ internal object JaMemoryPolicy : ComponentCallbacks2 {
     private var constrainedDevice = false
 
     @Volatile
+    private var videoPlaybackActive = false
+
+    @Volatile
     private var appContext: Context? = null
 
     fun install(context: Context) {
@@ -44,6 +47,19 @@ internal object JaMemoryPolicy : ComponentCallbacks2 {
     }
 
     fun isConstrainedDevice(): Boolean = constrainedDevice
+
+    /** Drop recreatable poster/image references when constrained devices enter video playback. */
+    fun setVideoPlaybackActive(active: Boolean) {
+        val changed = videoPlaybackActive != active
+        videoPlaybackActive = active
+        if (active && changed && constrainedDevice) {
+            trimRecreatableImages("VIDEO_PLAYBACK_START", null)
+        }
+        if (changed) {
+            Log.i(TAG, "VIDEO_RESOURCE_POLICY active=$active constrained=$constrainedDevice " +
+                "imageCacheTrimmed=${active && constrainedDevice}")
+        }
+    }
 
     override fun onTrimMemory(level: Int) {
         // UI_HIDDEN frees decoded images that cannot be on screen. RUNNING_LOW

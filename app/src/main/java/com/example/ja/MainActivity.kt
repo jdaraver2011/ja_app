@@ -833,7 +833,10 @@ class MainActivity : ComponentActivity() {
         }
     }
     LaunchedEffect(playback,playbackLoading,liveActive,weatherOpen,weather.sound) {
-        JaMusicService.setVideoActive(playback != null || playbackLoading || liveActive || (weatherOpen&&weather.weatherStar&&weather.sound))
+        val videoActive = playback != null || playbackLoading || liveActive ||
+            (weatherOpen && weather.weatherStar && weather.sound)
+        JaMusicService.setVideoActive(videoActive)
+        JaMemoryPolicy.setVideoPlaybackActive(playback != null || liveActive)
     }
     val catalogueVisible = !liveTv.fullscreen && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.
