@@ -1386,8 +1386,8 @@ class MainActivity : ComponentActivity() {
                                 blockerToolsError?.let { Text(it, color = Color(0xFFFFC48A), textAlign = TextAlign.Center) }
                             }
                             "Player" -> {
-                                Text("IPTV buffer size", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                                Text("Applies the next time you open a native IPTV channel. Larger buffers may help intermittent stalls.",
+                                Text("Native IPTV buffer size (ExoPlayer)", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                                Text("Applies the next time you open a native IPTV channel. Embedded GeckoView streams use the provider's own buffering because sites do not expose a universal buffer control.",
                                     color = Color.LightGray, textAlign = TextAlign.Center)
                                 JaIptvBuffer.entries.forEach { option ->
                                     TvSettingsToggle(option.label, iptvBuffer == option) { selected ->
@@ -1412,15 +1412,15 @@ class MainActivity : ComponentActivity() {
                                 TvSettingsToggle("Match TV frame rate during playback", matchTvFrameRate) {
                                     matchTvFrameRate = it; settings.matchTvFrameRate = it
                                 }
-                                Text("Enabled by default on Android TV; disabled on phones. JA measures video frames to request a compatible display refresh rate. A mode change may briefly blank the screen. Your previous display preference is restored when playback closes.",
+                                Text("Enabled by default on Android TV; disabled on phones. JA measures advancing video frames in ExoPlayer and supported embedded players before requesting a compatible refresh rate. A mode change may briefly blank the screen. Your previous display preference is restored when playback closes.",
                                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                TvSettingsToggle("Match TV output resolution to video (experimental)", matchTvResolution,
+                                TvSettingsToggle("Match TV output resolution to video", matchTvResolution,
                                     enabled = matchTvFrameRate) { matchTvResolution = it; settings.matchTvResolution = it }
-                                Text("A 1080-class video can request 1080p at its matching frame rate instead of keeping the TV's 4K output. Frame-rate matching takes priority. The prior display preference is restored on exit.",
+                                Text("A 1080-class video can request 1080p at its matching frame rate instead of keeping the TV's 4K output. This waits for stable frame reports in embedded players. Frame-rate matching takes priority. The prior display preference is restored on exit.",
                                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                TvSettingsToggle("Match stream quality to TV output (experimental)", matchStreamQuality,
+                                TvSettingsToggle("Match stream quality to TV output (supported players)", matchStreamQuality,
                                     enabled = matchTvFrameRate && matchTvResolution) { matchStreamQuality = it; settings.matchStreamQuality = it }
-                                Text("Selects matching quality on supported players after the TV mode is applied. Uses the best available quality below the output resolution when an exact match is missing. Restart playback after changing this setting.",
+                                Text("Uses the supported player quality API after the TV mode is applied, selecting the best available rendition at or below output resolution. Providers without that API keep their own adaptive quality. Restart playback after changing this setting.",
                                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                             }
                             "Tabs" -> {

@@ -6,6 +6,8 @@ public final class JaPlaybackWindow {
         public final int frames,dropped;
         Result(long elapsed,int frames,int dropped){this.elapsedMs=elapsed;this.frames=frames;this.dropped=dropped;}
         public double droppedPercent(){return 100.0*dropped/frames;}
+        public double droppedFps(){return elapsedMs>0?dropped*1000.0/elapsedMs:0.0;}
+        public double presentedFps(){return elapsedMs>0?Math.max(0,frames-dropped)*1000.0/elapsedMs:0.0;}
     }
     private long anchor=-1,lastAt=-1;
     private int anchorFrames,anchorDropped,lastFrames,lastDropped,width,height;

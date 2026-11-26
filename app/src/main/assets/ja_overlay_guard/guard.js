@@ -1,4 +1,4 @@
-/* JA v1.1.5u: embedded-player *in-page* scam overlay guard.
+/* JA v1.1.6: embedded-player *in-page* scam overlay guard.
  * The GeckoView PromptDelegate separately dismisses JS alerts/confirmations.
  * This content script runs in every frame, changes only high-confidence
  * deceptive overlays, and NEVER changes video elements, player controls,
@@ -6,8 +6,8 @@
  */
 (() => {
   'use strict';
-  if (globalThis.__jaOverlayGuard115u) return;
-  globalThis.__jaOverlayGuard115u = true;
+  if (globalThis.__jaOverlayGuard116) return;
+  globalThis.__jaOverlayGuard116 = true;
 
   // Exact claims seen on user screenshots. Avoid generic terms like "VPN"
   // or "Install" alone, which are too common in legitimate pages.
@@ -246,7 +246,22 @@
     let handled = 0;
     for (const record of records) {
       if (++handled > SLICE_NODES) { overflow = true; arm(); break; }
-      if (record.type === 'characterData' || record.type === 'attributes') enqueue(record.target, true);
+      if (record.type === 'characterData') enqueue(record.target, true);
+      else if (record.type === 'attributes') {
+        // Player controls animate class/style attributes constantly. Only
+        // rescan attribute changes in nodes named like dialog/overlay chrome;
+        // inserted text and the bounded safety sweep still catch generic popups.
+        let node = record.target?.nodeType === 1 ? record.target : record.target?.parentElement;
+        let relevant = false;
+        for (let depth=0; node && depth<6; depth++, node=node.parentElement) {
+          const identity = `${node.id || ''} ${typeof node.className === 'string' ? node.className : ''} ${node.getAttribute?.('role') || ''}`;
+          if (/modal|popup|pop-up|dialog|warning|alert|notice|scam|overlay|backdrop/i.test(identity)) {
+            relevant = true;
+            break;
+          }
+        }
+        if (relevant) enqueue(record.target, true);
+      }
       else for (const node of record.addedNodes || []) {
         if (++handled > SLICE_NODES) { overflow = true; arm(); break; }
         enqueue(node, true);

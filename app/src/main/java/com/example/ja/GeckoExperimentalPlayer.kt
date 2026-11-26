@@ -134,7 +134,7 @@ private class JaRemoteBridge {
     // hides its controls and the JS navigation mode expires.
     var onControlModeClosed: (() -> Unit)? = null
     // Read-only reports from the actual video frame (not ad/tracker frames).
-    var onVideoStatistics: ((Int, Double, Int, Int) -> Unit)? = null
+    var onVideoStatistics: ((WebExtension.Port, String, Int, Double, Int, Int, Boolean) -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ports = mutableSetOf<WebExtension.Port>()
     private var activePort: WebExtension.Port? = null
@@ -189,6 +189,8 @@ private class JaRemoteBridge {
                                                         Log.i("JA_PERF", "VIDEO_WINDOW host=${Uri.parse(port.sender.url).host} " +
                                                             "elapsedMs=${sample.elapsedMs} frames=${sample.frames} dropped=${sample.dropped} " +
                                                             "droppedPercent=${String.format(java.util.Locale.US, "%.2f", sample.droppedPercent())} " +
+                                                            "droppedFps=${String.format(java.util.Locale.US, "%.2f", sample.droppedFps())} " +
+                                                            "presentedFps=${String.format(java.util.Locale.US, "%.2f", sample.presentedFps())} " +
                                                             "resolution=${width}x$height")
                                                     }
                                                     val document = port.sender.url
@@ -196,7 +198,8 @@ private class JaRemoteBridge {
                                                     mainHandler.post {
                                                         if (port !in ports) return@post
                                                         frameWarmup.record(port, document, sampledAt, frames, seconds, width, height)
-                                                        onVideoStatistics?.invoke(frames, seconds, width, height)
+                                                        val stablePlayback = frameWarmup.isStablePlayback(port, document, sampledAt)
+                                                        onVideoStatistics?.invoke(port, document, frames, seconds, width, height, stablePlayback)
                                                     }
                                                 }
                                             }
@@ -258,9 +261,18 @@ private class JaRemoteBridge {
     }
 
     fun replayConfirmedStatistics(document: String?) {
-        val samples = frameWarmup.matching(document, android.os.SystemClock.elapsedRealtime())
+        val exactDocument = document ?: return
+        val samples = frameWarmup.matching(exactDocument, android.os.SystemClock.elapsedRealtime())
         Log.i("JA_FRAME_RATE", "FRAME_RATE_WARMUP samples=${samples.size} exactDocument=true")
-        samples.forEach { onVideoStatistics?.invoke(it.frames, it.position, it.width, it.height) }
+        val targetPort = ports.firstOrNull { it.sender.url == exactDocument } ?: return
+        samples.forEachIndexed { index, sample ->
+            val isLatest = index == samples.lastIndex
+            val stable = isLatest && frameWarmup.isStablePlayback(
+                targetPort, exactDocument, android.os.SystemClock.elapsedRealtime()
+            )
+            onVideoStatistics?.invoke(targetPort, exactDocument, sample.frames, sample.position,
+                sample.width, sample.height, stable)
+        }
     }
 
     fun initializeCaptions(confirmedDocument: String?) {
@@ -566,23 +578,25 @@ fun GeckoExperimentalPlayer(
     val overlayGuard = remember(url, reload) { JaOverlayGuardBridge() }
     var videoStarted by remember(url, reload) { mutableStateOf(false) }
     val frameStatsDebugCount = remember(url, reload) { intArrayOf(0) }
-    remoteBridge.onVideoStatistics = { frames, seconds, width, height ->
-        val confirmed = videoStarted
+    remoteBridge.onVideoStatistics = { port, document, frames, seconds, width, height, stablePlayback ->
+        val confirmedTitleFrame = videoStarted && sourceStatusBridge.confirmedDocumentUrl == document
+        val confirmed = confirmedTitleFrame || stablePlayback
         frameStatsDebugCount[0]++
         if (frameStatsDebugCount[0] <= 3 || frameStatsDebugCount[0] % 24 == 0) {
             Log.i("JA_FRAME_RATE", "FRAME_STATS_HANDOFF sample=${frameStatsDebugCount[0]} " +
-                "videoStarted=$confirmed matcherAttached=${latestFrameRateMatcher != null} " +
+                "videoStarted=$videoStarted stablePlayback=$stablePlayback matcherAttached=${latestFrameRateMatcher != null} " +
                 "frames=$frames position=$seconds resolution=${width}x$height " +
-                "bridge=${System.identityHashCode(remoteBridge)}")
+                "host=${Uri.parse(port.sender.url).host} bridge=${System.identityHashCode(remoteBridge)}")
         }
-        // The title's VIDEO_STARTED event is an explicit confirmation from
-        // the foreground source. Do not change the display for ads/pre-roll.
+        // Prefer the source monitor's exact document confirmation. For nested
+        // providers that do not expose VIDEO_STARTED to JA, require seven
+        // consecutive advancing frame reports from the same document first.
         if (confirmed) {
             latestFrameRateMatcher?.observe(frames, seconds, width, height)
-            if (vidFastBridge == null) remoteBridge.initializeCaptions(sourceStatusBridge.confirmedDocumentUrl)
+            if (confirmedTitleFrame && vidFastBridge == null) remoteBridge.initializeCaptions(document)
             if (latestMatchStreamQuality && isTelevision && vidFastBridge == null) {
                 latestFrameRateMatcher?.confirmedQualityHeight()?.let { outputHeight ->
-                    remoteBridge.matchQuality(outputHeight, sourceStatusBridge.confirmedDocumentUrl)
+                    remoteBridge.matchQuality(outputHeight, document)
                 }
             }
         }

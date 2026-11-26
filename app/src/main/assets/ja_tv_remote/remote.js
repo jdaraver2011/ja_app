@@ -1,51 +1,46 @@
-// JA v1.1.5ax: preserve VidFast playback UI and VidSrc/JW remote controls.
+// JA v1.1.6: preserve VidFast playback UI and VidSrc/JW remote controls.
 // Change only native subtitle defaults on new videos and read-only playback
 // frame statistics. Never click VidFast's custom controls or alter playback.
 (() => {
   'use strict';
-  if (globalThis.__jaTvRemote122) return;
-  globalThis.__jaTvRemote122 = true;
+  if (globalThis.__jaTvRemote123) return;
+  globalThis.__jaTvRemote123 = true;
   let port = null, attempts = 0, controlMode = false, selected = -1;
   let hidden = [], hideTimer = null, perfTimer = null;
   // Apply subtitle OFF to each new HTML5 video at startup. Stop enforcing
   // shortly after playback begins so the viewer can turn subtitles on again.
   // Native text tracks are independent of JW/VidFast player control layouts.
   const configuredSubtitleVideos = new WeakSet();
-  function initializeSubtitleDefaults() {
-    let videos;
-    try { videos = document.querySelectorAll('video'); } catch (_) { return; }
-    for (const video of videos) {
-      if (video.ownerDocument.querySelector('.jw-btn, .jw-seek, .jwplayer')) continue;
-      if (configuredSubtitleVideos.has(video)) continue;
-      configuredSubtitleVideos.add(video);
-      let active = true;
-      const turnOff = () => {
-        if (!active) return;
-        try {
-          for (const track of Array.from(video.textTracks || [])) {
-            if (track.mode !== 'disabled') track.mode = 'disabled';
-          }
-        } catch (_) {}
-      };
+  function configureSubtitleDefault(video) {
+    if (!(video instanceof HTMLVideoElement) || configuredSubtitleVideos.has(video)) return;
+    if (video.ownerDocument.querySelector('.jw-btn, .jw-seek, .jwplayer')) return;
+    configuredSubtitleVideos.add(video);
+    let active = true;
+    const turnOff = () => {
+      if (!active) return;
+      try {
+        for (const track of Array.from(video.textTracks || [])) {
+          if (track.mode !== 'disabled') track.mode = 'disabled';
+        }
+      } catch (_) {}
+    };
+    turnOff();
+    video.addEventListener?.('loadedmetadata', turnOff, {once:true});
+    video.addEventListener?.('loadeddata', turnOff, {once:true});
+    video.addEventListener?.('playing', () => {
       turnOff();
-      video.addEventListener?.('loadedmetadata', turnOff, {once:true});
-      video.addEventListener?.('loadeddata', turnOff, {once:true});
-      video.addEventListener?.('playing', () => {
-        turnOff();
-        // Default only: do not override an explicit later subtitle choice.
-        setTimeout(() => { active = false; }, 1800);
-      }, {once:true});
-      try { video.textTracks?.addEventListener?.('addtrack', turnOff); } catch (_) {}
-      setTimeout(() => { active = false; }, 18000);
-    }
+      // Default only: do not override an explicit later subtitle choice.
+      setTimeout(() => { active = false; }, 1800);
+    }, {once:true});
+    try { video.textTracks?.addEventListener?.('addtrack', turnOff); } catch (_) {}
+    setTimeout(() => { active = false; }, 18000);
   }
-  // Content scripts may initialize before <video> exists in an iframe.
-  initializeSubtitleDefaults();
-  let subtitleDiscoveryChecks = 0;
-  const subtitleDiscoveryTimer = setInterval(() => {
-    initializeSubtitleDefaults();
-    if (++subtitleDiscoveryChecks >= 90) clearInterval(subtitleDiscoveryTimer);
-  }, 500);
+  // Scan once, then react to media events. This avoids repeating a whole-page
+  // video query every 500 ms while an embed is starting.
+  try { for (const video of document.querySelectorAll('video')) configureSubtitleDefault(video); } catch (_) {}
+  const configureMediaEvent = event => configureSubtitleDefault(event.target);
+  document.addEventListener('loadedmetadata', configureMediaEvent, true);
+  document.addEventListener('playing', configureMediaEvent, true);
   // Android TV remote navigation and phone touch input need different hiding
   // behavior. Device capability is only a hint; a real touch event also opts in.
   let touchPlaybackMode = (navigator.maxTouchPoints || 0) > 0;

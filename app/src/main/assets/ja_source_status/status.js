@@ -1,5 +1,5 @@
 /*
- * JA v1.1.5h source availability reporting. Read-only; no DOM mutations,
+ * JA v1.1.6 source availability reporting. Read-only; no DOM mutations,
  * autoplay clicks, URL scraping or control remapping.
  *
  * A page-load response is not evidence of a playable video. The monitor
@@ -8,8 +8,8 @@
  */
 (() => {
   'use strict';
-  if (globalThis.__jaSourceMonitor118) return;
-  globalThis.__jaSourceMonitor118 = true;
+  if (globalThis.__jaSourceMonitor119) return;
+  globalThis.__jaSourceMonitor119 = true;
 
   let port = null;
   let reportedStarted = false;
@@ -250,7 +250,7 @@
   // either started or failed, monitoring stops. Otherwise continue sampling
   // periodically without declaring an unavailable title merely from time.
   const timer = setInterval(() => {
-    if (reportedStarted || reportedUnavailable || ++scanNumber > 150) {
+    if (reportedStarted || reportedUnavailable || ++scanNumber > 40) {
       clearInterval(timer); return;
     }
     const found = videos();

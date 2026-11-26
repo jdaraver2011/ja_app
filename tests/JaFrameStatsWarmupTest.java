@@ -18,6 +18,15 @@ public final class JaFrameStatsWarmupTest {
   for(int i=0;i<12;i++)w.record(i,"https://player.example/"+i,4000,24,1,1920,1080);
   check(w.matching("https://player.example/0",4100).isEmpty());
   check(w.matching("https://player.example/11",4100).size()==1);
-  System.out.println("PASS: exact-document warmup, immediate confirmed cadence, freshness, ambiguity, replacement, disposal and bounds");
+  JaFrameStatsWarmup stable=new JaFrameStatsWarmup();
+  for(int i=0;i<7;i++)stable.record("nested","https://embed.example/player",10_000L+i*1000L,
+    500+i*60,i,1280,720);
+  check(stable.isStablePlayback("nested","https://embed.example/player",16_000L));
+  check(!stable.isStablePlayback("nested","https://embed.example/player",18_000L));
+  JaFrameStatsWarmup paused=new JaFrameStatsWarmup();
+  for(int i=0;i<7;i++)paused.record("paused","https://embed.example/player",20_000L+i*1000L,
+    900+i*60,2,1280,720);
+  check(!paused.isStablePlayback("paused","https://embed.example/player",26_000L));
+  System.out.println("PASS: exact-document warmup, stable nested playback, immediate confirmed cadence, freshness, ambiguity, replacement, disposal and bounds");
  }
 }

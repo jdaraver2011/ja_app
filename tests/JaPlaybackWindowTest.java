@@ -6,6 +6,8 @@ public final class JaPlaybackWindowTest {
   for(int i=0;i<=30;i++)result=w.sample(i*1000L,100+i*24,2+i,1920,1080,i);
   check(result!=null&&result.frames==720&&result.dropped==30&&result.elapsedMs==30000);
   check(Math.abs(result.droppedPercent()-100.0*30/720)<.00001);
+  check(Math.abs(result.droppedFps()-1.0)<.00001);
+  check(Math.abs(result.presentedFps()-23.0)<.00001);
   check(w.sample(31000,850,33,1920,1080,600)==null);
   for(int i=1;i<30;i++)check(w.sample(31000+i*1000L,850+i*24,33,1920,1080,600+i)==null);
   check(w.sample(61000,1570,33,1920,1080,630)!=null);
