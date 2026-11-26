@@ -209,11 +209,17 @@ private class JaRemoteBridge {
                                                     ?.take(8)?.lowercase().orEmpty()
                                                 val redirectHost = redirectUrl.host?.let { " redirectHost=$it" }.orEmpty()
                                                 val statusCode = report.optInt("statusCode", 0)
+                                                val requestHeaders = report.optJSONObject("requestHeaders")
+                                                val headerNames = requestHeaders?.keys()?.asSequence()?.sorted()?.joinToString(",")
+                                                    .orEmpty()
+                                                val requestHeaderSummary = if (event == "MEDIA_REQUEST_SENT_HEADERS")
+                                                    " headerCount=${requestHeaders?.length() ?: 0} headerNames=${headerNames.ifBlank { "none" }}"
+                                                else ""
                                                 Log.i("JA_MEDIA_DIAG", "${event} kind=${report.optString("kind")} " +
                                                     "host=${requestUrl.host ?: "unknown"} format=${suffix.ifBlank { "unknown" }} " +
                                                     "query=${!requestUrl.query.isNullOrBlank()} frame=${documentUrl.host ?: "unknown"} " +
                                                     "frameId=${report.optInt("frameId", -1)} resource=${report.optString("resourceType")} " +
-                                                    "status=$statusCode$redirectHost")
+                                                    "status=$statusCode$redirectHost$requestHeaderSummary")
                                                 if (event == "MEDIA_REQUEST_CANDIDATE" &&
                                                     report.optString("kind") in setOf("HLS", "DASH") &&
                                                     (requestUrl.scheme == "http" || requestUrl.scheme == "https") &&

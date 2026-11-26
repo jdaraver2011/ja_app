@@ -997,13 +997,22 @@ private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: (
             .setAllowCrossProtocolRedirects(true)
             .setUserAgent(candidate.userAgent.takeIf { it.isNotBlank() } ?: "JA/2.8.8")
         val upstream = DefaultDataSource.Factory(context, http)
+        val loggedRequestContexts = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
         val requestScopedFactory = ResolvingDataSource.Factory(upstream) { dataSpec ->
             val sameHost = dataSpec.uri.host.equals(originHost, ignoreCase = true)
             val safeHeaders = headers.filter { (name, _) ->
                 name !in setOf("Cookie", "Authorization") || sameHost
             }
+            val requestHost = dataSpec.uri.host ?: "unknown"
+            val headerNames = safeHeaders.keys.sorted().joinToString(",").ifBlank { "none" }
+            if (loggedRequestContexts.add("$requestHost|$headerNames")) {
+                Log.i("JA_MEDIA_DIAG", "NATIVE_REQUEST_CONTEXT kind=${candidate.kind} " +
+                    "host=$requestHost headerNames=$headerNames")
+            }
             dataSpec.buildUpon().setHttpRequestHeaders(safeHeaders).build()
         }
+        Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_START kind=${candidate.kind} host=$originHost " +
+            "headerNames=${headers.keys.sorted().joinToString(",").ifBlank { "none" }}")
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(requestScopedFactory))
             .build().apply {
@@ -1027,11 +1036,16 @@ private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: (
                 }
                 status = if (httpCode != null) "Native test failed · HTTP $httpCode"
                     else "Native test failed · ${error.errorCodeName}"
-                Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_FAILED kind=${candidate.kind} http=${httpCode ?: 0} code=${error.errorCodeName}")
+                Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_FAILED kind=${candidate.kind} " +
+                    "host=${Uri.parse(candidate.url).host ?: "unknown"} http=${httpCode ?: 0} code=${error.errorCodeName}")
             }
         }
         player.addListener(listener)
-        onDispose { player.removeListener(listener); player.release() }
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+            Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_RELEASE host=${Uri.parse(candidate.url).host ?: "unknown"}")
+        }
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { PlayerView(it).apply {
