@@ -88,6 +88,10 @@ private data class DetailReturnPoint(
  * Never hold up the catalog UI or title selection while it initializes.
  */
 private fun prewarmPlayerAdBlocker(context: Context, mode: String) {
+    if (JaMemoryPolicy.isConstrainedDevice()) {
+        Log.i("JA_MEMORY", "GECKO_PREWARM_SKIPPED reason=constrained_device mode=$mode")
+        return
+    }
     try {
         val runtime = JaGeckoRuntime.get(context)
         prepareJaPlayerExtensions(runtime) { ready ->
@@ -157,6 +161,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        JaMemoryPolicy.install(applicationContext)
         Log.i("JA_STARTUP", "APP_BUILD versionName=${BuildConfig.VERSION_NAME} versionCode=${BuildConfig.VERSION_CODE}")
         JaLiveTvUpdates.schedule(applicationContext)
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()

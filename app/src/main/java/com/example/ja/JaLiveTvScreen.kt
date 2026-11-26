@@ -1142,7 +1142,20 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
     matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,
     onFullscreen:()->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit) {
     val context=LocalContext.current
-    val buffer = remember(context) { PlayerControlSettings(context).iptvBuffer }
+    val configuredBuffer = remember(context) { PlayerControlSettings(context).iptvBuffer }
+    val buffer = remember(context, configuredBuffer) {
+        val effective = if (
+            configuredBuffer == JaIptvBuffer.DEFAULT && JaMemoryPolicy.isConstrainedDevice()
+        ) JaIptvBuffer.SMALL else configuredBuffer
+        if (effective != configuredBuffer) {
+            Log.i(
+                "JA_MEMORY",
+                "IPTV_BUFFER_PROFILE configured=${configuredBuffer.name} effective=${effective.name} " +
+                    "reason=constrained_device maxBufferMs=${effective.maxMs}"
+            )
+        }
+        effective
+    }
     var frameMatcher by remember(channel){mutableStateOf<JaTvFrameRateMatcher?>(null)}
     val qualityMatching=fullscreen&&matchStreamQuality&&matchTvFrameRate&&matchTvResolution
     val owner=LocalLifecycleOwner.current
