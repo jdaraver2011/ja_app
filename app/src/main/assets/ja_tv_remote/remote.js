@@ -86,10 +86,14 @@
       try {
         const quality = video.getVideoPlaybackQuality?.();
         if (!quality || !video.videoWidth || !video.videoHeight) return;
+        const currentTime = Math.round(video.currentTime * 1000) / 1000;
+        const bufferedEnd = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
         sendDetail({event:'VIDEO_STATS', width:video.videoWidth,
           height:video.videoHeight, total:quality.totalVideoFrames,
           dropped:quality.droppedVideoFrames,
-          position:Math.round(video.currentTime*1000)/1000});
+          position:currentTime, readyState:video.readyState, networkState:video.networkState,
+          duration:Number.isFinite(video.duration) ? Math.round(video.duration) : -1,
+          bufferedAhead:Math.round(Math.max(0, bufferedEnd - video.currentTime) * 1000) / 1000});
       } catch (_) {}
     }, 1000);
     const elementLabel = el => {
@@ -1612,6 +1616,20 @@
   // Never alter autoplay, only watch status changes to handle show/hide.
   document.addEventListener('pause', () => { if (!controlMode) restore(); updateCenterVisibility(); }, true);
   document.addEventListener('play', () => { if (!controlMode) hideWhenPlaying(1200); updateCenterVisibility(); }, true);
+  // Capture state transitions separately from the one-second frame sampler.
+  // Report only bounded playback metadata; never include media URLs or headers.
+  for (const state of ['playing','waiting','stalled','pause','ended','error','loadedmetadata','canplay']) {
+    document.addEventListener(state, event => {
+      const video = event.target;
+      if (!(video instanceof HTMLVideoElement)) return;
+      const bufferedEnd = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
+      send({event:'VIDEO_STATE', state, width:video.videoWidth, height:video.videoHeight,
+        readyState:video.readyState, networkState:video.networkState,
+        position:Math.round(video.currentTime * 1000) / 1000,
+        bufferedAhead:Math.round(Math.max(0, bufferedEnd - video.currentTime) * 1000) / 1000,
+        errorCode:video.error?.code || 0});
+    }, true);
+  }
   // Read-only frame samples once per second. Three valid post-start samples
   // can reach JaTvFrameRateMatcher within ~3-5 seconds instead of ~15 seconds.
   // The matcher still requires valid data and may reject unsupported modes.
@@ -1623,7 +1641,11 @@
       const q = video.getVideoPlaybackQuality?.();
       if (q) send({event:'VIDEO_STATS', width:video.videoWidth, height:video.videoHeight,
         total:q.totalVideoFrames, dropped:q.droppedVideoFrames,
-        position:Math.round(video.currentTime * 1000) / 1000});
+        position:Math.round(video.currentTime * 1000) / 1000,
+        readyState:video.readyState, networkState:video.networkState,
+        duration:Number.isFinite(video.duration) ? Math.round(video.duration) : -1,
+        bufferedAhead:video.buffered.length ? Math.round(Math.max(0,
+          video.buffered.end(video.buffered.length - 1) - video.currentTime) * 1000) / 1000 : 0});
     } catch (_) {}
   }, 1000);
   // JA v1.0.16: sequential startup configuration, NOT another autoplay engine.

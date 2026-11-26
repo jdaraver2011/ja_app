@@ -179,14 +179,42 @@
   let roots = [], active = null, workTimer = null, sweepTimer = null, metricsTimer = null;
   let overflow = false;
   const metrics = {slices:0, nodes:0, fullScans:0, playbackSkips:0, mutationRoots:0, scanMs:0, maxSliceMs:0};
+  const activeChildFrames = new Set();
+
+  function localVideoActive() {
+    try { return [...document.querySelectorAll('video')].some(video => !video.paused && !video.ended); }
+    catch (_) { return false; }
+  }
+  function mediaActive() {
+    const embedded = Array.from(document.querySelectorAll('iframe,frame'))
+      .map(node => { try { return node.contentWindow; } catch (_) { return null; } });
+    for (const child of activeChildFrames) if (!embedded.includes(child)) activeChildFrames.delete(child);
+    return localVideoActive() || activeChildFrames.size > 0;
+  }
+  let lastReportedMediaState = null;
+  function reportMediaState(force = false) {
+    const activeNow = mediaActive();
+    if (!force && activeNow === lastReportedMediaState) return;
+    lastReportedMediaState = activeNow;
+    try { if (window.parent !== window) window.parent.postMessage({__jaGuardMediaActive:activeNow}, '*'); } catch (_) {}
+  }
+  // Cross-origin iframes cannot be inspected by the parent document. Each
+  // child reports only a boolean playback state; accept messages only from a
+  // frame that is actually embedded by this document, then relay the aggregate
+  // state upward for nested players.
+  window.addEventListener('message', event => {
+    const frame = Array.from(document.querySelectorAll('iframe,frame'))
+      .find(node => { try { return node.contentWindow === event.source; } catch (_) { return false; } });
+    if (!frame || event.data?.__jaGuardMediaActive !== true && event.data?.__jaGuardMediaActive !== false) return;
+    if (event.data.__jaGuardMediaActive) activeChildFrames.add(event.source);
+    else activeChildFrames.delete(event.source);
+    reportMediaState();
+  }, false);
 
   // Full-document sweeps are a safety net for missed mutations. During active
   // media they compete with decoding and rendering, so rely on the observer
   // until playback pauses or ends. Mutation-driven overlay checks stay active.
-  function videoActive() {
-    try { return [...document.querySelectorAll('video')].some(video => !video.paused && !video.ended); }
-    catch (_) { return false; }
-  }
+  function videoActive() { return mediaActive(); }
 
   function inspectText(textNode) {
     const content = (textNode.textContent || '').replace(/\s+/g, ' ').trim();
@@ -281,7 +309,8 @@
   });
   function reportMetrics() {
     if (live && !document.hidden && metrics.slices) send('GUARD_PERF', 'cumulative', {
-      ...metrics, scanMs:Math.round(metrics.scanMs), maxSliceMs:Math.round(metrics.maxSliceMs * 100) / 100
+      ...metrics, localVideoActive:localVideoActive(), activeChildFrames:activeChildFrames.size,
+      scanMs:Math.round(metrics.scanMs), maxSliceMs:Math.round(metrics.maxSliceMs * 100) / 100
     });
   }
   function pause() {
@@ -298,6 +327,7 @@
     if (!live || document.hidden || sweepTimer !== null) return;
     observer.observe(document, {childList:true, subtree:true, characterData:true,
       attributes:true, attributeFilter:['class','style','hidden']});
+    reportMediaState(true);
     sweep();
     sweepTimer = setInterval(sweep, 10000);
     metricsTimer = setInterval(reportMetrics, 30000);
@@ -307,6 +337,7 @@
     clearTimeout(mediaStateTimer);
     mediaStateTimer = setTimeout(() => {
       mediaStateTimer = null;
+      reportMediaState();
       if (!videoActive()) sweep();
     }, 700);
   }
@@ -315,7 +346,7 @@
   }
   document.addEventListener('DOMContentLoaded', sweep, {once:true});
   document.addEventListener('visibilitychange', () => document.hidden ? pause() : resume());
-  window.addEventListener('pagehide', () => { reportMetrics(); live = false; pause(); });
+  window.addEventListener('pagehide', () => { reportMetrics(); lastReportedMediaState = null; reportMediaState(true); live = false; pause(); });
   window.addEventListener('pageshow', () => { live = true; resume(); });
   resume();
 })();
