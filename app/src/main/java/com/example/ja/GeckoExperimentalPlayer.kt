@@ -135,6 +135,7 @@ private class JaRemoteBridge {
     var onControlModeClosed: (() -> Unit)? = null
     // Read-only reports from the actual video frame (not ad/tracker frames).
     var onVideoStatistics: ((WebExtension.Port, String, Int, Double, Int, Int, Boolean) -> Unit)? = null
+    var mediaSourceDiagnosticsEnabled: Boolean = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ports = mutableSetOf<WebExtension.Port>()
     private var activePort: WebExtension.Port? = null
@@ -143,6 +144,7 @@ private class JaRemoteBridge {
     private val captionTargets = mutableSetOf<WebExtension.Port>()
     private val qualityTargets = mutableMapOf<WebExtension.Port, Int>()
     private val playbackWindows = mutableMapOf<WebExtension.Port, JaPlaybackWindow>()
+    private val mediaDiagnosticsTargets = mutableSetOf<WebExtension.Port>()
     private val frameWarmup = JaFrameStatsWarmup()
 
     fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
@@ -170,8 +172,30 @@ private class JaRemoteBridge {
                                             val report = message as? JSONObject
                                             val event = report?.optString("event")
                                             // Forward every sample, but avoid formatting/writing a JSON log each second.
-                                            if (event != "VIDEO_STATS" || ++statisticsLogCount <= 3 || statisticsLogCount % 30 == 0) {
+                                            if (event == "MEDIA_SOURCE_CANDIDATE" && report != null) {
+                                                val candidate = Uri.parse(report.optString("url"))
+                                                val suffix = candidate.lastPathSegment?.substringAfterLast('.', "")
+                                                    ?.take(8)?.lowercase().orEmpty()
+                                                Log.i("JA_MEDIA_DIAG", "CANDIDATE kind=${report.optString("kind")} " +
+                                                    "host=${candidate.host ?: "unknown"} format=${suffix.ifBlank { "unknown" }} " +
+                                                    "query=${!candidate.query.isNullOrBlank()} evidence=${report.optString("evidence")} " +
+                                                    "frame=${report.optString("frameHost")} " +
+                                                    "resolution=${report.optInt("width")}x${report.optInt("height")}")
+                                            } else if (event == "MEDIA_SOURCE_BLOB" && report != null) {
+                                                Log.i("JA_MEDIA_DIAG", "BLOB_MSE frame=${report.optString("frameHost")} " +
+                                                    "mime=${report.optString("mime")} resolution=${report.optInt("width")}x${report.optInt("height")} " +
+                                                    "active=${report.optBoolean("active")} observerSupported=true")
+                                            } else if (event != "VIDEO_STATS" || ++statisticsLogCount <= 3 || statisticsLogCount % 30 == 0) {
                                                 Log.i("JA_TV_BRIDGE", "FRAME_REPORT $message")
+                                            }
+                                            if (event == "VIDEO_STATS" && mediaSourceDiagnosticsEnabled &&
+                                                report != null && report.optInt("width", 0) >= 480 &&
+                                                report.optInt("height", 0) >= 270 && port !in mediaDiagnosticsTargets) {
+                                                try {
+                                                    port.postMessage(JSONObject().put("action", "startMediaSourceDiagnostics"))
+                                                    mediaDiagnosticsTargets.add(port)
+                                                    Log.i("JA_MEDIA_DIAG", "START_REQUESTED frame=${Uri.parse(port.sender.url).host}")
+                                                } catch (_: Exception) { }
                                             }
                                             if (event == "VIDEO_STATS" && report != null &&
                                                 report.optInt("width", 0) >= 480 &&
@@ -218,6 +242,7 @@ private class JaRemoteBridge {
                                     override fun onDisconnect(port: WebExtension.Port) {
                                         ports.remove(port)
                                         playbackWindows.remove(port)
+                                        mediaDiagnosticsTargets.remove(port)
                                         qualityTargets.remove(port)
                                         captionTargets.remove(port)
                                         frameWarmup.remove(port)
@@ -300,7 +325,7 @@ private class JaRemoteBridge {
         }
     }
 
-    fun clear() { captionTargets.clear(); qualityTargets.clear(); ports.clear(); playbackWindows.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
+    fun clear() { captionTargets.clear(); qualityTargets.clear(); ports.clear(); playbackWindows.clear(); mediaDiagnosticsTargets.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
 }
 
 /**
@@ -517,7 +542,8 @@ fun GeckoExperimentalPlayer(
     // suppresses the *unconfirmed* timeout banner: it must NOT mark the
     // selected title as verified, since an embedded page may play an ad.
     onMediaActivity: () -> Unit = {},
-    onTopLevelRedirect: (String) -> Unit = {}
+    onTopLevelRedirect: (String) -> Unit = {},
+    enableMediaSourceDiagnostics: Boolean = false
 ) {
     val context = LocalContext.current
     val isTelevision = (LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
@@ -562,6 +588,7 @@ fun GeckoExperimentalPlayer(
     // dispatchKeyEvent handler retains a stale bridge even after Compose updates
     // GeckoView.setSession(). This produced NO_FRAME_PORT despite VIDEO_STATS.
     val remoteBridge = remember(url, reload) { JaRemoteBridge() }
+    remoteBridge.mediaSourceDiagnosticsEnabled = enableMediaSourceDiagnostics
     var webControlMode by remember(url, reload) { mutableStateOf(false) }
     remoteBridge.onControlModeClosed = { webControlMode = false }
     val vidFastBridge = remember(url,reload) {

@@ -231,6 +231,90 @@
     queueMicrotask(() => { videoLookupCached = false; videoLookupResult = null; });
     return videoLookupResult;
   };
+  let mediaSourceDiagnostics = false;
+  let mediaResourceObserver = null;
+  let mediaBlobReported = false;
+  let mediaLastResourceEntryCount = 0;
+  const reportedMediaCandidates = new Set();
+  const classifyNativeMedia = (raw, mime = '', allowProgressive = false) => {
+    let parsed;
+    try { parsed = new URL(raw, document.baseURI); } catch (_) { return null; }
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.href.length > 8192) return null;
+    const path = parsed.pathname.toLowerCase();
+    const contentType = String(mime || '').toLowerCase();
+    if (/\.m3u8?$/.test(path) || /mpegurl|vnd\.apple\.mpegurl/.test(contentType) ||
+        /(?:^|[/?&])(?:format|type)=m3u8(?:&|$)/i.test(parsed.href)) return {parsed, kind:'HLS'};
+    if (/\.mpd$/.test(path) || /dash\+xml/.test(contentType) ||
+        /(?:^|[/?&])(?:format|type)=mpd(?:&|$)/i.test(parsed.href)) return {parsed, kind:'DASH'};
+    if (/\/(?:master|playlist|manifest|chunklist|index)(?:[._/-]|$)/i.test(path)) return {parsed, kind:'MANIFEST_UNKNOWN'};
+    if (allowProgressive && /^(?:video|audio)\//.test(contentType)) return {parsed, kind:'PROGRESSIVE'};
+    if (allowProgressive && /\.(?:mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|mpg|mpeg)$/.test(path))
+      return {parsed, kind:'PROGRESSIVE'};
+    return null;
+  };
+  const reportNativeMediaCandidate = (raw, evidence, mime = '', allowProgressive = false) => {
+    if (!mediaSourceDiagnostics) return;
+    const video = currentVideo();
+    if (!video) return;
+    const match = classifyNativeMedia(raw, mime, allowProgressive);
+    if (!match) return;
+    const url = match.parsed.href.split('#', 1)[0];
+    const key = `${match.kind}|${url}`;
+    if (reportedMediaCandidates.has(key) || reportedMediaCandidates.size >= 24) return;
+    reportedMediaCandidates.add(key);
+    send({event:'MEDIA_SOURCE_CANDIDATE', url, kind:match.kind,
+      evidence:String(evidence || '').slice(0,48), mime:String(mime || '').slice(0,96),
+      width:video?.videoWidth || 0, height:video?.videoHeight || 0,
+      position:Math.round((video?.currentTime || 0)*1000)/1000,
+      readyState:video?.readyState || 0, frameHost:location.hostname,
+      referer:location.href, userAgent:navigator.userAgent.slice(0,512)});
+  };
+  const inspectNativeMediaFrame = () => {
+    if (!mediaSourceDiagnostics) return;
+    const video = currentVideo();
+    if (!video) return;
+    const active = !video.paused && !video.ended;
+    const sourceType = video.querySelector('source[type]')?.getAttribute('type') || '';
+    const currentSrc = video.currentSrc || video.src || '';
+    if (/^blob:/i.test(currentSrc)) {
+      if (!mediaBlobReported) {
+        mediaBlobReported = true;
+        send({event:'MEDIA_SOURCE_BLOB', frameHost:location.hostname,
+          mime:sourceType.slice(0,96), width:video.videoWidth || 0, height:video.videoHeight || 0,
+          active, readyState:video.readyState});
+      }
+    } else if (currentSrc) {
+      reportNativeMediaCandidate(currentSrc, 'video.currentSrc', sourceType, true);
+    }
+    if (video.querySelectorAll) for (const source of video.querySelectorAll('source[src]'))
+      reportNativeMediaCandidate(source.src, 'source.element', source.type || '', true);
+    if (active && performance?.getEntriesByType) {
+      const entries = performance.getEntriesByType('resource');
+      const start = entries.length < mediaLastResourceEntryCount ? 0 : mediaLastResourceEntryCount;
+      for (let i = start; i < entries.length; i++) {
+        const entry = entries[i];
+        reportNativeMediaCandidate(entry.name, `resource.${entry.initiatorType || 'unknown'}`, '', false);
+      }
+      mediaLastResourceEntryCount = entries.length;
+    }
+  };
+  const startNativeMediaDiagnostics = () => {
+    if (mediaSourceDiagnostics) return;
+    mediaSourceDiagnostics = true;
+    inspectNativeMediaFrame();
+    try {
+      mediaResourceObserver = new PerformanceObserver(list => {
+        if (!mediaSourceDiagnostics) return;
+        for (const entry of list.getEntries())
+          reportNativeMediaCandidate(entry.name, `resource.${entry.initiatorType || 'unknown'}`, '', false);
+      });
+      mediaResourceObserver.observe({type:'resource', buffered:true});
+    } catch (_) { mediaResourceObserver = null; }
+    for (const event of ['loadedmetadata','loadeddata','canplay','playing','progress','durationchange'])
+      document.addEventListener(event, inspectNativeMediaFrame, true);
+    send({event:'MEDIA_SOURCE_DIAGNOSTICS_STARTED', frameHost:location.hostname,
+      videoCount:videos().length, performanceObserver:!!mediaResourceObserver});
+  };
   const bottomBarCandidates = () => Array.from(document.querySelectorAll(
     '[class*="control" i], [class*="toolbar" i], [class*="player-bar" i], [class*="progress" i]'
   )).filter(el => {
@@ -1398,6 +1482,7 @@
 
   async function handle(message) {
     const action = message?.action;
+    if (action === 'startMediaSourceDiagnostics') { startNativeMediaDiagnostics(); return; }
     if (['toggle','back10','forward10','controlsOpen','controlsNext','controlsPrev','controlsSelect','controlsClose','controlsUp','controlsDown'].includes(action))qualityIntentVersion++;
     if (action === 'initializePlaybackPreferences') { captionDefaults.start(); return; }
     if (action === 'matchOutputQuality') { outputQuality.request(message.height); return; }
@@ -1533,6 +1618,7 @@
   perfTimer = setInterval(() => {
     const video = currentVideo();
     if (!video || video.paused) return;
+    if (mediaSourceDiagnostics) inspectNativeMediaFrame();
     try {
       const q = video.getVideoPlaybackQuality?.();
       if (q) send({event:'VIDEO_STATS', width:video.videoWidth, height:video.videoHeight,

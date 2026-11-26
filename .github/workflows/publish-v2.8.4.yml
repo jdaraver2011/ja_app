@@ -13,5 +13,4 @@ jobs:
       publish_update: true
       build_variant: release
       generate_baseline_profile: false
-      daddylive_us_pilot: true
     secrets: inherit

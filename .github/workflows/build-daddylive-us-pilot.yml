@@ -11,5 +11,4 @@ jobs:
       run_checks: true
       publish_update: false
       build_variant: release
-      daddylive_us_pilot: true
     secrets: inherit

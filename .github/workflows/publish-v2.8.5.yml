@@ -13,6 +13,4 @@ jobs:
       publish_update: true
       build_variant: release
       generate_baseline_profile: false
-      # Carry forward the confirmed DaddyLive USA pilot from v2.8.4.
-      daddylive_us_pilot: true
     secrets: inherit

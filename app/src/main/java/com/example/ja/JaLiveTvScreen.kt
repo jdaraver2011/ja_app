@@ -940,6 +940,7 @@ private fun JaLiveEmbeddedPlayback(
                 }
             }
         } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name,
+            enableMediaSourceDiagnostics = BuildConfig.DEBUG,
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
             })

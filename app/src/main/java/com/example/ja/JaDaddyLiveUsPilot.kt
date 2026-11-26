@@ -5,8 +5,7 @@ private data class PilotChannel(val id: Int, val name: String, val guideId: Stri
 // Snapshot of the public lineup. Only explicit U.S. labels, corroborated U.S.
 // names, and approved shared-brand feeds are included. XMLTV IDs are from JA's
 // existing U.S. feed. Shared-brand and uncertain regional schedules stay blank.
-internal val jaDaddyLiveUsPilot = if (BuildConfig.JA_DADDYLIVE_US_PILOT) {
-    listOf(
+internal val jaDaddyLiveUsPilot = listOf(
         PilotChannel(302, "A&E USA"),
         PilotChannel(766, "ABC NY USA", "467679"),
         PilotChannel(51, "ABC USA"),
@@ -185,10 +184,9 @@ internal val jaDaddyLiveUsPilot = if (BuildConfig.JA_DADDYLIVE_US_PILOT) {
         PilotChannel(655, "WETV USA", "464955"),
         PilotChannel(376, "WWE Network"),
         PilotChannel(763, "YES Network USA", "496607"),
-    ).map { (id, name, guideId) ->
+).map { (id, name, guideId) ->
         JaLiveChannel("daddylive:$id", name, "", emptyList(),
             categories = setOf("daddylive-usa"),
             embeddedPlayerUrl = "https://thedaddy.li/stream/stream-$id.php",
             xmlTvGuideId = guideId)
     }
-} else emptyList()
