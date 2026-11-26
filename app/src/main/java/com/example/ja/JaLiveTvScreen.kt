@@ -1,6 +1,7 @@
 package com.example.ja
 
 import android.app.Activity
+import android.net.Uri
 import android.view.ViewGroup
 import android.os.SystemClock
 import android.util.Log
@@ -920,6 +921,8 @@ private fun JaLiveEmbeddedPlayback(
     matchStreamQuality:Boolean=false
 ) {
     var frameMatcher by remember(url){mutableStateOf<JaTvFrameRateMatcher?>(null)}
+    val capturedCandidates = remember(url) { mutableStateListOf<JaMediaSourceCandidate>() }
+    var nativeCandidate by remember(url) { mutableStateOf<JaMediaSourceCandidate?>(null) }
     val qualityMatching=matchStreamQuality&&matchTvFrameRate&&matchTvResolution
     var fallbackIndex by remember(url) { mutableIntStateOf(0) }
     val activeUrl=(listOf(url)+fallbackUrls).getOrElse(fallbackIndex){url}
@@ -931,7 +934,10 @@ private fun JaLiveEmbeddedPlayback(
     var failed by remember(activeUrl) { mutableStateOf(false) }
     JaLivePresentation(true, onClose) {
         JaLiveFrameMatcherHost(matchTvFrameRate,matchTvResolution){frameMatcher=it}
-        if (failed) {
+        val candidatePlayer = nativeCandidate
+        if (candidatePlayer != null) {
+            JaNativeCandidatePlayer(candidatePlayer, onBack = { nativeCandidate = null })
+        } else if (failed) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Channel unavailable", color = Color.White)
@@ -941,9 +947,80 @@ private fun JaLiveEmbeddedPlayback(
             }
         } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name,
             enableMediaSourceDiagnostics = BuildConfig.DEBUG,
+            onMediaSourceCandidate = { candidate ->
+                if (BuildConfig.DEBUG && candidate.kind in setOf("HLS", "DASH") &&
+                    capturedCandidates.none { it.url == candidate.url } && capturedCandidates.size < 4) {
+                    capturedCandidates.add(candidate)
+                }
+            },
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
             })
+        if (BuildConfig.DEBUG && nativeCandidate == null && capturedCandidates.isNotEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
+                Column(Modifier.padding(12.dp)
+                    .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Captured ${capturedCandidates.size} manifest request(s)", color = Color.White, fontSize = 12.sp)
+                    capturedCandidates.forEachIndexed { index, candidate ->
+                        val host = Uri.parse(candidate.url).host ?: "stream host"
+                        TvFocusButton(onClick = { nativeCandidate = candidate }) {
+                            Text("Test native ${candidate.kind} ${index + 1} · $host", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: () -> Unit) {
+    val context = LocalContext.current
+    var status by remember(candidate.url) { mutableStateOf("Preparing native ${candidate.kind} test…") }
+    val player = remember(candidate.url, candidate.referer, candidate.userAgent) {
+        val headers = buildMap {
+            if (candidate.referer.isNotBlank()) put("Referer", candidate.referer)
+        }
+        val http = DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setUserAgent(candidate.userAgent.takeIf { it.isNotBlank() } ?: "JA/2.8.8")
+            .setDefaultRequestProperties(headers)
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
+            .build().apply {
+                setMediaItem(MediaItem.fromUri(candidate.url))
+                prepare()
+                playWhenReady = true
+            }
+    }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                status = if (isPlaying) "Native playback started" else "Native player is buffering or paused"
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                status = "Native test failed · ${error.errorCodeName}"
+                Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_FAILED kind=${candidate.kind} code=${error.errorCodeName}")
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener); player.release() }
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(factory = { PlayerView(it).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            this.player = player
+            useController = true
+            keepScreenOn = true
+        } }, update = { it.player = player }, modifier = Modifier.fillMaxSize(),
+            onReset = null, onRelease = { it.player = null; it.keepScreenOn = false })
+        Column(Modifier.align(Alignment.TopStart).padding(14.dp)
+            .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp)) {
+            Text(status, color = Color.White, fontSize = 12.sp)
+            Text("Source host: ${Uri.parse(candidate.url).host ?: "unknown"}", color = Color.LightGray, fontSize = 11.sp)
+            TvFocusButton(onClick = onBack) { Text("Back to web player") }
+        }
     }
 }
 

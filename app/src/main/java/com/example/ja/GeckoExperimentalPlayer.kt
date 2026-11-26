@@ -63,6 +63,13 @@ import org.mozilla.geckoview.WebRequestError
 import java.util.Collections
 import java.util.WeakHashMap
 
+data class JaMediaSourceCandidate(
+    val url: String,
+    val kind: String,
+    val referer: String,
+    val userAgent: String
+)
+
 /**
  * Built-in extensions are runtime-wide, whereas their native-message delegates
  * are registered on each GeckoSession. Installing the same extension again for
@@ -135,9 +142,12 @@ private class JaRemoteBridge {
     var onControlModeClosed: (() -> Unit)? = null
     // Read-only reports from the actual video frame (not ad/tracker frames).
     var onVideoStatistics: ((WebExtension.Port, String, Int, Double, Int, Int, Boolean) -> Unit)? = null
+    var onMediaSourceCandidate: ((JaMediaSourceCandidate) -> Unit)? = null
     var mediaSourceDiagnosticsEnabled: Boolean = false
+        private set
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ports = mutableSetOf<WebExtension.Port>()
+    private var mediaRequestPort: WebExtension.Port? = null
     private var activePort: WebExtension.Port? = null
     private var hideTitlePending = false
     private var statisticsLogCount = 0
@@ -145,6 +155,9 @@ private class JaRemoteBridge {
     private val qualityTargets = mutableMapOf<WebExtension.Port, Int>()
     private val playbackWindows = mutableMapOf<WebExtension.Port, JaPlaybackWindow>()
     private val mediaDiagnosticsTargets = mutableSetOf<WebExtension.Port>()
+    // Keep full request URLs only until the matching redirect/response event.
+    // They are never written to Logcat or persistent storage.
+    private val mediaRequestUrls = LinkedHashMap<String, JSONObject>()
     private val frameWarmup = JaFrameStatsWarmup()
 
     fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
@@ -162,6 +175,10 @@ private class JaRemoteBridge {
                             override fun onConnect(port: WebExtension.Port) {
                                 ports.add(port)
                                 Log.i("JA_TV_BRIDGE", "FRAME_CONNECTED ports=${ports.size} bridge=${System.identityHashCode(this@JaRemoteBridge)}")
+                                if (Uri.parse(port.sender.url).scheme == "moz-extension") {
+                                    mediaRequestPort = port
+                                    if (mediaSourceDiagnosticsEnabled) sendMediaRequestInspection(true)
+                                }
                                 if (hideTitlePending) {
                                     try { port.postMessage(JSONObject().put("action", "hideTitleChrome")) }
                                     catch (_: Exception) { }
@@ -172,7 +189,51 @@ private class JaRemoteBridge {
                                             val report = message as? JSONObject
                                             val event = report?.optString("event")
                                             // Forward every sample, but avoid formatting/writing a JSON log each second.
-                                            if (event == "MEDIA_SOURCE_CANDIDATE" && report != null) {
+                                            if (event != null && event in setOf("MEDIA_REQUEST_CANDIDATE", "MEDIA_REQUEST_REDIRECT",
+                                                    "MEDIA_REQUEST_HEADERS", "MEDIA_REQUEST_COMPLETE", "MEDIA_REQUEST_ERROR") && report != null) {
+                                                val requestId = report.optString("requestId")
+                                                if ((event == "MEDIA_REQUEST_CANDIDATE" || event == "MEDIA_REQUEST_HEADERS") && requestId.isNotBlank()) {
+                                                    if (mediaRequestUrls.size >= 96 && !mediaRequestUrls.containsKey(requestId))
+                                                        mediaRequestUrls.remove(mediaRequestUrls.keys.firstOrNull())
+                                                    mediaRequestUrls[requestId] = JSONObject(report.toString())
+                                                    if (event == "MEDIA_REQUEST_HEADERS")
+                                                        mediaRequestUrls[requestId]?.put("mime", report.optString("mime"))
+                                                } else if (event == "MEDIA_REQUEST_REDIRECT" && requestId.isNotBlank()) {
+                                                    mediaRequestUrls[requestId]?.put("redirectUrl", report.optString("redirectUrl"))
+                                                }
+                                                val requestUrl = Uri.parse(report.optString("url"))
+                                                val redirectUrl = Uri.parse(report.optString("redirectUrl"))
+                                                val documentUrl = Uri.parse(report.optString("documentUrl"))
+                                                val suffix = requestUrl.lastPathSegment?.substringAfterLast('.', "")
+                                                    ?.take(8)?.lowercase().orEmpty()
+                                                val redirectHost = redirectUrl.host?.let { " redirectHost=$it" }.orEmpty()
+                                                val statusCode = report.optInt("statusCode", 0)
+                                                Log.i("JA_MEDIA_DIAG", "${event} kind=${report.optString("kind")} " +
+                                                    "host=${requestUrl.host ?: "unknown"} format=${suffix.ifBlank { "unknown" }} " +
+                                                    "query=${!requestUrl.query.isNullOrBlank()} frame=${documentUrl.host ?: "unknown"} " +
+                                                    "frameId=${report.optInt("frameId", -1)} resource=${report.optString("resourceType")} " +
+                                                    "status=$statusCode$redirectHost")
+                                                if (event == "MEDIA_REQUEST_CANDIDATE" &&
+                                                    report.optString("kind") in setOf("HLS", "DASH") &&
+                                                    (requestUrl.scheme == "http" || requestUrl.scheme == "https") &&
+                                                    requestUrl.host != null) {
+                                                    val referer = report.optString("documentUrl")
+                                                        .ifBlank { report.optString("originUrl") }
+                                                    val captured = JaMediaSourceCandidate(
+                                                        requestUrl.toString(), report.optString("kind"), referer, ""
+                                                    )
+                                                    mainHandler.post {
+                                                        if (mediaSourceDiagnosticsEnabled)
+                                                            onMediaSourceCandidate?.invoke(captured)
+                                                    }
+                                                }
+                                                if ((event == "MEDIA_REQUEST_COMPLETE" || event == "MEDIA_REQUEST_ERROR") &&
+                                                    requestId.isNotBlank()) mediaRequestUrls.remove(requestId)
+                                            } else if (event == "MEDIA_REQUEST_INSPECTION_READY") {
+                                                Log.i("JA_MEDIA_DIAG", "REQUEST_INSPECTION_READY api=${report?.optBoolean("api", false)}")
+                                            } else if (event == "MEDIA_REQUEST_INSPECTION_UNAVAILABLE") {
+                                                Log.w("JA_MEDIA_DIAG", "REQUEST_INSPECTION_UNAVAILABLE reason=${report?.optString("reason")}")
+                                            } else if (event == "MEDIA_SOURCE_CANDIDATE" && report != null) {
                                                 val candidate = Uri.parse(report.optString("url"))
                                                 val suffix = candidate.lastPathSegment?.substringAfterLast('.', "")
                                                     ?.take(8)?.lowercase().orEmpty()
@@ -181,6 +242,18 @@ private class JaRemoteBridge {
                                                     "query=${!candidate.query.isNullOrBlank()} evidence=${report.optString("evidence")} " +
                                                     "frame=${report.optString("frameHost")} " +
                                                     "resolution=${report.optInt("width")}x${report.optInt("height")}")
+                                                val referer = report.optString("referer")
+                                                if (activePort === port && (candidate.scheme == "http" || candidate.scheme == "https") &&
+                                                    candidate.host != null && Uri.parse(referer).host == Uri.parse(port.sender.url).host) {
+                                                    val captured = JaMediaSourceCandidate(
+                                                        candidate.toString(), report.optString("kind"), referer,
+                                                        report.optString("userAgent")
+                                                    )
+                                                    mainHandler.post {
+                                                        if (port in ports && activePort === port)
+                                                            onMediaSourceCandidate?.invoke(captured)
+                                                    }
+                                                }
                                             } else if (event == "MEDIA_SOURCE_BLOB" && report != null) {
                                                 Log.i("JA_MEDIA_DIAG", "BLOB_MSE frame=${report.optString("frameHost")} " +
                                                     "mime=${report.optString("mime")} resolution=${report.optInt("width")}x${report.optInt("height")} " +
@@ -243,6 +316,8 @@ private class JaRemoteBridge {
                                         ports.remove(port)
                                         playbackWindows.remove(port)
                                         mediaDiagnosticsTargets.remove(port)
+                                        mediaRequestUrls.clear()
+                                        if (mediaRequestPort === port) mediaRequestPort = null
                                         qualityTargets.remove(port)
                                         captionTargets.remove(port)
                                         frameWarmup.remove(port)
@@ -285,6 +360,21 @@ private class JaRemoteBridge {
         }
     }
 
+    fun setMediaSourceDiagnosticsEnabled(enabled: Boolean) {
+        if (mediaSourceDiagnosticsEnabled == enabled) return
+        mediaSourceDiagnosticsEnabled = enabled
+        sendMediaRequestInspection(enabled)
+    }
+
+    private fun sendMediaRequestInspection(enabled: Boolean) {
+        val port = mediaRequestPort ?: return
+        try {
+            port.postMessage(JSONObject().put("action", if (enabled)
+                "startMediaRequestInspection" else "stopMediaRequestInspection"))
+            Log.i("JA_MEDIA_DIAG", "REQUEST_INSPECTION_COMMAND enabled=$enabled")
+        } catch (_: Exception) { }
+    }
+
     fun replayConfirmedStatistics(document: String?) {
         val exactDocument = document ?: return
         val samples = frameWarmup.matching(exactDocument, android.os.SystemClock.elapsedRealtime())
@@ -325,7 +415,7 @@ private class JaRemoteBridge {
         }
     }
 
-    fun clear() { captionTargets.clear(); qualityTargets.clear(); ports.clear(); playbackWindows.clear(); mediaDiagnosticsTargets.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null }
+    fun clear() { sendMediaRequestInspection(false); captionTargets.clear(); qualityTargets.clear(); ports.clear(); mediaRequestPort = null; playbackWindows.clear(); mediaDiagnosticsTargets.clear(); mediaRequestUrls.clear(); frameWarmup.clear(); activePort = null; hideTitlePending = false; onControlModeClosed = null; onVideoStatistics = null; onMediaSourceCandidate = null }
 }
 
 /**
@@ -543,7 +633,8 @@ fun GeckoExperimentalPlayer(
     // selected title as verified, since an embedded page may play an ad.
     onMediaActivity: () -> Unit = {},
     onTopLevelRedirect: (String) -> Unit = {},
-    enableMediaSourceDiagnostics: Boolean = false
+    enableMediaSourceDiagnostics: Boolean = false,
+    onMediaSourceCandidate: (JaMediaSourceCandidate) -> Unit = {}
 ) {
     val context = LocalContext.current
     val isTelevision = (LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
@@ -559,6 +650,7 @@ fun GeckoExperimentalPlayer(
     val latestOnFatalError by rememberUpdatedState(onFatalError)
     val latestOnMediaActivity by rememberUpdatedState(onMediaActivity)
     val latestOnTopLevelRedirect by rememberUpdatedState(onTopLevelRedirect)
+    val latestOnMediaSourceCandidate by rememberUpdatedState(onMediaSourceCandidate)
     // Hide system chrome while the player is visible; restore it on exit.
     val activity = context as? Activity
     DisposableEffect(activity) {
@@ -588,7 +680,8 @@ fun GeckoExperimentalPlayer(
     // dispatchKeyEvent handler retains a stale bridge even after Compose updates
     // GeckoView.setSession(). This produced NO_FRAME_PORT despite VIDEO_STATS.
     val remoteBridge = remember(url, reload) { JaRemoteBridge() }
-    remoteBridge.mediaSourceDiagnosticsEnabled = enableMediaSourceDiagnostics
+    remoteBridge.setMediaSourceDiagnosticsEnabled(enableMediaSourceDiagnostics)
+    remoteBridge.onMediaSourceCandidate = { latestOnMediaSourceCandidate(it) }
     var webControlMode by remember(url, reload) { mutableStateOf(false) }
     remoteBridge.onControlModeClosed = { webControlMode = false }
     val vidFastBridge = remember(url,reload) {
