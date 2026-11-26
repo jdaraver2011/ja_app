@@ -67,6 +67,7 @@ import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -948,24 +949,30 @@ private fun JaLiveEmbeddedPlayback(
         } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name,
             enableMediaSourceDiagnostics = BuildConfig.DEBUG,
             onMediaSourceCandidate = { candidate ->
-                if (BuildConfig.DEBUG && candidate.kind in setOf("HLS", "DASH") &&
-                    capturedCandidates.none { it.url == candidate.url } && capturedCandidates.size < 4) {
-                    capturedCandidates.add(candidate)
+                if (BuildConfig.DEBUG && candidate.kind in setOf("HLS", "DASH")) {
+                    val existing = capturedCandidates.indexOfFirst { it.url == candidate.url }
+                    if (existing >= 0) {
+                        if (candidate.requestHeaders.size > capturedCandidates[existing].requestHeaders.size)
+                            capturedCandidates[existing] = candidate
+                    } else if (capturedCandidates.size < 4) {
+                        capturedCandidates.add(candidate)
+                    }
                 }
             },
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
             })
+        val readyCandidates = capturedCandidates.filter { it.requestHeaders.isNotEmpty() }
         if (BuildConfig.DEBUG && nativeCandidate == null && capturedCandidates.isNotEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
                 Column(Modifier.padding(12.dp)
                     .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Captured ${capturedCandidates.size} manifest request(s)", color = Color.White, fontSize = 12.sp)
-                    capturedCandidates.forEachIndexed { index, candidate ->
+                    Text("Captured ${readyCandidates.size} manifest request(s) with request context", color = Color.White, fontSize = 12.sp)
+                    readyCandidates.forEachIndexed { index, candidate ->
                         val host = Uri.parse(candidate.url).host ?: "stream host"
                         TvFocusButton(onClick = { nativeCandidate = candidate }) {
-                            Text("Test native ${candidate.kind} ${index + 1} · $host", fontSize = 11.sp)
+                            Text("Test native ${candidate.kind} ${index + 1} · $host · ${candidate.requestHeaders.size} headers", fontSize = 11.sp)
                         }
                     }
                 }
@@ -978,16 +985,27 @@ private fun JaLiveEmbeddedPlayback(
 private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: () -> Unit) {
     val context = LocalContext.current
     var status by remember(candidate.url) { mutableStateOf("Preparing native ${candidate.kind} test…") }
-    val player = remember(candidate.url, candidate.referer, candidate.userAgent) {
-        val headers = buildMap {
-            if (candidate.referer.isNotBlank()) put("Referer", candidate.referer)
+    val player = remember(candidate.url, candidate.referer, candidate.userAgent, candidate.requestHeaders) {
+        val originHost = Uri.parse(candidate.url).host.orEmpty()
+        val headers = candidate.requestHeaders.filter { (name, value) ->
+            (name in setOf("Origin", "Referer", "Cookie", "Authorization", "Accept", "Accept-Language",
+                "X-Requested-With") || name.matches(Regex("(?i)^x-[a-z0-9-]{1,60}$"))) && value.isNotBlank()
+        }.toMutableMap().apply {
+            if (candidate.referer.isNotBlank() && !containsKey("Referer")) put("Referer", candidate.referer)
         }
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
             .setUserAgent(candidate.userAgent.takeIf { it.isNotBlank() } ?: "JA/2.8.8")
-            .setDefaultRequestProperties(headers)
+        val upstream = DefaultDataSource.Factory(context, http)
+        val requestScopedFactory = ResolvingDataSource.Factory(upstream) { dataSpec ->
+            val sameHost = dataSpec.uri.host.equals(originHost, ignoreCase = true)
+            val safeHeaders = headers.filter { (name, _) ->
+                name !in setOf("Cookie", "Authorization") || sameHost
+            }
+            dataSpec.buildUpon().setHttpRequestHeaders(safeHeaders).build()
+        }
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(requestScopedFactory))
             .build().apply {
                 setMediaItem(MediaItem.fromUri(candidate.url))
                 prepare()
@@ -1000,8 +1018,16 @@ private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: (
                 status = if (isPlaying) "Native playback started" else "Native player is buffering or paused"
             }
             override fun onPlayerError(error: PlaybackException) {
-                status = "Native test failed · ${error.errorCodeName}"
-                Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_FAILED kind=${candidate.kind} code=${error.errorCodeName}")
+                var cause: Throwable? = error
+                var httpCode: Int? = null
+                while (cause != null && httpCode == null) {
+                    if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)
+                        httpCode = cause.responseCode
+                    cause = cause.cause
+                }
+                status = if (httpCode != null) "Native test failed · HTTP $httpCode"
+                    else "Native test failed · ${error.errorCodeName}"
+                Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_FAILED kind=${candidate.kind} http=${httpCode ?: 0} code=${error.errorCodeName}")
             }
         }
         player.addListener(listener)

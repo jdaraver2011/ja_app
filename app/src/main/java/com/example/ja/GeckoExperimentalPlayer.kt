@@ -67,7 +67,8 @@ data class JaMediaSourceCandidate(
     val url: String,
     val kind: String,
     val referer: String,
-    val userAgent: String
+    val userAgent: String,
+    val requestHeaders: Map<String, String> = emptyMap()
 )
 
 /**
@@ -187,10 +188,12 @@ private class JaRemoteBridge {
                                             val report = message as? JSONObject
                                             val event = report?.optString("event")
                                             // Forward every sample, but avoid formatting/writing a JSON log each second.
-                                            if (event != null && event in setOf("MEDIA_REQUEST_CANDIDATE", "MEDIA_REQUEST_REDIRECT",
-                                                    "MEDIA_REQUEST_HEADERS", "MEDIA_REQUEST_COMPLETE", "MEDIA_REQUEST_ERROR") && report != null) {
+                                            if (event != null && event in setOf("MEDIA_REQUEST_CANDIDATE", "MEDIA_REQUEST_SENT_HEADERS",
+                                                    "MEDIA_REQUEST_REDIRECT", "MEDIA_REQUEST_HEADERS", "MEDIA_REQUEST_COMPLETE",
+                                                    "MEDIA_REQUEST_ERROR") && report != null) {
                                                 val requestId = report.optString("requestId")
-                                                if ((event == "MEDIA_REQUEST_CANDIDATE" || event == "MEDIA_REQUEST_HEADERS") && requestId.isNotBlank()) {
+                                                if ((event == "MEDIA_REQUEST_CANDIDATE" || event == "MEDIA_REQUEST_SENT_HEADERS" ||
+                                                        event == "MEDIA_REQUEST_HEADERS") && requestId.isNotBlank()) {
                                                     if (mediaRequestUrls.size >= 96 && !mediaRequestUrls.containsKey(requestId))
                                                         mediaRequestUrls.remove(mediaRequestUrls.keys.firstOrNull())
                                                     mediaRequestUrls[requestId] = JSONObject(report.toString())
@@ -223,6 +226,32 @@ private class JaRemoteBridge {
                                                     mainHandler.post {
                                                         if (mediaSourceDiagnosticsEnabled)
                                                             onMediaSourceCandidate?.invoke(captured)
+                                                    }
+                                                }
+                                                if (event == "MEDIA_REQUEST_SENT_HEADERS" &&
+                                                    report.optString("kind") in setOf("HLS", "DASH") &&
+                                                    (requestUrl.scheme == "http" || requestUrl.scheme == "https") &&
+                                                    requestUrl.host != null) {
+                                                    val headersJson = report.optJSONObject("requestHeaders")
+                                                    val headers = buildMap {
+                                                        headersJson?.keys()?.forEach { key ->
+                                                            val value = headersJson.optString(key)
+                                                            if (value.isNotBlank() && (key in setOf(
+                                                                    "Origin", "Referer", "User-Agent", "Cookie", "Authorization",
+                                                                    "Accept", "Accept-Language", "X-Requested-With") ||
+                                                                    key.matches(Regex("(?i)^x-[a-z0-9-]{1,60}$"))))
+                                                                put(key, value)
+                                                        }
+                                                    }
+                                                    val referer = headers["Referer"].orEmpty()
+                                                        .ifBlank { report.optString("documentUrl") }
+                                                    val candidate = JaMediaSourceCandidate(
+                                                        requestUrl.toString(), report.optString("kind"), referer,
+                                                        headers["User-Agent"].orEmpty(), headers
+                                                    )
+                                                    mainHandler.post {
+                                                        if (mediaSourceDiagnosticsEnabled)
+                                                            onMediaSourceCandidate?.invoke(candidate)
                                                     }
                                                 }
                                                 if ((event == "MEDIA_REQUEST_COMPLETE" || event == "MEDIA_REQUEST_ERROR") &&

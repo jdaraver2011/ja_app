@@ -5,6 +5,7 @@
   let nativePort = null;
   let reconnectTimer = null;
   let inspecting = false;
+  let requestHeaderInspectionAvailable = false;
   const trackedRequests = new Set();
   const MAX_TRACKED_REQUESTS = 96;
 
@@ -45,7 +46,8 @@
       resourceType: String(details.type || ''),
       method: String(details.method || ''),
       statusCode: Number.isFinite(details.statusCode) ? details.statusCode : 0,
-      mime: String(extra.mime || '').slice(0, 96)
+      mime: String(extra.mime || '').slice(0, 96),
+      requestHeaders: extra.requestHeaders || undefined
     });
     if (event === 'MEDIA_REQUEST_COMPLETE' || event === 'MEDIA_REQUEST_ERROR')
       trackedRequests.delete(details.requestId);
@@ -54,6 +56,26 @@
   const onBeforeRequest = details => {
     const kind = classify(details.url);
     if (kind) requestDetails('MEDIA_REQUEST_CANDIDATE', details, {kind});
+  };
+  // Keep only the request context commonly required by native HLS players.
+  // These values stay in the short-lived native bridge payload and are never logged.
+  const onBeforeSendHeaders = details => {
+    const kind = classify(details.url);
+    if (!kind) return;
+    const allowed = new Map([
+      ['origin', 'Origin'], ['referer', 'Referer'], ['user-agent', 'User-Agent'],
+      ['cookie', 'Cookie'], ['authorization', 'Authorization'], ['accept', 'Accept'],
+      ['accept-language', 'Accept-Language'], ['x-requested-with', 'X-Requested-With']
+    ]);
+    const requestHeaders = {};
+    for (const header of details.requestHeaders || []) {
+      const rawName = String(header.name || '');
+      const key = allowed.get(rawName.toLowerCase()) ||
+        (/^x-[a-z0-9-]{1,60}$/i.test(rawName) ? rawName : null);
+      const value = String(header.value || '').slice(0, 8192);
+      if (key && value) requestHeaders[key] = value;
+    }
+    requestDetails('MEDIA_REQUEST_SENT_HEADERS', details, {kind, requestHeaders});
   };
   const onBeforeRedirect = details => requestDetails('MEDIA_REQUEST_REDIRECT', details);
   const onHeadersReceived = details => {
@@ -72,14 +94,15 @@
 
   const stopInspection = () => {
     if (!inspecting) return;
-    try {
-      browser.webRequest.onBeforeRequest.removeListener(onBeforeRequest);
-      browser.webRequest.onBeforeRedirect.removeListener(onBeforeRedirect);
-      browser.webRequest.onHeadersReceived.removeListener(onHeadersReceived);
-      browser.webRequest.onCompleted.removeListener(onCompleted);
-      browser.webRequest.onErrorOccurred.removeListener(onErrorOccurred);
-    } catch (_) {}
+    const remove = (event, listener) => { try { event?.removeListener(listener); } catch (_) {} };
+    remove(browser.webRequest?.onBeforeRequest, onBeforeRequest);
+    remove(browser.webRequest?.onBeforeSendHeaders, onBeforeSendHeaders);
+    remove(browser.webRequest?.onBeforeRedirect, onBeforeRedirect);
+    remove(browser.webRequest?.onHeadersReceived, onHeadersReceived);
+    remove(browser.webRequest?.onCompleted, onCompleted);
+    remove(browser.webRequest?.onErrorOccurred, onErrorOccurred);
     inspecting = false;
+    requestHeaderInspectionAvailable = false;
     trackedRequests.clear();
     sendNative({event:'MEDIA_REQUEST_INSPECTION_STOPPED'});
   };
@@ -89,6 +112,13 @@
       if (!browser.webRequest) throw new Error('webRequest API unavailable');
       browser.webRequest.onBeforeRequest.addListener(onBeforeRequest,
         {urls:['http://*/*','https://*/*'], types:['xmlhttprequest','media','other']});
+      // This is observation only: no blocking or header mutation. Keep it
+      // optional so older GeckoView builds still retain URL/status inspection.
+      try {
+        browser.webRequest.onBeforeSendHeaders.addListener(onBeforeSendHeaders,
+          {urls:['http://*/*','https://*/*'], types:['xmlhttprequest','media','other']}, ['requestHeaders']);
+        requestHeaderInspectionAvailable = true;
+      } catch (_) { requestHeaderInspectionAvailable = false; }
       browser.webRequest.onBeforeRedirect.addListener(onBeforeRedirect,
         {urls:['http://*/*','https://*/*']});
       browser.webRequest.onHeadersReceived.addListener(onHeadersReceived,
@@ -98,7 +128,8 @@
       browser.webRequest.onErrorOccurred.addListener(onErrorOccurred,
         {urls:['http://*/*','https://*/*']});
       inspecting = true;
-      sendNative({event:'MEDIA_REQUEST_INSPECTION_READY', api:true});
+      sendNative({event:'MEDIA_REQUEST_INSPECTION_READY', api:true,
+        requestHeaders:requestHeaderInspectionAvailable});
     } catch (error) {
       stopInspection();
       sendNative({event:'MEDIA_REQUEST_INSPECTION_UNAVAILABLE',
