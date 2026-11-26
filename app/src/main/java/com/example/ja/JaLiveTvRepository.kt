@@ -93,8 +93,8 @@ internal class JaLiveTvRepository(private val context:Context) {
         val due=cached==null||cachedFile!=file||refreshDueAfterSix(cachedAt,now)
         val prefs=context.getSharedPreferences("ja_live_tv_refresh",Context.MODE_PRIVATE)
         val attemptedToday=prefs.getString("automatic_attempt_date","")==localDate.toString()
-        // Refresh once per day until NTV NFL/NCAAF name rules are successfully applied.
-        val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<3&&
+        // Refresh once per day after new NTV Raptor event groups and route rules are introduced.
+        val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<4&&
             prefs.getString("source_groups_upgrade_attempt_date","")!=localDate.toString()
         val shouldRefresh=force||sourceGroupsUpgradeDue||(due&&!attemptedToday)
         if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
@@ -108,7 +108,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         try {
             val raw=downloadDirectCatalog()
             val parsed=parseCatalog(raw,false)
-            write(file,raw);prefs.edit().putInt("source_groups_schema",3).remove("source_groups_upgrade_attempt_date").apply()
+            write(file,raw);prefs.edit().putInt("source_groups_schema",4).remove("source_groups_upgrade_attempt_date").apply()
             memoryCatalog=parsed to file.lastModified();parsed
         }catch(e:CancellationException){throw e}catch(e:Exception){
             cached?.copy(saved=true)?.also{memoryCatalog=it to cachedAt}?:throw e
@@ -248,13 +248,19 @@ internal class JaLiveTvRepository(private val context:Context) {
         var selectedHost:String?=null
         for(host in domains){
             try{
-                val json=JSONObject(text("https://$host/api/get-matches?server=all&type=both",12_000_000,25))
+                // NTV's matches response omits `server` on many events. Keep the requested
+                // Raptor page context so these event links resolve through /watch/raptor/.
+                val json=JSONObject(text("https://$host/api/get-matches?server=raptor&type=both",12_000_000,25))
                 if(!json.optBoolean("success"))throw IOException("Invalid event API response")
                 response=json;selectedHost=host;break
             }catch(e:CancellationException){throw e}
             catch(e:Exception){Log.w("JA_LIVE_TV","NTV_EVENTS_HOST_FAILED host=$host error=${e.message}")}
         }
         val data=response?:throw IOException("NTV events API unavailable on all configured domains")
+        val liveIds=mutableSetOf<String>()
+        data.optJSONArray("live")?.let{rows->for(index in 0 until rows.length()){
+            rows.optJSONObject(index)?.optString("id")?.trim()?.takeIf{it.isNotBlank()}?.let(liveIds::add)
+        }}
         val entries=JSONArray().apply{
             listOfNotNull(data.optJSONArray("live"),data.optJSONArray("all")).forEach{rows->
                 for(index in 0 until rows.length())rows.optJSONObject(index)?.let{entry->put(entry)}
@@ -272,21 +278,33 @@ internal class JaLiveTvRepository(private val context:Context) {
             val sportTags=ntvSportCategories(category,title)
             val sources=event.optJSONArray("sources")?:continue
             if(sources.length()==0)continue
-            val server=event.optString("server").ifBlank{"titan"}
+            val server=event.optString("server").ifBlank{"raptor"}
             val watchServer=when(server.lowercase(Locale.ROOT)){
                 "cdnlive"->"titan";"hesgoales"->"falcon";"dlhd"->"phoenix";else->server.lowercase(Locale.ROOT)
             }
             val urls=mirrorHosts.flatMap{host->(0 until sources.length()).map{sourceIndex->
                 "https://$host/watch/$watchServer/$id?source=$sourceIndex"
             }}.distinct()
+            val categories=mutableSetOf("source-ntv",ntvServerCategory(server),"ntv-sport-all")
+            categories+=sportTags
+            val eventIsLive=id in liveIds||event.optString("status").equals("live",ignoreCase=true)
+            if(server.equals("raptor",ignoreCase=true)){
+                if(eventIsLive)categories+="ntv-raptor-live-now"
+                if(JaLiveTvRules.isAmericanFootballEvent(category,title))categories+="ntv-raptor-american-football"
+                if(JaLiveTvRules.isBasketballEvent(category,title))categories+="ntv-raptor-basketball"
+            }
             result+=JaLiveChannel(
                 id="ntv-event:$id",name=title,logo=event.optString("poster"),urls=emptyList(),
-                categories=setOf("source-ntv",ntvServerCategory(server),"ntv-sport-all")+sportTags,
+                categories=categories,
                 embeddedPlayerUrl=urls.first(),
                 embeddedPlayerFallbackUrls=urls.drop(1)
             )
         }
-        Log.i("JA_LIVE_TV","NTV_EVENTS_READY events=${result.size} host=${selectedHost?:"none"}")
+        val raptorEvents=result.filter{"ntv-server-raptor" in it.categories}
+        Log.i("JA_LIVE_TV","NTV_EVENTS_READY events=${result.size} raptor=${raptorEvents.size} " +
+            "liveNow=${raptorEvents.count{"ntv-raptor-live-now" in it.categories}} " +
+            "americanFootball=${raptorEvents.count{"ntv-raptor-american-football" in it.categories}} " +
+            "basketball=${raptorEvents.count{"ntv-raptor-basketball" in it.categories}} host=${selectedHost?:"none"}")
         return result
     }
     private fun ntvSportCategories(category:String,title:String):Set<String> {
@@ -294,11 +312,11 @@ internal class JaLiveTvRepository(private val context:Context) {
         val tags=mutableSetOf<String>()
         fun has(vararg words:String)=words.any{text.contains(it)}
         val isNfl=Regex("\\bnfl\\b").containsMatchIn(text)||JaLiveTvRules.isNflChannelName(text)
-        if(has("soccer","football","epl","premier league","champions league","la liga","serie a","bundesliga"))tags+="ntv-sport-soccer"
+        if(JaLiveTvRules.isSoccerEvent(category,title))tags+="ntv-sport-soccer"
         if(isNfl)tags+="ntv-sport-nfl"
         if(has("ncaa","college football","college basketball","ncaaf","ncaab"))tags+="ntv-sport-ncaa"
         if(JaLiveTvRules.isNcaafEvent(category,title))tags+="ntv-sport-ncaaf"
-        if(has("basketball","nba","wnba","ncaab"))tags+="ntv-sport-basketball"
+        if(JaLiveTvRules.isBasketballEvent(category,title))tags+="ntv-sport-basketball"
         if(has("golf","pga","lpga","liv golf"))tags+="ntv-sport-golf"
         if(has("motorsport","motor sport","formula 1","formula one","f1","nascar","indycar","motogp","racing"))tags+="ntv-sport-motorsport"
         if(Regex("\\bufc\\b").containsMatchIn(text))tags+="ntv-sport-ufc"

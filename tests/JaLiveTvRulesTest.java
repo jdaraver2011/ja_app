@@ -32,6 +32,11 @@ public final class JaLiveTvRulesTest {
         check(JaLiveTvRules.isNcaafEvent("American Football","Baylor Bears at Houston Cougars"));
         check(!JaLiveTvRules.isNcaafEvent("American Football","Green Bay Packers at Los Angeles Rams"));
         check(!JaLiveTvRules.isNcaafEvent("American Football","NFL Network"));
+        check(JaLiveTvRules.isAmericanFootballEvent("American Football","Green Bay Packers at Los Angeles Rams"));
+        check(JaLiveTvRules.isAmericanFootballEvent("American Football","Boise State Broncos at Colorado State Rams"));
+        check(!JaLiveTvRules.isSoccerEvent("American Football","Green Bay Packers at Los Angeles Rams"));
+        check(JaLiveTvRules.isSoccerEvent("Soccer","Real Madrid vs Barcelona"));
+        check(JaLiveTvRules.isBasketballEvent("Basketball","Boston Celtics at Chicago Bulls"));
         java.util.List<String> ntvGroups=JaLiveTvRules.groupsForSource("NTV",
             new java.util.HashSet<>(java.util.Arrays.asList("ntv-sport-nfl","ntv-sport-ncaaf",
                 "ntv-nfl-usa","ntv-basketball-usa","ntv-sport-baseball","ntv-sport-baseball-usa")));
@@ -40,6 +45,12 @@ public final class JaLiveTvRulesTest {
         check(!ntvGroups.contains("NFL USA")&&!ntvGroups.contains("NTV NFL USA"));
         check(!ntvGroups.contains("Basketball USA")&&!ntvGroups.contains("NTV Basketball USA"));
         check(ntvGroups.contains("Baseball")&&!ntvGroups.contains("Baseball USA"));
+        check(ntvGroups.contains("Raptor Live Now"));
+        check(ntvGroups.contains("Raptor American Football"));
+        check(ntvGroups.contains("Raptor Basketball"));
+        check(JaLiveTvRules.category("Raptor Live Now").equals("ntv-raptor-live-now"));
+        check(JaLiveTvRules.category("Raptor American Football").equals("ntv-raptor-american-football"));
+        check(JaLiveTvRules.category("Raptor Basketball").equals("ntv-raptor-basketball"));
         check(JaLiveTvRules.category("Baseball").equals("ntv-sport-baseball"));
         check(JaLiveTvRules.category("Documentaries").equals("documentary"));
         check(JaLiveTvRules.category("Auto and Motoring").equals("auto"));

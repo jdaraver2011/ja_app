@@ -29,6 +29,24 @@ public final class JaLiveTvRules {
         if(NFL_WORD.matcher(value).find()||isNflChannelName(title))return false;
         return value.contains("ncaaf")||value.contains("college football")||value.contains("american football");
     }
+    public static boolean isAmericanFootballEvent(String category,String title) {
+        String normalized=(category==null?"":category).trim().toLowerCase(Locale.ROOT);
+        return normalized.equals("american football")||normalized.equals("nfl")||normalized.equals("ncaaf")
+            ||NFL_WORD.matcher(((title==null?"":title)+" "+normalized)).find()
+            ||isNflChannelName(title)||isNcaafEvent(category,title);
+    }
+    public static boolean isSoccerEvent(String category,String title) {
+        String normalized=(category==null?"":category).trim().toLowerCase(Locale.ROOT);
+        if(isAmericanFootballEvent(category,title))return false;
+        String value=(normalized+" "+(title==null?"":title)).toLowerCase(Locale.ROOT);
+        return value.contains("soccer")||value.contains("epl")||value.contains("premier league")
+            ||value.contains("champions league")||value.contains("la liga")||value.contains("serie a")
+            ||value.contains("bundesliga")||(normalized.equals("football")&&!value.contains("american"));
+    }
+    public static boolean isBasketballEvent(String category,String title) {
+        String value=((category==null?"":category)+" "+(title==null?"":title)).toLowerCase(Locale.ROOT);
+        return value.contains("basketball")||value.contains("nba")||value.contains("wnba")||value.contains("ncaab");
+    }
     public static String attribute(String line, String name) {
         Matcher m=Pattern.compile("(?:^|\\s)"+Pattern.quote(name)+"=\"([^\"]*)\"").matcher(line);
         return m.find()?m.group(1):"";
@@ -152,7 +170,8 @@ public final class JaLiveTvRules {
         } else if("DaddyLive TV".equals(source)) {
             if(cats.contains("daddylive-usa"))groups.add("DaddyLive USA");
         } else if("NTV".equals(source)) {
-            groups.addAll(Arrays.asList("Raptor","Falcon","Phoenix","Titan","Scorpion","Other Servers",
+            groups.addAll(Arrays.asList("Raptor","Raptor Live Now","Raptor American Football","Raptor Basketball",
+                "Falcon","Phoenix","Titan","Scorpion","Other Servers",
                 "All Sports","Soccer","NFL","NCAAF","NCAA","Basketball","Golf","Motorsport","UFC","WWE","MMA","Badminton",
                 "Baseball"));
             if(cats.contains("ntv-adult-only"))groups.add("Adult Only");
@@ -162,7 +181,8 @@ public final class JaLiveTvRules {
                 "ntv-sport-nfl","ntv-sport-ncaaf","ntv-sport-ncaa","ntv-sport-basketball","ntv-sport-golf",
                 "ntv-sport-motorsport","ntv-sport-ufc","ntv-sport-wwe","ntv-sport-mma",
                 "ntv-sport-badminton","ntv-sport-baseball","ntv-sport-baseball-usa",
-                "ntv-nfl-usa","ntv-basketball-usa","ntv-channel"));
+                "ntv-nfl-usa","ntv-basketball-usa","ntv-channel","ntv-raptor-live-now",
+                "ntv-raptor-american-football","ntv-raptor-basketball"));
         }
         return groups;
     }
@@ -185,6 +205,9 @@ public final class JaLiveTvRules {
         if("United Kingdom".equals(view))return "country-uk";
         if("DaddyLive USA".equals(view))return "daddylive-usa";
         if("Raptor".equals(view))return "ntv-server-raptor";
+        if("Raptor Live Now".equals(view))return "ntv-raptor-live-now";
+        if("Raptor American Football".equals(view))return "ntv-raptor-american-football";
+        if("Raptor Basketball".equals(view))return "ntv-raptor-basketball";
         if("Falcon".equals(view))return "ntv-server-falcon";
         if("Phoenix".equals(view))return "ntv-server-phoenix";
         if("Titan".equals(view))return "ntv-server-titan";
