@@ -146,6 +146,8 @@ private class JaRemoteBridge {
     var onMediaSourceCandidate: ((JaMediaSourceCandidate) -> Unit)? = null
     var mediaSourceDiagnosticsEnabled: Boolean = false
         private set
+    var playbackTelemetryEnabled: Boolean = true
+        private set
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ports = mutableSetOf<WebExtension.Port>()
     private var mediaRequestPort: WebExtension.Port? = null
@@ -187,6 +189,12 @@ private class JaRemoteBridge {
                                         try {
                                             val report = message as? JSONObject
                                             val event = report?.optString("event")
+                                            if (!playbackTelemetryEnabled && event in setOf("VIDEO_STATS", "VIDEO_STATE")) return
+                                            if (!mediaSourceDiagnosticsEnabled && event in setOf(
+                                                    "MEDIA_SOURCE_CANDIDATE", "MEDIA_SOURCE_BLOB",
+                                                    "MEDIA_REQUEST_CANDIDATE", "MEDIA_REQUEST_SENT_HEADERS",
+                                                    "MEDIA_REQUEST_REDIRECT", "MEDIA_REQUEST_HEADERS",
+                                                    "MEDIA_REQUEST_COMPLETE", "MEDIA_REQUEST_ERROR")) return
                                             // Forward every sample, but avoid formatting/writing a JSON log each second.
                                             if (event != null && event in setOf("MEDIA_REQUEST_CANDIDATE", "MEDIA_REQUEST_SENT_HEADERS",
                                                     "MEDIA_REQUEST_REDIRECT", "MEDIA_REQUEST_HEADERS", "MEDIA_REQUEST_COMPLETE",
@@ -358,6 +366,12 @@ private class JaRemoteBridge {
                                         Log.i("JA_TV_BRIDGE", "FRAME_DISCONNECTED ports=${ports.size}")
                                     }
                                 })
+                                if (Uri.parse(port.sender.url).scheme != "moz-extension") {
+                                    try {
+                                        port.postMessage(JSONObject().put("action", "setPlaybackTelemetry")
+                                            .put("enabled", playbackTelemetryEnabled))
+                                    } catch (_: Exception) { }
+                                }
                             }
                         }
                     // Background extension pages use the extension-level delegate;
@@ -399,7 +413,32 @@ private class JaRemoteBridge {
     fun setMediaSourceDiagnosticsEnabled(enabled: Boolean) {
         if (mediaSourceDiagnosticsEnabled == enabled) return
         mediaSourceDiagnosticsEnabled = enabled
+        Log.i("JA_MEDIA_DIAG", "HLS_REQUEST_INSPECTION enabled=$enabled")
         sendMediaRequestInspection(enabled)
+        if (!enabled) {
+            for (port in ports.toList()) {
+                if (Uri.parse(port.sender.url).scheme == "moz-extension") continue
+                try { port.postMessage(JSONObject().put("action", "stopMediaSourceDiagnostics")) }
+                catch (_: Exception) { }
+            }
+            mediaDiagnosticsTargets.clear()
+            mediaRequestUrls.clear()
+        }
+    }
+
+    fun setPlaybackTelemetryEnabled(enabled: Boolean) {
+        if (playbackTelemetryEnabled == enabled) return
+        playbackTelemetryEnabled = enabled
+        Log.i("JA_PERF", "PLAYBACK_TELEMETRY enabled=$enabled")
+        if (!enabled) {
+            playbackWindows.clear()
+            frameWarmup.clear()
+        }
+        for (port in ports.toList()) {
+            if (Uri.parse(port.sender.url).scheme == "moz-extension") continue
+            try { port.postMessage(JSONObject().put("action", "setPlaybackTelemetry").put("enabled", enabled)) }
+            catch (_: Exception) { }
+        }
     }
 
     private fun sendMediaRequestInspection(enabled: Boolean) {
@@ -576,8 +615,10 @@ private class JaOverlayGuardBridge {
     var onBlocked: ((String, String) -> Unit)? = null
     var onFrameReady: ((String) -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
+    private val ports = mutableSetOf<WebExtension.Port>()
     private var connected = true
     private var readyNotified = false
+    private var metricsEnabled = true
 
     private fun ready(onReady: (Boolean) -> Unit, success: Boolean) {
         handler.post {
@@ -599,6 +640,7 @@ private class JaOverlayGuardBridge {
                                 object : WebExtension.MessageDelegate {
                                     override fun onConnect(port: WebExtension.Port) {
                                         if (!connected) return
+                                        ports.add(port)
                                         port.setDelegate(object : WebExtension.PortDelegate {
                                             override fun onPortMessage(message: Any, port: WebExtension.Port) {
                                                 val data = message as? JSONObject ?: return
@@ -613,7 +655,14 @@ private class JaOverlayGuardBridge {
                                                     else onBlocked?.invoke(event, host)
                                                 }
                                             }
+                                            override fun onDisconnect(port: WebExtension.Port) {
+                                                ports.remove(port)
+                                            }
                                         })
+                                        try {
+                                            port.postMessage(JSONObject().put("action", "setGuardMetrics")
+                                                .put("enabled", metricsEnabled))
+                                        } catch (_: Exception) { }
                                     }
                                 }, "ja_overlay_guard"
                             )
@@ -639,8 +688,18 @@ private class JaOverlayGuardBridge {
 
     fun clear() {
         connected = false
+        ports.clear()
         onBlocked = null
         onFrameReady = null
+    }
+
+    fun setMetricsEnabled(enabled: Boolean) {
+        if (metricsEnabled == enabled) return
+        metricsEnabled = enabled
+        for (port in ports.toList()) {
+            try { port.postMessage(JSONObject().put("action", "setGuardMetrics").put("enabled", enabled)) }
+            catch (_: Exception) { }
+        }
     }
 }
 
@@ -669,6 +728,7 @@ fun GeckoExperimentalPlayer(
     // selected title as verified, since an embedded page may play an ad.
     onMediaActivity: () -> Unit = {},
     onTopLevelRedirect: (String) -> Unit = {},
+    enablePlaybackTelemetry: Boolean = true,
     enableMediaSourceDiagnostics: Boolean = false,
     onMediaSourceCandidate: (JaMediaSourceCandidate) -> Unit = {}
 ) {
@@ -716,6 +776,7 @@ fun GeckoExperimentalPlayer(
     // dispatchKeyEvent handler retains a stale bridge even after Compose updates
     // GeckoView.setSession(). This produced NO_FRAME_PORT despite VIDEO_STATS.
     val remoteBridge = remember(url, reload) { JaRemoteBridge() }
+    remoteBridge.setPlaybackTelemetryEnabled(enablePlaybackTelemetry)
     remoteBridge.setMediaSourceDiagnosticsEnabled(enableMediaSourceDiagnostics)
     remoteBridge.onMediaSourceCandidate = { latestOnMediaSourceCandidate(it) }
     var webControlMode by remember(url, reload) { mutableStateOf(false) }
@@ -732,6 +793,7 @@ fun GeckoExperimentalPlayer(
     vidFastBridge?.onProgress = { position,duration -> latestOnProgress(position,duration) }
     sourceStatusBridge.onStalled = { latestOnStalled() }
     val overlayGuard = remember(url, reload) { JaOverlayGuardBridge() }
+    overlayGuard.setMetricsEnabled(enablePlaybackTelemetry)
     var videoStarted by remember(url, reload) { mutableStateOf(false) }
     val frameStatsDebugCount = remember(url, reload) { intArrayOf(0) }
     remoteBridge.onVideoStatistics = { port, document, frames, seconds, width, height, stablePlayback ->

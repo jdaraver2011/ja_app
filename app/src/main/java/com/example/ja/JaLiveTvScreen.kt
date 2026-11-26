@@ -340,13 +340,17 @@ private enum class JaNtvPinDialog { CREATE, UNLOCK_ADULT }
 
 @Composable
 internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,
-    matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,matchStreamQuality:Boolean=false,modifier:Modifier=Modifier) {
-    JaScaledUi { JaLiveTvScreenContent(state,weather,onMainMenu,matchTvFrameRate,matchTvResolution,matchStreamQuality,modifier) }
+    matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,matchStreamQuality:Boolean=false,
+    playerTelemetryEnabled:Boolean=BuildConfig.DEBUG,hlsRequestInspectionEnabled:Boolean=BuildConfig.DEBUG,
+    modifier:Modifier=Modifier) {
+    JaScaledUi { JaLiveTvScreenContent(state,weather,onMainMenu,matchTvFrameRate,matchTvResolution,
+        matchStreamQuality,playerTelemetryEnabled,hlsRequestInspectionEnabled,modifier) }
 }
 
 @Composable
 private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,
-    matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,modifier:Modifier) {
+    matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,
+    playerTelemetryEnabled:Boolean,hlsRequestInspectionEnabled:Boolean,modifier:Modifier) {
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
     val appContext=LocalContext.current
@@ -670,7 +674,9 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                                     onAttached = { state.playerAttached = it },
                                     fallbackUrls = channel.embeddedPlayerFallbackUrls,
                                     matchTvFrameRate=matchTvFrameRate,matchTvResolution=matchTvResolution,
-                                    matchStreamQuality=matchStreamQuality
+                                    matchStreamQuality=matchStreamQuality,
+                                    playerTelemetryEnabled=playerTelemetryEnabled,
+                                    hlsRequestInspectionEnabled=hlsRequestInspectionEnabled
                                 )
                             } else Text("Select the channel to watch", Modifier.align(Alignment.Center),
                                 color = Color.LightGray, fontSize = 12.sp)
@@ -919,12 +925,16 @@ private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiv
 private fun JaLiveEmbeddedPlayback(
     url: String, name: String, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit,
     fallbackUrls: List<String> = emptyList(),matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,
-    matchStreamQuality:Boolean=false
+    matchStreamQuality:Boolean=false,playerTelemetryEnabled:Boolean=BuildConfig.DEBUG,
+    hlsRequestInspectionEnabled:Boolean=BuildConfig.DEBUG
 ) {
-    var frameMatcher by remember(url){mutableStateOf<JaTvFrameRateMatcher?>(null)}
+    var frameMatcher by remember(url,playerTelemetryEnabled,matchTvFrameRate,matchTvResolution){
+        mutableStateOf<JaTvFrameRateMatcher?>(null)
+    }
     val capturedCandidates = remember(url) { mutableStateListOf<JaMediaSourceCandidate>() }
     var nativeCandidate by remember(url) { mutableStateOf<JaMediaSourceCandidate?>(null) }
-    val qualityMatching=matchStreamQuality&&matchTvFrameRate&&matchTvResolution
+    val effectiveFrameRateMatching=playerTelemetryEnabled&&matchTvFrameRate
+    val qualityMatching=playerTelemetryEnabled&&matchStreamQuality&&matchTvFrameRate&&matchTvResolution
     var fallbackIndex by remember(url) { mutableIntStateOf(0) }
     val activeUrl=(listOf(url)+fallbackUrls).getOrElse(fallbackIndex){url}
     val attached by rememberUpdatedState(onAttached)
@@ -934,7 +944,7 @@ private fun JaLiveEmbeddedPlayback(
     }
     var failed by remember(activeUrl) { mutableStateOf(false) }
     JaLivePresentation(true, onClose) {
-        JaLiveFrameMatcherHost(matchTvFrameRate,matchTvResolution){frameMatcher=it}
+        JaLiveFrameMatcherHost(effectiveFrameRateMatching,matchTvResolution){frameMatcher=it}
         val candidatePlayer = nativeCandidate
         if (candidatePlayer != null) {
             JaNativeCandidatePlayer(candidatePlayer, onBack = { nativeCandidate = null })
@@ -947,9 +957,10 @@ private fun JaLiveEmbeddedPlayback(
                 }
             }
         } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name,
-            enableMediaSourceDiagnostics = BuildConfig.DEBUG,
+            enablePlaybackTelemetry = playerTelemetryEnabled,
+            enableMediaSourceDiagnostics = BuildConfig.DEBUG && hlsRequestInspectionEnabled,
             onMediaSourceCandidate = { candidate ->
-                if (BuildConfig.DEBUG && candidate.kind in setOf("HLS", "DASH")) {
+                if (BuildConfig.DEBUG && hlsRequestInspectionEnabled && candidate.kind in setOf("HLS", "DASH")) {
                     val existing = capturedCandidates.indexOfFirst { it.url == candidate.url }
                     if (existing >= 0) {
                         if (candidate.requestHeaders.size > capturedCandidates[existing].requestHeaders.size)
@@ -963,7 +974,7 @@ private fun JaLiveEmbeddedPlayback(
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
             })
         val readyCandidates = capturedCandidates.filter { it.requestHeaders.isNotEmpty() }
-        if (BuildConfig.DEBUG && nativeCandidate == null && capturedCandidates.isNotEmpty()) {
+        if (BuildConfig.DEBUG && hlsRequestInspectionEnabled && nativeCandidate == null && capturedCandidates.isNotEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
                 Column(Modifier.padding(12.dp)
                     .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp),

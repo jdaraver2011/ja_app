@@ -335,6 +335,8 @@ class MainActivity : ComponentActivity() {
     var delayTvEpisodes by remember { mutableStateOf(settings.delayTvEpisodes) }
     var showRestore by remember { mutableStateOf(settings.showRestore) }
     var showPlayerDiagnostics by remember { mutableStateOf(settings.showPlayerDiagnostics) }
+    var playerTelemetryEnabled by remember { mutableStateOf(settings.playerTelemetryEnabled) }
+    var hlsRequestInspectionEnabled by remember { mutableStateOf(settings.hlsRequestInspectionEnabled) }
     // Match frame rate by default on televisions; phones remain disabled.
     // Explicit prior choices persist. Both matching options default on for TV.
     var matchTvFrameRate by remember { mutableStateOf(settings.matchTvFrameRate) }
@@ -1250,6 +1252,8 @@ class MainActivity : ComponentActivity() {
             matchTvFrameRate = matchTvFrameRate,
             matchTvResolution = matchTvResolution,
             matchStreamQuality = matchStreamQuality,
+            playerTelemetryEnabled = playerTelemetryEnabled,
+            hlsRequestInspectionEnabled = hlsRequestInspectionEnabled,
             modifier = Modifier.fillMaxSize())
         return
     }
@@ -1415,6 +1419,16 @@ class MainActivity : ComponentActivity() {
                                     showPlayerDiagnostics = it; settings.showPlayerDiagnostics = it
                                 }
                                 Text("Shows provider, loading, media and navigation diagnostics over GeckoView. The normal player controls are unchanged.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                TvSettingsToggle("Collect IPTV Gecko playback telemetry", playerTelemetryEnabled) {
+                                    playerTelemetryEnabled = it; settings.playerTelemetryEnabled = it
+                                }
+                                Text("Controls one-second video sampling, playback state reports, and guard performance reports. Turning it off also pauses IPTV frame-rate and resolution matching. Reopen the IPTV stream after changing it.",
+                                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                TvSettingsToggle("Inspect IPTV HLS and network requests", hlsRequestInspectionEnabled) {
+                                    hlsRequestInspectionEnabled = it; settings.hlsRequestInspectionEnabled = it
+                                }
+                                Text("Registers GeckoView webRequest listeners and a media resource observer to inspect HLS requests. Turn it off to compare playback without request inspection, then reopen the stream.",
                                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                                 Text("Android TV display performance", style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 TvSettingsToggle("Match TV frame rate during playback", matchTvFrameRate) {
@@ -1632,6 +1646,8 @@ class MainActivity : ComponentActivity() {
                     matchTvFrameRate = matchTvFrameRate,
                     matchTvResolution = matchTvResolution,
                     matchStreamQuality = matchStreamQuality,
+                    playerTelemetryEnabled = playerTelemetryEnabled,
+                    hlsRequestInspectionEnabled = hlsRequestInspectionEnabled,
                     modifier = Modifier.fillMaxWidth().weight(1f))
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"
@@ -2164,6 +2180,12 @@ internal class PlayerControlSettings(context: Context) {
     var showPlayerDiagnostics: Boolean
         get() = prefs.getBoolean("show_player_diagnostics", false)
         set(value) { prefs.edit().putBoolean("show_player_diagnostics", value).apply() }
+    var playerTelemetryEnabled: Boolean
+        get() = prefs.getBoolean("iptv_player_telemetry", BuildConfig.DEBUG)
+        set(value) { prefs.edit().putBoolean("iptv_player_telemetry", value).apply() }
+    var hlsRequestInspectionEnabled: Boolean
+        get() = prefs.getBoolean("iptv_hls_request_inspection", BuildConfig.DEBUG)
+        set(value) { prefs.edit().putBoolean("iptv_hls_request_inspection", value).apply() }
     var matchTvFrameRate: Boolean
         get() = isTelevision && prefs.getBoolean("tv_match_frame_rate", true)
         set(value) { prefs.edit().putBoolean("tv_match_frame_rate", value).apply() }

@@ -6,7 +6,7 @@
   if (globalThis.__jaTvRemote123) return;
   globalThis.__jaTvRemote123 = true;
   let port = null, attempts = 0, controlMode = false, selected = -1;
-  let hidden = [], hideTimer = null, perfTimer = null;
+  let hidden = [], hideTimer = null, perfTimer = null, playbackTelemetryEnabled = true;
   // Apply subtitle OFF to each new HTML5 video at startup. Stop enforcing
   // shortly after playback begins so the viewer can turn subtitles on again.
   // Native text tracks are independent of JW/VidFast player control layouts.
@@ -159,6 +159,24 @@
     }, {capture:true,passive:true});
     const onCommand = async message => {
       const action=message?.action;
+      if (action === 'setPlaybackTelemetry') {
+        playbackTelemetryEnabled = message.enabled !== false;
+        clearInterval(perfTimer); perfTimer = null;
+        if (playbackTelemetryEnabled) perfTimer = setInterval(() => {
+          const video = activeVideo();
+          if (!video || video.paused || video.ended) return;
+          try {
+            const quality = video.getVideoPlaybackQuality?.();
+            if (!quality || !video.videoWidth || !video.videoHeight) return;
+            const bufferedEnd = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
+            sendDetail({event:'VIDEO_STATS', width:video.videoWidth, height:video.videoHeight,
+              total:quality.totalVideoFrames, dropped:quality.droppedVideoFrames,
+              position:Math.round(video.currentTime*1000)/1000, readyState:video.readyState,
+              networkState:video.networkState, bufferedAhead:Math.round(Math.max(0,bufferedEnd-video.currentTime)*1000)/1000});
+          } catch (_) {}
+        }, 1000);
+        return;
+      }
       if (!['toggle','back10','forward10','controlsOpen','controlsClose'].includes(action)) return;
       const video=activeVideo();
       if (action === 'controlsOpen' || action === 'controlsClose') {
@@ -314,10 +332,23 @@
       });
       mediaResourceObserver.observe({type:'resource', buffered:true});
     } catch (_) { mediaResourceObserver = null; }
-    for (const event of ['loadedmetadata','loadeddata','canplay','playing','progress','durationchange'])
+    for (const event of mediaSourceEvents)
       document.addEventListener(event, inspectNativeMediaFrame, true);
     send({event:'MEDIA_SOURCE_DIAGNOSTICS_STARTED', frameHost:location.hostname,
       videoCount:videos().length, performanceObserver:!!mediaResourceObserver});
+  };
+  const mediaSourceEvents = ['loadedmetadata','loadeddata','canplay','playing','progress','durationchange'];
+  const stopNativeMediaDiagnostics = () => {
+    if (!mediaSourceDiagnostics) return;
+    mediaSourceDiagnostics = false;
+    try { mediaResourceObserver?.disconnect(); } catch (_) {}
+    mediaResourceObserver = null;
+    for (const event of mediaSourceEvents)
+      document.removeEventListener(event, inspectNativeMediaFrame, true);
+    reportedMediaCandidates.clear();
+    mediaLastResourceEntryCount = 0;
+    mediaBlobReported = false;
+    send({event:'MEDIA_SOURCE_DIAGNOSTICS_STOPPED', frameHost:location.hostname});
   };
   const bottomBarCandidates = () => Array.from(document.querySelectorAll(
     '[class*="control" i], [class*="toolbar" i], [class*="player-bar" i], [class*="progress" i]'
@@ -1486,7 +1517,9 @@
 
   async function handle(message) {
     const action = message?.action;
+    if (action === 'setPlaybackTelemetry') { applyPlaybackTelemetry(message.enabled !== false); return; }
     if (action === 'startMediaSourceDiagnostics') { startNativeMediaDiagnostics(); return; }
+    if (action === 'stopMediaSourceDiagnostics') { stopNativeMediaDiagnostics(); return; }
     if (['toggle','back10','forward10','controlsOpen','controlsNext','controlsPrev','controlsSelect','controlsClose','controlsUp','controlsDown'].includes(action))qualityIntentVersion++;
     if (action === 'initializePlaybackPreferences') { captionDefaults.start(); return; }
     if (action === 'matchOutputQuality') { outputQuality.request(message.height); return; }
@@ -1616,38 +1649,43 @@
   // Never alter autoplay, only watch status changes to handle show/hide.
   document.addEventListener('pause', () => { if (!controlMode) restore(); updateCenterVisibility(); }, true);
   document.addEventListener('play', () => { if (!controlMode) hideWhenPlaying(1200); updateCenterVisibility(); }, true);
-  // Capture state transitions separately from the one-second frame sampler.
-  // Report only bounded playback metadata; never include media URLs or headers.
-  for (const state of ['playing','waiting','stalled','pause','ended','error','loadedmetadata','canplay']) {
-    document.addEventListener(state, event => {
-      const video = event.target;
-      if (!(video instanceof HTMLVideoElement)) return;
-      const bufferedEnd = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
-      send({event:'VIDEO_STATE', state, width:video.videoWidth, height:video.videoHeight,
-        readyState:video.readyState, networkState:video.networkState,
-        position:Math.round(video.currentTime * 1000) / 1000,
-        bufferedAhead:Math.round(Math.max(0, bufferedEnd - video.currentTime) * 1000) / 1000,
-        errorCode:video.error?.code || 0});
-    }, true);
-  }
-  // Read-only frame samples once per second. Three valid post-start samples
-  // can reach JaTvFrameRateMatcher within ~3-5 seconds instead of ~15 seconds.
-  // The matcher still requires valid data and may reject unsupported modes.
-  perfTimer = setInterval(() => {
-    const video = currentVideo();
-    if (!video || video.paused) return;
-    if (mediaSourceDiagnostics) inspectNativeMediaFrame();
-    try {
-      const q = video.getVideoPlaybackQuality?.();
-      if (q) send({event:'VIDEO_STATS', width:video.videoWidth, height:video.videoHeight,
-        total:q.totalVideoFrames, dropped:q.droppedVideoFrames,
-        position:Math.round(video.currentTime * 1000) / 1000,
-        readyState:video.readyState, networkState:video.networkState,
-        duration:Number.isFinite(video.duration) ? Math.round(video.duration) : -1,
-        bufferedAhead:video.buffered.length ? Math.round(Math.max(0,
-          video.buffered.end(video.buffered.length - 1) - video.currentTime) * 1000) / 1000 : 0});
-    } catch (_) {}
-  }, 1000);
+  // Optional playback instrumentation can be disabled independently of the
+  // provider's player and remote controls for low-resource device testing.
+  const telemetryStates = ['playing','waiting','stalled','pause','ended','error','loadedmetadata','canplay'];
+  const reportVideoState = event => {
+    const video = event.target;
+    if (!(video instanceof HTMLVideoElement)) return;
+    const bufferedEnd = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
+    send({event:'VIDEO_STATE', state:event.type, width:video.videoWidth, height:video.videoHeight,
+      readyState:video.readyState, networkState:video.networkState,
+      position:Math.round(video.currentTime * 1000) / 1000,
+      bufferedAhead:Math.round(Math.max(0, bufferedEnd - video.currentTime) * 1000) / 1000,
+      errorCode:video.error?.code || 0});
+  };
+  const applyPlaybackTelemetry = enabled => {
+    playbackTelemetryEnabled = !!enabled;
+    clearInterval(perfTimer); perfTimer = null;
+    for (const state of telemetryStates) document.removeEventListener(state, reportVideoState, true);
+    if (!playbackTelemetryEnabled) return;
+    for (const state of telemetryStates) document.addEventListener(state, reportVideoState, true);
+    // Three valid post-start samples can reach the frame matcher in ~3-5s.
+    perfTimer = setInterval(() => {
+      const video = currentVideo();
+      if (!video || video.paused || video.ended) return;
+      if (mediaSourceDiagnostics) inspectNativeMediaFrame();
+      try {
+        const q = video.getVideoPlaybackQuality?.();
+        if (q) send({event:'VIDEO_STATS', width:video.videoWidth, height:video.videoHeight,
+          total:q.totalVideoFrames, dropped:q.droppedVideoFrames,
+          position:Math.round(video.currentTime * 1000) / 1000,
+          readyState:video.readyState, networkState:video.networkState,
+          duration:Number.isFinite(video.duration) ? Math.round(video.duration) : -1,
+          bufferedAhead:video.buffered.length ? Math.round(Math.max(0,
+            video.buffered.end(video.buffered.length - 1) - video.currentTime) * 1000) / 1000 : 0});
+      } catch (_) {}
+    }, 1000);
+  };
+  applyPlaybackTelemetry(playbackTelemetryEnabled);
   // JA v1.0.16: sequential startup configuration, NOT another autoplay engine.
   // The previous script clicked a quality option in a closed menu, then stopped
   // all work whenever that click opened Settings. CC Off therefore never ran.

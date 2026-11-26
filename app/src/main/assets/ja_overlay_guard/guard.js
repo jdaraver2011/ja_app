@@ -29,6 +29,7 @@
   let port = null;
   let reconnectScheduled = false;
   let live = true;
+  let metricsEnabled = true;
   let reconnectTimer = null;
   let sentFrames = 0;
 
@@ -38,6 +39,13 @@
     try {
       if (!port) {
         port = browser.runtime.connectNative('ja_overlay_guard');
+        port.onMessage.addListener(message => {
+          if (message?.action !== 'setGuardMetrics') return;
+          metricsEnabled = message.enabled !== false;
+          clearInterval(metricsTimer);
+          metricsTimer = metricsEnabled && live && !document.hidden
+            ? setInterval(reportMetrics, 30000) : null;
+        });
         port.onDisconnect.addListener(() => { port = null; });
       }
       port.postMessage(message);
@@ -308,7 +316,7 @@
     }
   });
   function reportMetrics() {
-    if (live && !document.hidden && metrics.slices) send('GUARD_PERF', 'cumulative', {
+    if (metricsEnabled && live && !document.hidden && metrics.slices) send('GUARD_PERF', 'cumulative', {
       ...metrics, localVideoActive:localVideoActive(), activeChildFrames:activeChildFrames.size,
       scanMs:Math.round(metrics.scanMs), maxSliceMs:Math.round(metrics.maxSliceMs * 100) / 100
     });
@@ -330,7 +338,7 @@
     reportMediaState(true);
     sweep();
     sweepTimer = setInterval(sweep, 10000);
-    metricsTimer = setInterval(reportMetrics, 30000);
+    if (metricsEnabled) metricsTimer = setInterval(reportMetrics, 30000);
   }
   let mediaStateTimer = null;
   function onMediaStateChange() {
