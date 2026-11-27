@@ -35,7 +35,7 @@ internal object JaMemoryPolicy : ComponentCallbacks2 {
         Coil.setImageLoader(
             ImageLoader.Builder(appContext)
                 .memoryCache {
-                    MemoryCache.Builder().maxSizePercent(appContext, cacheFraction).build()
+                    MemoryCache.Builder().maxSizePercent(cacheFraction).build()
                 }
                 .build()
         )
@@ -84,7 +84,11 @@ internal object JaMemoryPolicy : ComponentCallbacks2 {
             val processes = manager?.runningAppProcesses.orEmpty()
                 .filter { it.uid == context.applicationInfo.uid }
             val pids = processes.map { it.pid }.distinct().toIntArray()
-            val familyMemory = if (pids.isNotEmpty()) manager?.getProcessMemoryInfo(pids).orEmpty() else emptyList()
+            val familyMemory: List<Debug.MemoryInfo> = if (pids.isNotEmpty()) {
+                manager?.getProcessMemoryInfo(pids)?.toList() ?: emptyList()
+            } else {
+                emptyList()
+            }
             val familyPss = familyMemory.sumOf { it.totalPss }
             val familySwapPss = familyMemory.sumOf { it.totalSwappablePss }
             Log.i(TAG, "SNAPSHOT reason=$reason level=${level ?: -1} " +
