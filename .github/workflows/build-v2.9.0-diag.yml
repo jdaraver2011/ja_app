@@ -1,0 +1,22 @@
+name: Build JA v2.9.0 diagnostic APK
+on:
+  push:
+    branches: [v2.9.0-diag]
+    paths:
+      - .github/workflows/build-v2.9.0-diag.yml
+      - .github/workflows/build-apk.yml
+      - app/**
+      - build.gradle.kts
+      - gradle.properties
+      - settings.gradle.kts
+permissions:
+  contents: read
+jobs:
+  build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      run_checks: false
+      publish_update: false
+      build_variant: debug
+      generate_baseline_profile: false
+    secrets: inherit

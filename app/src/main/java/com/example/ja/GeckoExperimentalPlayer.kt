@@ -673,6 +673,10 @@ fun GeckoExperimentalPlayer(
     val startupGate = remember(url, reload) { arrayOfNulls<JaStartupBarrier>(1) }
     val session = remember(url, reload) {
         GeckoSession().apply {
+            if (BuildConfig.DEBUG) {
+                Log.i("JA_GECKO_DIAG", "SESSION_CREATED id=${System.identityHashCode(this)} " +
+                    "host=${Uri.parse(url).host ?: "unknown"} reload=$reload")
+            }
             // GeckoView can observe actual media playback even when the
             // source-status script cannot access a nested iframe's <video>.
             // Treat this as media activity, NOT confirmed title availability.
@@ -685,7 +689,17 @@ fun GeckoExperimentalPlayer(
                     latestOnMediaActivity()
                 }
             })
-            contentDelegate = object : GeckoSession.ContentDelegate {}
+            contentDelegate = object : GeckoSession.ContentDelegate {
+                override fun onCrash(session: GeckoSession) {
+                    Log.e("JA_GECKO_DIAG", "CONTENT_PROCESS_CRASH id=${System.identityHashCode(session)} " +
+                        "host=$lastPageHost")
+                }
+
+                override fun onKill(session: GeckoSession) {
+                    Log.w("JA_GECKO_DIAG", "CONTENT_PROCESS_KILLED id=${System.identityHashCode(session)} " +
+                        "host=$lastPageHost")
+                }
+            }
             // These are native JavaScript dialogs from embedded iframe content,
             // not new browser windows. The existing onNewSession/new-window
             // guard cannot prevent alert() and confirm() from blocking video.

@@ -40,7 +40,13 @@ internal object JaGeckoRuntime {
         val contents = "prefs:\n  $EXTENSION_SCRIPT_PREF: $EXTENSION_SCRIPT_SECONDS\n" +
             "  $BACKGROUND_SCRIPT_PREF: $EXTENSION_SCRIPT_SECONDS\n"
         if (!config.exists() || config.readText() != contents) config.writeText(contents)
-        val settings = GeckoRuntimeSettings.Builder().configFilePath(config.absolutePath).build()
+        val settings = GeckoRuntimeSettings.Builder()
+            .configFilePath(config.absolutePath)
+            // Firefox DevTools are available only in the side-by-side debug
+            // package; release builds keep remote debugging disabled.
+            .remoteDebuggingEnabled(BuildConfig.DEBUG)
+            .build()
+        if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "REMOTE_DEBUG_ENABLED true")
         return GeckoRuntime.create(context.applicationContext, settings).also {
             instance = it
             Log.i("JA_ADBLOCK", "EXTENSION_SCRIPT_BUDGET_CONFIGURED seconds=$EXTENSION_SCRIPT_SECONDS pageWatchdogSeconds=$EXTENSION_SCRIPT_SECONDS")

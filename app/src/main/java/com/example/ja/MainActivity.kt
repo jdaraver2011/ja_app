@@ -842,6 +842,12 @@ class MainActivity : ComponentActivity() {
     LaunchedEffect(playback,playbackLoading,liveActive,weatherOpen,weather.sound) {
         val videoActive = playback != null || playbackLoading || liveActive || (weatherOpen&&weather.weatherStar&&weather.sound)
         JaMusicService.setVideoActive(videoActive)
+        if (BuildConfig.DEBUG) {
+            android.util.Log.i("JA_PLAYBACK_DIAG", "UI_STATE elapsedMs=${android.os.SystemClock.elapsedRealtime()} " +
+                "playbackPresent=${playback != null} loading=$playbackLoading liveActive=$liveActive " +
+                "weatherVideo=${weatherOpen && weather.weatherStar && weather.sound} " +
+                "memoryPolicyActive=${playback != null || liveActive}")
+        }
         JaMemoryPolicy.setVideoPlaybackActive(playback != null || liveActive)
     }
     val catalogueVisible = !liveTv.fullscreen && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting

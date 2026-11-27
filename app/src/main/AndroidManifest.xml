@@ -12,7 +12,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <application
         android:theme="@android:style/Theme.Material.NoActionBar"
-        android:label="JA"
+        android:label="${jaAppLabel}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/tv_banner_logo"

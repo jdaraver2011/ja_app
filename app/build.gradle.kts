@@ -16,6 +16,7 @@ android {
     compileSdk { version = release(37) { minorApiLevel = 2 } }
     defaultConfig {
         applicationId = "com.example.ja"
+        manifestPlaceholders["jaAppLabel"] = "JA"
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -45,6 +46,13 @@ android {
         }
         buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("updates")
         buildTypes.getByName("release").signingConfig = signingConfigs.getByName("updates")
+    }
+    // Keep the diagnostics build installed beside the stable JA app so tests
+    // never overwrite its package or private data.
+    buildTypes.getByName("debug") {
+        applicationIdSuffix = ".diag"
+        versionNameSuffix = "-diag"
+        manifestPlaceholders["jaAppLabel"] = "JA Diagnostics"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
