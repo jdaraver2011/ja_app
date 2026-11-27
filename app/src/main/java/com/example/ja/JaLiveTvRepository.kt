@@ -41,7 +41,8 @@ import java.util.zip.GZIPInputStream
 internal data class JaLiveChannel(val id:String,val name:String,val logo:String,val urls:List<String>,
     val headers:Map<String,Map<String,String>> = emptyMap(),val categories:Set<String> = emptySet(),
     val embeddedPlayerUrl: String? = null, val xmlTvGuideId: String? = null,
-    val embeddedPlayerFallbackUrls: List<String> = emptyList())
+    val embeddedPlayerFallbackUrls: List<String> = emptyList(),
+    val headersByHost: Map<String,Map<String,String>> = emptyMap())
 @androidx.compose.runtime.Immutable
 internal data class JaLiveProgram(val channel:String,val start:Long,val end:Long,val title:String)
 @androidx.compose.runtime.Immutable

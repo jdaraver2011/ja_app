@@ -3,7 +3,14 @@ package com.example.ja
 import android.app.Activity
 import android.view.ViewGroup
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.CookieManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.background
@@ -66,6 +73,8 @@ import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -360,6 +369,8 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     var searchOpen by remember{mutableStateOf(false)}
     var menuChannel by remember{mutableStateOf<JaLiveChannel?>(null)}
     var pinDialog by remember{mutableStateOf<JaNtvPinDialog?>(null)}
+    var ntvWebFallback by remember(state.previewChannel?.id) { mutableStateOf(false) }
+    var ntvExoChannel by remember(state.previewChannel?.id) { mutableStateOf<JaLiveChannel?>(null) }
     val menuGuard=remember{JaLiveTvGuideRules.MenuKeyGuard()}
     val searchFocus=remember{FocusRequester()}
     val jaButtonFocus=remember{FocusRequester()}
@@ -658,12 +669,22 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                         }
                         else if (channel.embeddedPlayerUrl != null) {
                             if (state.fullscreen) key(channel.id) {
-                                JaLiveEmbeddedPlayback(
+                                if(channel.categories.contains("source-ntv")&&!ntvWebFallback){
+                                    val handoff=ntvExoChannel
+                                    if(handoff==null)JaLiveNtvWebCapture(
+                                        channel.embeddedPlayerUrl,channel.name,
+                                        onClose={state.fullscreen=false;state.returnChannel=channel.id},
+                                        onFallback={ntvWebFallback=true},
+                                        onHandoff={ntvExoChannel=it;state.playerAttached=false}
+                                    )else JaLiveTvPlayback(handoff,state.repository,true,
+                                        matchTvFrameRate,matchTvResolution,matchStreamQuality,
+                                        onFullscreen={state.fullscreen=it;if(!it)state.returnChannel=channel.id},
+                                        onPlaying={state.playbackStarted(channel)},
+                                        onAttached={state.playerAttached=it},
+                                        onFallback={ntvExoChannel=null;ntvWebFallback=true})
+                                }else JaLiveEmbeddedPlayback(
                                     channel.embeddedPlayerUrl, channel.name,
-                                    onClose = {
-                                        state.fullscreen = false
-                                        state.returnChannel = channel.id
-                                    },
+                                    onClose = {state.fullscreen = false;state.returnChannel = channel.id},
                                     onPlaying = { state.playbackStarted(channel) },
                                     onAttached = { state.playerAttached = it },
                                     fallbackUrls = channel.embeddedPlayerFallbackUrls,
@@ -946,17 +967,105 @@ private fun JaLiveEmbeddedPlayback(
     }
 }
 
+/** NTV-only pilot: let WebView navigate the embed, capture the first HLS/DASH URL, then hand it to IPTV Exo. */
+@Composable
+private fun JaLiveNtvWebCapture(url:String,name:String,onClose:()->Unit,onFallback:()->Unit,
+    onHandoff:(JaLiveChannel)->Unit) {
+    val context=LocalContext.current
+    val main=remember{Handler(Looper.getMainLooper())}
+    var webView by remember(url){mutableStateOf<WebView?>(null)}
+    var status by remember(url){mutableStateOf("Looking for a playable stream…")}
+    var done by remember(url){mutableStateOf(false)}
+    val hostHeaders=remember(url){java.util.concurrent.ConcurrentHashMap<String,Map<String,String>>()}
+    val callback by rememberUpdatedState(onHandoff)
+    val fallback by rememberUpdatedState(onFallback)
+    fun finishWithFallback(message:String){
+        if(done)return
+        done=true;status=message
+        Log.i("JA_NTV_HANDOFF","CAPTURE_FALLBACK reason=$message")
+    }
+    fun releaseWebView(){webView?.let{view->webView=null;runCatching{view.stopLoading();view.loadUrl("about:blank");view.destroy()}}}
+    DisposableEffect(url){
+        val timeout=Runnable{finishWithFallback("No HLS/DASH manifest found. Use Gecko player.")}
+        main.postDelayed(timeout,30_000)
+        onDispose{main.removeCallbacks(timeout);releaseWebView()}
+    }
+    JaLivePresentation(true,onClose){
+        Box(Modifier.fillMaxSize().background(Color.Black)){
+            AndroidView(factory={ctx->WebView(ctx).apply{
+                setBackgroundColor(android.graphics.Color.BLACK);keepScreenOn=true
+                settings.javaScriptEnabled=true;settings.domStorageEnabled=true
+                settings.mediaPlaybackRequiresUserGesture=false
+                settings.allowFileAccess=false;settings.allowContentAccess=false
+                settings.mixedContentMode=android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                isFocusable=true;isFocusableInTouchMode=true
+                webChromeClient=object:WebChromeClient(){
+                    override fun onCreateWindow(view:WebView?,isDialog:Boolean,isUserGesture:Boolean,resultMsg:android.os.Message?)=false
+                }
+                webViewClient=object:WebViewClient(){
+                    override fun shouldInterceptRequest(view:WebView?,request:WebResourceRequest):android.webkit.WebResourceResponse?{
+                        val uri=request.url
+                        val host=uri.host?.lowercase(Locale.ROOT)
+                        if(host!=null){
+                            val requestHeaders=request.requestHeaders.toMutableMap()
+                            if(uri.scheme.equals("https",true))CookieManager.getInstance().getCookie(uri.toString())?.let{requestHeaders["Cookie"]=it}
+                            val headers=requestHeaders.entries.asSequence()
+                                .filter{(key,value)->key.isNotBlank()&&value.isNotBlank()&&key.lowercase(Locale.ROOT) !in setOf("host","content-length","connection","range","accept-encoding")}
+                                .associate{it.key to it.value}
+                            if(headers.isNotEmpty())hostHeaders[host]=headers
+                        }
+                        val path=uri.encodedPath.orEmpty().lowercase(Locale.ROOT)
+                        val manifest=path.endsWith(".m3u8")||path.endsWith(".mpd")
+                        if(manifest&&!done){
+                            done=true
+                            status="Stream found. Preparing ExoPlayer…"
+                            val target=uri.toString()
+                            main.postDelayed({
+                                val captured=hostHeaders.toMap()
+                                val headers=captured[host].orEmpty()
+                                val ua=headers.entries.firstOrNull{it.key.equals("User-Agent",true)}?.value
+                                Log.i("JA_NTV_HANDOFF","MANIFEST_FOUND host=${host?:"unknown"} type=${if(path.endsWith(".mpd"))"dash" else "hls"} headerHosts=${captured.size} headerNames=${headers.keys.joinToString(",")}")
+                                val channel=JaLiveChannel(id="ntv-exo:$name",name=name,logo="",urls=listOf(target),
+                                    headers=mapOf(target to ua?.let{mapOf("User-Agent" to it)}.orEmpty()),
+                                    headersByHost=captured.mapKeys{it.key.lowercase(Locale.ROOT)})
+                                releaseWebView()
+                                callback(channel)
+                            },900)
+                        }
+                        return null
+                    }
+                    override fun onReceivedError(view:WebView?,request:WebResourceRequest,error:android.webkit.WebResourceError){
+                        if(request.isForMainFrame&&!done)finishWithFallback("NTV page could not be loaded. Use Gecko player.")
+                    }
+                    override fun onRenderProcessGone(view:WebView?,detail:android.webkit.RenderProcessGoneDetail?):Boolean{
+                        finishWithFallback("WebView stopped unexpectedly. Use Gecko player.");return true
+                    }
+                }
+                webView=this;loadUrl(url);requestFocus()
+            }},modifier=Modifier.fillMaxSize(),onRelease={v->if(webView===v)webView=null;v.keepScreenOn=false;v.stopLoading();v.destroy()})
+            if(!done||status.isNotBlank())Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .background(Color(0xCC101820)).padding(10.dp),horizontalAlignment=Alignment.CenterHorizontally){
+                Text(status,color=Color.White,fontSize=12.sp)
+                if(done)TvFocusButton(onClick={releaseWebView();fallback()}){Text("Use Gecko player")}
+                TvFocusButton(onClick=onClose){Text("Back to channels")}
+            }
+        }
+    }
+}
+
 /** A single session owns playback; fullscreen only changes the view hosting that session. */
 @Composable
 private fun JaLiveTvPlayback(channel:JaLiveChannel,repository:JaLiveTvRepository,fullscreen:Boolean,
     matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,
-    onFullscreen:(Boolean)->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit) {
+    onFullscreen:(Boolean)->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit,
+    onFallback:(()->Unit)?=null) {
     var revision by remember(channel.id){mutableIntStateOf(0)}
     var resolved by remember(channel.id){mutableStateOf<JaLiveChannel?>(null)}
     var resolveError by remember(channel.id){mutableStateOf(false)}
     LaunchedEffect(channel.id,revision){
         resolved=null;resolveError=false
-        resolved=try{repository.playbackChannel(channel,revision>0)}catch(e:CancellationException){throw e}catch(_:Exception){resolveError=true;null}
+        resolved=try{if(channel.id.startsWith("ntv-exo:"))channel else repository.playbackChannel(channel,revision>0)}
+            catch(e:CancellationException){throw e}catch(_:Exception){resolveError=true;null}
         Log.i("JA_LIVE_TV","SOURCES_READY channel=${channel.id} count=${resolved?.urls?.size}")
     }
     val ready=resolved
@@ -971,7 +1080,7 @@ private fun JaLiveTvPlayback(channel:JaLiveChannel,repository:JaLiveTvRepository
         }
     }else key(revision){JaLiveTvSession(ready,fullscreen,onRetry={revision++},
         matchTvFrameRate=matchTvFrameRate,matchTvResolution=matchTvResolution,matchStreamQuality=matchStreamQuality,
-        onClose={onFullscreen(false)},onFullscreen={onFullscreen(true)},onPlaying=onPlaying,onAttached=onAttached)}
+        onClose={onFullscreen(false)},onFullscreen={onFullscreen(true)},onPlaying=onPlaying,onAttached=onAttached,onFallback=onFallback)}
 }
 
 @Composable
@@ -1022,7 +1131,8 @@ internal enum class JaIptvBuffer(
 @Composable
 private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()->Unit,onClose:()->Unit,
     matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,
-    onFullscreen:()->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit) {
+    onFullscreen:()->Unit,onPlaying:(JaLiveChannel)->Unit,onAttached:(Boolean)->Unit,
+    onFallback:(()->Unit)?=null) {
     val context=LocalContext.current
     val buffer = remember(context) { PlayerControlSettings(context).iptvBuffer }
     var frameMatcher by remember(channel){mutableStateOf<JaTvFrameRateMatcher?>(null)}
@@ -1056,9 +1166,17 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
         val headers=channel.headers[channel.urls[source]].orEmpty()
         val http=DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
             .setUserAgent(headers["User-Agent"]?:"JA/2.5.0").setDefaultRequestProperties(headers)
+        val hostAware:androidx.media3.datasource.DataSource.Factory=if(channel.headersByHost.isEmpty())DefaultDataSource.Factory(context,http)
+        else ResolvingDataSource.Factory(DefaultDataSource.Factory(context,http),ResolvingDataSource.Resolver{spec:DataSpec->
+            val host=spec.uri.host?.lowercase(Locale.ROOT)
+            val perHost=channel.headersByHost[host].orEmpty().filterKeys{key->
+                key.lowercase(Locale.ROOT) !in setOf("host","content-length","connection","range","accept-encoding","user-agent")
+            }
+            if(perHost.isEmpty())spec else spec.buildUpon().setHttpRequestHeaders(perHost).build()
+        })
         val builder = ExoPlayer.Builder(context)
             .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,http)))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(hostAware))
         if (buffer != JaIptvBuffer.DEFAULT) {
             val loadControl = DefaultLoadControl.Builder()
                 .setBufferDurationsMsForStreaming(buffer.minMs, buffer.maxMs, buffer.startupMs, buffer.rebufferMs)
@@ -1192,6 +1310,7 @@ private fun JaLiveTvSession(channel:JaLiveChannel,fullscreen:Boolean,onRetry:()-
         if(fullscreen)error?.let{message->Column(Modifier.align(Alignment.Center).background(androidx.compose.ui.graphics.Color(0xDD202832)).padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally){
             Text(message,color=androidx.compose.ui.graphics.Color.White)
             TvFocusButton(onClick=onRetry){Text("Refresh sources and retry")}
+            if(onFallback!=null)TvFocusButton(onClick=onFallback){Text("Use Gecko player")}
             TvFocusButton(onClick=onClose){Text("Back to channels")}
         }}
     }
