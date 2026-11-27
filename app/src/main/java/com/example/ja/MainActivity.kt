@@ -426,7 +426,16 @@ class MainActivity : ComponentActivity() {
     var playback by remember { mutableStateOf<PlaybackSource?>(null) }
     val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext), scope) }
     val liveActive = tab == "IPTV" && (liveTv.playerAttached || liveTv.previewChannel?.id==JA_WEATHER_CHANNEL)
-    LaunchedEffect(tab){if(tab != "IPTV"){liveTv.fullscreen=false;liveTv.finishMove(false)}}
+    LaunchedEffect(tab) {
+        if (tab == "IPTV" && BuildConfig.DEBUG && JaMemoryPolicy.isConstrainedDevice()) {
+            withFrameNanos { }
+            JaGeckoRuntime.prewarmForIptv(appContext)
+        }
+        if (tab != "IPTV") {
+            liveTv.fullscreen = false
+            liveTv.finishMove(false)
+        }
+    }
     val weather = rememberJaWeather(active = playback == null && (!liveTv.fullscreen || liveTv.previewChannel?.id==JA_WEATHER_CHANNEL) && !exiting)
     val navigationRowState = androidx.compose.foundation.lazy.rememberLazyListState()
     val mainRequesters = remember { listOf("Movies","TV","IPTV","Music","Search","Settings").associateWith { FocusRequester() } }
