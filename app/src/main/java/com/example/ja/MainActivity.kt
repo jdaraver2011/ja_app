@@ -15,6 +15,8 @@ import android.app.Dialog
 import android.widget.Button
 import android.widget.LinearLayout
 import android.os.Message
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
@@ -66,9 +68,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.room.Room
 import coil.compose.AsyncImage
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -1188,6 +1194,7 @@ class MainActivity : ComponentActivity() {
             onPositionChanged = { resumePositionMs = it; restartFromBeginning = false },
             showBack = showBack, showRestore = showRestore,
             showDiagnostics = showPlayerDiagnostics,
+            inspectVideoRequests = hlsRequestInspectionEnabled,
             matchTvFrameRate = matchTvFrameRate,
             matchTvResolution = matchTvResolution,
             matchStreamQuality = matchStreamQuality,
@@ -1425,10 +1432,10 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Text("Controls one-second video sampling, playback state reports, and guard performance reports. Turning it off also pauses IPTV frame-rate and resolution matching. Reopen the IPTV stream after changing it.",
                                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                TvSettingsToggle("Inspect IPTV HLS and network requests", hlsRequestInspectionEnabled) {
+                                TvSettingsToggle("Capture GeckoView video requests", hlsRequestInspectionEnabled) {
                                     hlsRequestInspectionEnabled = it; settings.hlsRequestInspectionEnabled = it
                                 }
-                                Text("Registers GeckoView webRequest listeners and a media resource observer to inspect HLS requests. Turn it off to compare playback without request inspection, then reopen the stream.",
+                                Text("In debug builds, captures request headers for GeckoView page requests and ExoPlayer media loads in IPTV and Movies/TV. Full values are shown in the inspector and remain in memory for the current player session; they are not written to logs or storage. Reopen playback after changing this setting.",
                                     color = Color.LightGray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                                 Text("Android TV display performance", style = MaterialTheme.typography.titleLarge, color = Color.White)
                                 TvSettingsToggle("Match TV frame rate during playback", matchTvFrameRate) {
@@ -1911,6 +1918,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     showBack: Boolean,
     showRestore: Boolean,
     showDiagnostics: Boolean = false,
+    inspectVideoRequests: Boolean = false,
     matchTvFrameRate: Boolean = false,
     matchTvResolution: Boolean = false,
     matchStreamQuality: Boolean = false,
@@ -1948,6 +1956,8 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
         }
     }
     var playerError by remember(source) { mutableStateOf<String?>(null) }
+    val capturedVideoRequests = remember(source) { mutableStateListOf<JaMediaSourceCandidate>() }
+    var detailsCandidate by remember(source) { mutableStateOf<JaMediaSourceCandidate?>(null) }
     var recoveryReason by remember(source) { mutableStateOf<String?>(null) }
     var confirmedPlayback by remember(source) { mutableStateOf(false) }
     // A running media session is evidence that the embed is active, even if
@@ -1985,7 +1995,35 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
     webStatus?.let { Text(it, color = Color.LightGray) }
     when (source) {
         is PlaybackSource.Native -> {
-            val player = remember(source.url) { ExoPlayer.Builder(context).build().apply {
+            val requestCaptureHandler = remember { Handler(Looper.getMainLooper()) }
+            val exoRequestListener = remember(source, inspectVideoRequests) {
+                if (!BuildConfig.DEBUG || !inspectVideoRequests) null else object : AnalyticsListener {
+                    override fun onLoadStarted(
+                        eventTime: AnalyticsListener.EventTime,
+                        loadEventInfo: LoadEventInfo,
+                        mediaLoadData: MediaLoadData
+                    ) {
+                        val dataSpec = loadEventInfo.dataSpec
+                        val uri = dataSpec.uri
+                        if (uri.scheme != "http" && uri.scheme != "https") return
+                        val kind = when (mediaLoadData.trackType) {
+                            C.TRACK_TYPE_VIDEO -> "EXO_VIDEO"
+                            C.TRACK_TYPE_AUDIO -> "EXO_AUDIO"
+                            else -> "EXO_REQUEST"
+                        }
+                        val candidate = JaMediaSourceCandidate(
+                            uri.toString(), kind, "", "", dataSpec.httpRequestHeaders
+                        )
+                        requestCaptureHandler.post {
+                            val index = capturedVideoRequests.indexOfFirst { it.url == candidate.url }
+                            if (index >= 0) capturedVideoRequests[index] = candidate
+                            else if (capturedVideoRequests.size < 24) capturedVideoRequests.add(candidate)
+                        }
+                    }
+                }
+            }
+            val player = remember(source.url, exoRequestListener) { ExoPlayer.Builder(context).build().apply {
+                exoRequestListener?.let { addAnalyticsListener(it) }
                 setMediaItem(MediaItem.fromUri(source.url))
                 prepare()
                 playWhenReady = true
@@ -2022,7 +2060,23 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
             Box(Modifier.fillMaxSize()) {
                 AndroidView(factory = { PlayerView(it).apply { this.player = player; useController = true } }, modifier = Modifier.fillMaxSize())
                 TvFocusButton(onClick = onClose, modifier = Modifier.align(Alignment.TopStart)) { Text("Back") }
+                if (BuildConfig.DEBUG && inspectVideoRequests && capturedVideoRequests.isNotEmpty()) {
+                    Column(
+                        Modifier.align(Alignment.TopEnd).padding(12.dp)
+                            .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("Captured ${capturedVideoRequests.size} Exo request(s)", color = Color.White, fontSize = 12.sp)
+                        capturedVideoRequests.takeLast(8).forEach { candidate ->
+                            val host = Uri.parse(candidate.url).host ?: "media host"
+                            TvFocusButton(onClick = { detailsCandidate = candidate }) {
+                                Text("${candidate.kind} · $host · ${candidate.requestHeaders.size} headers", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
             }
+            detailsCandidate?.let { candidate -> JaMediaRequestDetailsDialog(candidate) { detailsCandidate = null } }
         }
         is PlaybackSource.Embed -> {
             val embedUrl = remember(source) { JaVidFastBridge.resumeUrl(source.url,resumePositionMs) }
@@ -2060,6 +2114,16 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     },
                     showRestore = showRestore,
                     showDiagnostics = showDiagnostics,
+                    enableMediaSourceDiagnostics = BuildConfig.DEBUG && inspectVideoRequests,
+                    onMediaSourceCandidate = { candidate ->
+                        if (BuildConfig.DEBUG && inspectVideoRequests && candidate.kind in setOf("HLS", "DASH", "MEDIA", "SEGMENT", "IFRAME")) {
+                            val index = capturedVideoRequests.indexOfFirst { it.url == candidate.url }
+                            if (index >= 0) {
+                                if (candidate.requestHeaders.size >= capturedVideoRequests[index].requestHeaders.size)
+                                    capturedVideoRequests[index] = candidate
+                            } else if (capturedVideoRequests.size < 24) capturedVideoRequests.add(candidate)
+                        }
+                    },
                     adBlockerMode = adBlockerMode,
                     diagnosticsLabel = currentSourceLabel,
                     matchStreamQuality = matchStreamQuality && matchTvFrameRate && matchTvResolution,
@@ -2105,6 +2169,21 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                 if (showBack) {
                     TvFocusButton(onClick = onClose, modifier = Modifier.align(Alignment.TopStart)) { Text("Back") }
                 }
+                if (BuildConfig.DEBUG && inspectVideoRequests && capturedVideoRequests.isNotEmpty()) {
+                    Column(
+                        Modifier.align(Alignment.TopEnd).padding(12.dp)
+                            .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("Captured ${capturedVideoRequests.size} video request(s)", color = Color.White, fontSize = 12.sp)
+                        capturedVideoRequests.takeLast(8).forEach { candidate ->
+                            val host = Uri.parse(candidate.url).host ?: "media host"
+                            TvFocusButton(onClick = { detailsCandidate = candidate }) {
+                                Text("${candidate.kind} · $host · ${candidate.requestHeaders.size} headers", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
                 // Useful when the remote provider renders an opaque white or
                 // TLS error screen which GeckoView cannot report from an iframe.
                 // Shown only with diagnostics enabled to avoid permanently
@@ -2117,6 +2196,7 @@ private fun TvFocusTextButton(onClick: () -> Unit, content: @Composable RowScope
                     ) { Text("Next Server", fontSize = 12.sp, color = Color.White) }
                 }
             }
+            detailsCandidate?.let { candidate -> JaMediaRequestDetailsDialog(candidate) { detailsCandidate = null } }
         }
     }
     recoveryReason?.let { reason ->

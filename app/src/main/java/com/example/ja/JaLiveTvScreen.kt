@@ -67,12 +67,16 @@ import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
@@ -246,6 +250,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     var returnChannel by mutableStateOf<String?>(null)
     private var refreshJob:Job?=null
     private var lastAttempt=0L
+    private var indexedCatalogChannels: List<JaLiveChannel>? = null
     val list=LazyListState()
     val groups=androidx.compose.foundation.ScrollState(0)
     val timeline=androidx.compose.foundation.ScrollState(0)
@@ -274,11 +279,13 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
         lastAttempt=now
         // Owned by StreamingApp's scope, so opening a channel does not cancel the EPG download.
         refreshJob=scope.launch {
-            loading=true;error=null
+            // Keep the cached lineup visible during daily/background checks. Only show the
+            // initial loading state before there is a catalog to display.
+            if(!catalogReady||channels.isEmpty())loading=true
+            error=null
             try{
-                var indexedChannels: List<JaLiveChannel>? = null
                 suspend fun applyCatalog(result:JaLiveChannels){
-                    if (indexedChannels !== result.channels) {
+                    if (indexedCatalogChannels !== result.channels) {
                         val indexStart = SystemClock.elapsedRealtime()
                         catalogIndex = withContext(Dispatchers.Default) {
                             val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL } +
@@ -298,7 +305,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                             }}
                             CatalogIndex(channels,sourceGroups,sourceIndex)
                         }
-                        indexedChannels = result.channels
+                        indexedCatalogChannels = result.channels
                         android.util.Log.i("JA_IPTV_PERF", "CATALOG_INDEX ms=${SystemClock.elapsedRealtime() - indexStart}")
                     }
                     saved=result.saved;verifiedAt=result.verifiedAt
@@ -316,7 +323,9 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
             }catch(e:CancellationException){throw e}catch(_:Exception){error="Channel catalog unavailable. Check your connection and retry."}
             finally{loading=false;catalogReady=true}
             if(channels.isEmpty())return@launch
-            guideLoading=true;guideError=null
+            // A saved schedule remains usable while the once-daily refresh runs.
+            if(guide==null)guideLoading=true
+            guideError=null
             val cacheStart = SystemClock.elapsedRealtime()
             val cachedGuide = repository.cachedGuideForDisplay(channels)
             cachedGuide?.let{guide=it}
@@ -933,6 +942,8 @@ private fun JaLiveEmbeddedPlayback(
     }
     val capturedCandidates = remember(url) { mutableStateListOf<JaMediaSourceCandidate>() }
     var nativeCandidate by remember(url) { mutableStateOf<JaMediaSourceCandidate?>(null) }
+    var nativeHandoffCandidates by remember(url) { mutableStateOf<List<JaMediaSourceCandidate>>(emptyList()) }
+    var detailsCandidate by remember(url) { mutableStateOf<JaMediaSourceCandidate?>(null) }
     val effectiveFrameRateMatching=playerTelemetryEnabled&&matchTvFrameRate
     val qualityMatching=playerTelemetryEnabled&&matchStreamQuality&&matchTvFrameRate&&matchTvResolution
     var fallbackIndex by remember(url) { mutableIntStateOf(0) }
@@ -947,7 +958,7 @@ private fun JaLiveEmbeddedPlayback(
         JaLiveFrameMatcherHost(effectiveFrameRateMatching,matchTvResolution){frameMatcher=it}
         val candidatePlayer = nativeCandidate
         if (candidatePlayer != null) {
-            JaNativeCandidatePlayer(candidatePlayer, onBack = { nativeCandidate = null })
+            JaNativeCandidatePlayer(candidatePlayer, nativeHandoffCandidates, onBack = { nativeCandidate = null })
         } else if (failed) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -960,12 +971,25 @@ private fun JaLiveEmbeddedPlayback(
             enablePlaybackTelemetry = playerTelemetryEnabled,
             enableMediaSourceDiagnostics = BuildConfig.DEBUG && hlsRequestInspectionEnabled,
             onMediaSourceCandidate = { candidate ->
-                if (BuildConfig.DEBUG && hlsRequestInspectionEnabled && candidate.kind in setOf("HLS", "DASH")) {
-                    val existing = capturedCandidates.indexOfFirst { it.url == candidate.url }
+                if (BuildConfig.DEBUG && hlsRequestInspectionEnabled && candidate.kind in setOf("HLS", "DASH", "MEDIA", "SEGMENT", "KEY", "IFRAME")) {
+                    val candidateHost = Uri.parse(candidate.url).host
+                    // Keep exact manifests and AES key URLs, but retain only one
+                    // representative media request per host/frame to bound memory.
+                    val identity = when (candidate.kind) {
+                        "HLS", "DASH", "KEY" -> "${candidate.frameId}|${candidate.kind}|${candidate.url}"
+                        else -> "${candidate.frameId}|${candidate.kind}|$candidateHost"
+                    }
+                    val existing = capturedCandidates.indexOfFirst {
+                        val oldIdentity = when (it.kind) {
+                            "HLS", "DASH", "KEY" -> "${it.frameId}|${it.kind}|${it.url}"
+                            else -> "${it.frameId}|${it.kind}|${Uri.parse(it.url).host}"
+                        }
+                        oldIdentity == identity
+                    }
                     if (existing >= 0) {
                         if (candidate.requestHeaders.size > capturedCandidates[existing].requestHeaders.size)
                             capturedCandidates[existing] = candidate
-                    } else if (capturedCandidates.size < 4) {
+                    } else if (capturedCandidates.size < 24) {
                         capturedCandidates.add(candidate)
                     }
                 }
@@ -979,42 +1003,137 @@ private fun JaLiveEmbeddedPlayback(
                 Column(Modifier.padding(12.dp)
                     .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Captured ${readyCandidates.size} manifest request(s) with request context", color = Color.White, fontSize = 12.sp)
+                    Text("Captured ${readyCandidates.size} video request(s)", color = Color.White, fontSize = 12.sp)
                     readyCandidates.forEachIndexed { index, candidate ->
                         val host = Uri.parse(candidate.url).host ?: "stream host"
-                        TvFocusButton(onClick = { nativeCandidate = candidate }) {
-                            Text("Test native ${candidate.kind} ${index + 1} · $host · ${candidate.requestHeaders.size} headers", fontSize = 11.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TvFocusButton(onClick = { detailsCandidate = candidate }) {
+                                Text("Headers ${index + 1} · ${candidate.kind} · $host · ${candidate.requestHeaders.size}", fontSize = 11.sp)
+                            }
+                            if (candidate.kind in setOf("HLS", "DASH")) {
+                                TvFocusButton(onClick = {
+                                    nativeHandoffCandidates = capturedCandidates.toList()
+                                    nativeCandidate = candidate
+                                }) {
+                                    Text("Test in Exo", fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+        detailsCandidate?.let { candidate -> JaMediaRequestDetailsDialog(candidate) { detailsCandidate = null } }
     }
 }
 
 @Composable
-private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: () -> Unit) {
+private data class JaNativeHttpResult(
+    val responseCode: Int,
+    val responseUri: String,
+    val responseHeaders: Map<String, List<String>>
+)
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class JaObservedHttpDataSource(
+    private val upstream: HttpDataSource,
+    private val onResponse: (DataSpec, JaNativeHttpResult) -> Unit
+) : HttpDataSource by upstream {
+    override fun open(dataSpec: DataSpec): Long {
+        return try {
+            val length = upstream.open(dataSpec)
+            onResponse(dataSpec, JaNativeHttpResult(
+                responseCode = upstream.responseCode,
+                responseUri = upstream.uri?.toString().orEmpty(),
+                responseHeaders = upstream.responseHeaders
+            ))
+            length
+        } catch (error: java.io.IOException) {
+            val responseCodeError = error as? HttpDataSource.InvalidResponseCodeException
+            val responseCode = responseCodeError?.responseCode
+                ?: runCatching { upstream.responseCode }.getOrDefault(-1)
+            if (responseCode >= 0) {
+                onResponse(dataSpec, JaNativeHttpResult(
+                    responseCode = responseCode,
+                    responseUri = upstream.uri?.toString().orEmpty(),
+                    responseHeaders = responseCodeError?.headerFields ?: upstream.responseHeaders
+                ))
+            }
+            throw error
+        }
+    }
+}
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class JaObservedHttpDataSourceFactory(
+    private val upstream: HttpDataSource.Factory,
+    private val onResponse: (DataSpec, JaNativeHttpResult) -> Unit
+) : HttpDataSource.Factory by upstream {
+    override fun createDataSource(): HttpDataSource =
+        JaObservedHttpDataSource(upstream.createDataSource(), onResponse)
+}
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun JaNativeCandidatePlayer(
+    candidate: JaMediaSourceCandidate,
+    capturedCandidates: List<JaMediaSourceCandidate>,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     var status by remember(candidate.url) { mutableStateOf("Preparing native ${candidate.kind} test…") }
-    val player = remember(candidate.url, candidate.referer, candidate.userAgent, candidate.requestHeaders) {
+    val exoLoads = remember(candidate.url) { mutableStateListOf<JaMediaSourceCandidate>() }
+    var detailsCandidate by remember(candidate.url) { mutableStateOf<JaMediaSourceCandidate?>(null) }
+    val player = remember(candidate.url, candidate.referer, candidate.userAgent, candidate.requestHeaders, capturedCandidates) {
         val originHost = Uri.parse(candidate.url).host.orEmpty()
-        val headers = candidate.requestHeaders.filter { (name, value) ->
-            (name in setOf("Origin", "Referer", "Cookie", "Authorization", "Accept", "Accept-Language",
-                "X-Requested-With") || name.matches(Regex("(?i)^x-[a-z0-9-]{1,60}$"))) && value.isNotBlank()
-        }.toMutableMap().apply {
-            if (candidate.referer.isNotBlank() && !containsKey("Referer")) put("Referer", candidate.referer)
+        val generatedHeaders = setOf(
+            "host", "connection", "keep-alive", "content-length", "transfer-encoding", "upgrade",
+            "proxy-connection", "proxy-authenticate", "te", "trailer", "accept-encoding", "range",
+            "if-range", "if-none-match", "if-modified-since"
+        )
+        fun safeCapturedHeaders(source: Map<String, String>): Map<String, String> = source.filter { (name, value) ->
+            name.isNotBlank() && !name.startsWith(":") && name.lowercase() !in generatedHeaders && value.isNotBlank()
+        }
+        val exactUrlHeaders = linkedMapOf<String, Map<String, String>>()
+        val hostHeaders = linkedMapOf<String, Map<String, String>>()
+        capturedCandidates
+            .filter {
+                it.frameId == candidate.frameId && it.requestHeaders.isNotEmpty() &&
+                    (candidate.pageUrl.isBlank() || it.pageUrl == candidate.pageUrl)
+            }
+            .forEach { observed ->
+                val observedUrl = Uri.parse(observed.url)
+                val observedHost = observedUrl.host?.lowercase() ?: return@forEach
+                val observedHeaders = safeCapturedHeaders(observed.requestHeaders)
+                exactUrlHeaders[observed.url] = observedHeaders
+                val previous = hostHeaders[observedHost]
+                // Prefer the richest request actually sent to this host. This
+                // keeps cookies and custom tokens bound to their observed host.
+                if (previous == null || observedHeaders.size > previous.size)
+                    hostHeaders[observedHost] = observedHeaders
+            }
+        if (candidate.url !in exactUrlHeaders)
+            exactUrlHeaders[candidate.url] = safeCapturedHeaders(candidate.requestHeaders)
+        val safeManifestHeaders = safeCapturedHeaders(candidate.requestHeaders)
+        val nonSensitiveFallback = safeManifestHeaders.filterKeys {
+            it.equals("User-Agent", true) || it.equals("Accept", true) || it.equals("Accept-Language", true)
         }
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
             .setUserAgent(candidate.userAgent.takeIf { it.isNotBlank() } ?: "JA/2.8.8")
-        val upstream = DefaultDataSource.Factory(context, http)
+        val httpResults = java.util.concurrent.ConcurrentHashMap<String, JaNativeHttpResult>()
+        val observedHttp = JaObservedHttpDataSourceFactory(http) { dataSpec, result ->
+                httpResults[dataSpec.uri.toString()] = result
+                while (httpResults.size > 32) httpResults.keys.firstOrNull()?.let(httpResults::remove) ?: break
+        }
+        val upstream = DefaultDataSource.Factory(context, observedHttp)
         val loggedRequestContexts = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
         val requestScopedFactory = ResolvingDataSource.Factory(upstream) { dataSpec ->
-            val sameHost = dataSpec.uri.host.equals(originHost, ignoreCase = true)
-            val safeHeaders = headers.filter { (name, _) ->
-                name !in setOf("Cookie", "Authorization") || sameHost
-            }
-            val requestHost = dataSpec.uri.host ?: "unknown"
+            val requestUrl = dataSpec.uri.toString()
+            val normalizedHost = dataSpec.uri.host?.lowercase().orEmpty()
+            val safeHeaders = exactUrlHeaders[requestUrl]
+                ?: hostHeaders[normalizedHost]
+                ?: nonSensitiveFallback
+            val requestHost = normalizedHost.ifBlank { "unknown" }
             val headerNames = safeHeaders.keys.sorted().joinToString(",").ifBlank { "none" }
             if (loggedRequestContexts.add("$requestHost|$headerNames")) {
                 Log.i("JA_MEDIA_DIAG", "NATIVE_REQUEST_CONTEXT kind=${candidate.kind} " +
@@ -1027,6 +1146,97 @@ private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: (
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(requestScopedFactory))
             .build().apply {
+                addAnalyticsListener(object : AnalyticsListener {
+                    private fun requestKind(dataType: Int): String = when (dataType) {
+                        C.DATA_TYPE_MANIFEST -> "EXO_MANIFEST"
+                        C.DATA_TYPE_MEDIA -> "EXO_MEDIA"
+                        else -> "EXO_LOAD_$dataType"
+                    }
+
+                    private fun upsert(record: JaMediaSourceCandidate) {
+                        val index = exoLoads.indexOfFirst { it.url == record.url && it.kind == record.kind }
+                        if (index >= 0) exoLoads[index] = record else {
+                            if (exoLoads.size >= 32) exoLoads.removeAt(0)
+                            exoLoads.add(record)
+                        }
+                    }
+
+                    override fun onLoadStarted(
+                        eventTime: AnalyticsListener.EventTime,
+                        loadEventInfo: LoadEventInfo,
+                        mediaLoadData: MediaLoadData
+                    ) {
+                        val dataSpec = loadEventInfo.dataSpec
+                        if (dataSpec.uri.scheme != "http" && dataSpec.uri.scheme != "https") return
+                        val requestHeaders = dataSpec.httpRequestHeaders
+                        upsert(JaMediaSourceCandidate(
+                            url = dataSpec.uri.toString(),
+                            kind = requestKind(mediaLoadData.dataType),
+                            referer = requestHeaders.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty(),
+                            userAgent = requestHeaders.entries.firstOrNull { it.key.equals("User-Agent", true) }?.value.orEmpty(),
+                            requestHeaders = requestHeaders
+                        ))
+                    }
+
+                    override fun onLoadCompleted(
+                        eventTime: AnalyticsListener.EventTime,
+                        loadEventInfo: LoadEventInfo,
+                        mediaLoadData: MediaLoadData
+                    ) {
+                        val dataSpec = loadEventInfo.dataSpec
+                        val kind = requestKind(mediaLoadData.dataType)
+                        val httpResult = httpResults.remove(dataSpec.uri.toString())
+                        val responseHeaderSource = loadEventInfo.responseHeaders.ifEmpty { httpResult?.responseHeaders.orEmpty() }
+                        val responseHeaders = responseHeaderSource.mapValues { (_, values) -> values.joinToString("; ") }
+                        val contentType = responseHeaders.entries.firstOrNull { it.key.equals("Content-Type", true) }?.value.orEmpty()
+                        val index = exoLoads.indexOfFirst { it.url == dataSpec.uri.toString() && it.kind == kind }
+                        val previous = exoLoads.getOrNull(index)
+                        val completed = (previous ?: JaMediaSourceCandidate(
+                            url = dataSpec.uri.toString(), kind = kind, referer = "", userAgent = "",
+                            requestHeaders = dataSpec.httpRequestHeaders
+                        )).copy(
+                            responseUrl = httpResult?.responseUri?.ifBlank { null } ?: loadEventInfo.uri.toString(),
+                            responseHeaders = responseHeaders,
+                            responseStatus = httpResult?.responseCode,
+                            bytesLoaded = loadEventInfo.bytesLoaded,
+                            loadDurationMs = loadEventInfo.loadDurationMs
+                        )
+                        upsert(completed)
+                        Log.i("JA_MEDIA_DIAG", "NATIVE_LOAD_COMPLETE kind=$kind " +
+                            "host=${dataSpec.uri.host ?: "unknown"} finalHost=${loadEventInfo.uri.host ?: "unknown"} " +
+                            "mime=${contentType.substringBefore(';')} bytes=${loadEventInfo.bytesLoaded} " +
+                            "durationMs=${loadEventInfo.loadDurationMs}")
+                    }
+
+                    override fun onLoadError(
+                        eventTime: AnalyticsListener.EventTime,
+                        loadEventInfo: LoadEventInfo,
+                        mediaLoadData: MediaLoadData,
+                        error: java.io.IOException,
+                        wasCanceled: Boolean
+                    ) {
+                        val dataSpec = loadEventInfo.dataSpec
+                        val kind = requestKind(mediaLoadData.dataType)
+                        val httpError = error as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
+                        val httpResult = httpResults.remove(dataSpec.uri.toString())
+                        val index = exoLoads.indexOfFirst { it.url == dataSpec.uri.toString() && it.kind == kind }
+                        val previous = exoLoads.getOrNull(index)
+                        upsert((previous ?: JaMediaSourceCandidate(
+                            url = dataSpec.uri.toString(), kind = kind, referer = "", userAgent = "",
+                            requestHeaders = dataSpec.httpRequestHeaders
+                        )).copy(
+                            responseUrl = httpResult?.responseUri?.ifBlank { null } ?: loadEventInfo.uri.toString(),
+                            responseHeaders = (httpError?.headerFields ?: httpResult?.responseHeaders.orEmpty()).mapValues { (_, values) -> values.joinToString("; ") },
+                            responseStatus = httpError?.responseCode ?: httpResult?.responseCode,
+                            bytesLoaded = loadEventInfo.bytesLoaded,
+                            loadDurationMs = loadEventInfo.loadDurationMs,
+                            loadError = "${httpError?.let { "HTTP ${it.responseCode}: " } ?: ""}${error.javaClass.simpleName}: ${error.message.orEmpty()}"
+                        ))
+                        Log.w("JA_MEDIA_DIAG", "NATIVE_LOAD_ERROR kind=$kind " +
+                            "host=${dataSpec.uri.host ?: "unknown"} finalHost=${loadEventInfo.uri.host ?: "unknown"} " +
+                            "http=${httpError?.responseCode ?: 0} canceled=$wasCanceled error=${error.javaClass.simpleName}")
+                    }
+                })
                 setMediaItem(MediaItem.fromUri(candidate.url))
                 prepare()
                 playWhenReady = true
@@ -1070,9 +1280,23 @@ private fun JaNativeCandidatePlayer(candidate: JaMediaSourceCandidate, onBack: (
             .background(Color(0xDD111820), RoundedCornerShape(8.dp)).padding(10.dp)) {
             Text(status, color = Color.White, fontSize = 12.sp)
             Text("Source host: ${Uri.parse(candidate.url).host ?: "unknown"}", color = Color.LightGray, fontSize = 11.sp)
+            if (BuildConfig.DEBUG && exoLoads.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Recent native loads", color = Color.White, fontSize = 11.sp)
+                exoLoads.takeLast(6).forEach { record ->
+                    val host = Uri.parse(record.responseUrl.ifBlank { record.url }).host ?: "unknown"
+                    val mime = record.responseHeaders.entries.firstOrNull { it.key.equals("Content-Type", true) }?.value
+                        ?.substringBefore(';')?.ifBlank { "mime unknown" } ?: "mime unknown"
+                    TvFocusButton(onClick = { detailsCandidate = record }) {
+                        Text("${record.kind} · $host · $mime · ${record.bytesLoaded ?: 0} B" +
+                            if (record.loadError.isNotBlank()) " · ERROR" else "", fontSize = 10.sp)
+                    }
+                }
+            }
             TvFocusButton(onClick = onBack) { Text("Back to web player") }
         }
     }
+    detailsCandidate?.let { JaMediaRequestDetailsDialog(it) { detailsCandidate = null } }
 }
 
 /** A single session owns playback; fullscreen only changes the view hosting that session. */

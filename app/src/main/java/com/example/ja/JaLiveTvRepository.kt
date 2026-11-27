@@ -52,10 +52,9 @@ internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Lon
 }
 
 internal class JaLiveTvRepository(private val context:Context) {
-    private companion object { val catalogLock=Mutex() }
-    private val guideLock=Mutex()
+    private companion object { val catalogLock=Mutex(); val guideLock=Mutex() }
     @Volatile private var memoryCatalog:Pair<JaLiveChannels,Long>?=null
-    @Volatile private var memoryGuide:Pair<String,JaLiveGuide>?=null
+    @Volatile private var memoryGuide:Triple<String,Long,JaLiveGuide>?=null
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
     private val client=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS)
         .callTimeout(120,TimeUnit.SECONDS).build()
@@ -97,6 +96,8 @@ internal class JaLiveTvRepository(private val context:Context) {
         val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<4&&
             prefs.getString("source_groups_upgrade_attempt_date","")!=localDate.toString()
         val shouldRefresh=force||sourceGroupsUpgradeDue||(due&&!attemptedToday)
+        Log.i("JA_LIVE_TV","CATALOG_CACHE hit=${cached!=null} due=$due attemptedToday=$attemptedToday " +
+            "sourceGroupsUpgradeDue=$sourceGroupsUpgradeDue refresh=$shouldRefresh")
         if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
         if(cached==null&&!shouldRefresh)throw IOException("No catalog cache is available; automatic refresh was already attempted today")
         if(cached!=null)withContext(Dispatchers.Main){onCached(cached)}
@@ -504,16 +505,18 @@ internal class JaLiveTvRepository(private val context:Context) {
         } else null
     suspend fun cachedGuide(channels:List<JaLiveChannel>):JaLiveGuide? = withContext(Dispatchers.IO){
         val key=signature(channels)
-        memoryGuide?.takeIf{it.first==key}?.let{return@withContext it.second}
+        val file=File(root,"guide-$key.json")
+        val modified=file.lastModified()
+        memoryGuide?.takeIf{it.first==key&&it.second==modified}?.let{return@withContext it.third}
         val loaded=runCatching {
-            val obj=JSONObject(File(root,"guide-$key.json").readText())
+            val obj=JSONObject(file.readText())
             require(obj.getString("signature")==key)
             val now=System.currentTimeMillis();val a=obj.getJSONArray("programs")
             val entries=(0 until a.length()).mapNotNull{index->val item=a.getJSONArray(index)
                 if(item.getLong(2)<=now)null else JaLiveProgram(item.getString(0),item.getLong(1),item.getLong(2),item.getString(3))}
             JaLiveGuide(entries,obj.getLong("fetched"),obj.optBoolean("saved",false))
         }.getOrNull()
-        loaded?.also{memoryGuide=key to it}
+        loaded?.also{memoryGuide=Triple(key,file.lastModified(),it)}
     }
     private data class Feed(val programs:List<JaLiveProgram>,val fetched:Long,val stale:Boolean)
     // StreamingApp retains this work across channel playback. Concurrent providers publish useful partial schedules.
@@ -521,19 +524,25 @@ internal class JaLiveTvRepository(private val context:Context) {
         val began=android.os.SystemClock.elapsedRealtime()
         val now=System.currentTimeMillis();val key=signature(channels)
         val exactCache=cachedGuide(channels)
-        if(!force&&exactCache!=null){
-            val rebuiltAt=File(root,"guide-$key.json").lastModified()
-            val coversNow=exactCache.programs.any{it.start<=now&&it.end>now}
-            if((coversNow&&!refreshDueAfterSix(rebuiltAt,now))||
-                (!exactCache.saved&&JaLiveTvRules.fresh(exactCache.fetched,now,21_600_000)))return@withContext exactCache
-        }
+        val rebuiltAt=File(root,"guide-$key.json").lastModified()
+        val dailyRefreshDue=exactCache==null||refreshDueAfterSix(rebuiltAt,now)
+        val refreshPrefs=context.getSharedPreferences("ja_live_tv_refresh",Context.MODE_PRIVATE)
+        val localDate=Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+        val alreadyAttemptedToday=refreshPrefs.getString("guide_attempt_date","")==localDate
+        Log.i("JA_LIVE_TV","GUIDE_CACHE hit=${exactCache!=null} due=$dailyRefreshDue " +
+            "attemptedToday=$alreadyAttemptedToday force=$force")
+        if(!force&&exactCache!=null&&!dailyRefreshDue)return@withContext exactCache
         val cached=exactCache ?: if (channels.any { it.xmlTvGuideId != null }) {
             cachedGuide(channels.filter { it.embeddedPlayerUrl == null })
         } else null
+        if(!force&&dailyRefreshDue&&alreadyAttemptedToday){
+            return@withContext cached?.copy(saved=true)?:throw IOException("Guide refresh was already attempted today")
+        }
+        if(force||dailyRefreshDue)refreshPrefs.edit().putString("guide_attempt_date",localDate).apply()
         val cancellation=currentCoroutineContext()
         suspend fun loadFeed(url:String,name:String,limit:Long,aliases:Map<String,String>):Feed? {
             val file=File(root,name);var stale=false
-            if(force||!JaLiveTvRules.fresh(file.lastModified(),now,21_600_000)) {
+            if(force||refreshDueAfterSix(file.lastModified(),now)) {
                 try {
                     client.newCall(request(url)).execute().use{response->
                         if(!response.isSuccessful)throw IOException("Guide HTTP ${response.code}")
@@ -577,7 +586,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         val result=JaLiveGuide(programs,fetched,degraded)
         val a=JSONArray();programs.forEach{a.put(JSONArray().put(it.channel).put(it.start).put(it.end).put(it.title))}
         write(File(root,"guide-$key.json"),JSONObject().put("signature",key).put("fetched",fetched).put("saved",degraded).put("programs",a).toString())
-        memoryGuide=key to result
+        memoryGuide=Triple(key,File(root,"guide-$key.json").lastModified(),result)
         android.util.Log.i("JA_LIVE_TV","GUIDE_READY programs=${programs.size} channels=${result.byChannel.size} saved=$degraded elapsedMs=${android.os.SystemClock.elapsedRealtime()-began}")
         result
     }}

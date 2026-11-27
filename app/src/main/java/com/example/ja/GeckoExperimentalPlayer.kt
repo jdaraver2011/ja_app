@@ -68,7 +68,19 @@ data class JaMediaSourceCandidate(
     val kind: String,
     val referer: String,
     val userAgent: String,
-    val requestHeaders: Map<String, String> = emptyMap()
+    val requestHeaders: Map<String, String> = emptyMap(),
+    val responseUrl: String = "",
+    val responseHeaders: Map<String, String> = emptyMap(),
+    val responseStatus: Int? = null,
+    val bytesLoaded: Long? = null,
+    val loadDurationMs: Long? = null,
+    val loadError: String = "",
+    val pageUrl: String = "",
+    val frameId: Int = -1,
+    val requestId: String = "",
+    val browserFinalUrl: String = "",
+    val browserStatus: Int? = null,
+    val browserMime: String = ""
 )
 
 /**
@@ -228,40 +240,45 @@ private class JaRemoteBridge {
                                                     "query=${!requestUrl.query.isNullOrBlank()} frame=${documentUrl.host ?: "unknown"} " +
                                                     "frameId=${report.optInt("frameId", -1)} resource=${report.optString("resourceType")} " +
                                                     "status=$statusCode$redirectHost$requestHeaderSummary")
-                                                if (event == "MEDIA_REQUEST_CANDIDATE" &&
-                                                    report.optString("kind") in setOf("HLS", "DASH") &&
-                                                    (requestUrl.scheme == "http" || requestUrl.scheme == "https") &&
-                                                    requestUrl.host != null) {
-                                                    val referer = report.optString("documentUrl")
-                                                        .ifBlank { report.optString("originUrl") }
-                                                    val captured = JaMediaSourceCandidate(
-                                                        requestUrl.toString(), report.optString("kind"), referer, ""
-                                                    )
-                                                    mainHandler.post {
-                                                        if (mediaSourceDiagnosticsEnabled)
-                                                            onMediaSourceCandidate?.invoke(captured)
-                                                    }
+                                                if (event == "MEDIA_REQUEST_REDIRECT" && requestId.isNotBlank()) {
+                                                    mediaRequestUrls[requestId]?.put("redirectUrl", report.optString("redirectUrl"))
                                                 }
-                                                if (event == "MEDIA_REQUEST_SENT_HEADERS" &&
-                                                    report.optString("kind") in setOf("HLS", "DASH") &&
-                                                    (requestUrl.scheme == "http" || requestUrl.scheme == "https") &&
-                                                    requestUrl.host != null) {
-                                                    val headersJson = report.optJSONObject("requestHeaders")
+                                                val capturedReport = if (requestId.isNotBlank()) mediaRequestUrls[requestId] ?: report else report
+                                                val capturedUrl = Uri.parse(capturedReport.optString("url").ifBlank { report.optString("url") })
+                                                val capturedKind = capturedReport.optString("kind", report.optString("kind"))
+                                                if (capturedKind in setOf("HLS", "DASH", "MEDIA", "SEGMENT", "KEY", "IFRAME") &&
+                                                    (capturedUrl.scheme == "http" || capturedUrl.scheme == "https") && capturedUrl.host != null) {
+                                                    val headersJson = capturedReport.optJSONObject("requestHeaders")
                                                     val headers = buildMap {
                                                         headersJson?.keys()?.forEach { key ->
                                                             val value = headersJson.optString(key)
-                                                            if (value.isNotBlank() && (key in setOf(
-                                                                    "Origin", "Referer", "User-Agent", "Cookie", "Authorization",
-                                                                    "Accept", "Accept-Language", "X-Requested-With") ||
-                                                                    key.matches(Regex("(?i)^x-[a-z0-9-]{1,60}$"))))
-                                                                put(key, value)
+                                                            if (value.isNotBlank()) put(key, value)
                                                         }
                                                     }
-                                                    val referer = headers["Referer"].orEmpty()
-                                                        .ifBlank { report.optString("documentUrl") }
+                                                    val browserFinalUrl = when (event) {
+                                                        "MEDIA_REQUEST_COMPLETE" -> report.optString("url")
+                                                        else -> capturedReport.optString("redirectUrl")
+                                                    }
+                                                    val responseStatus = when (event) {
+                                                        "MEDIA_REQUEST_HEADERS", "MEDIA_REQUEST_COMPLETE", "MEDIA_REQUEST_ERROR" ->
+                                                            report.optInt("statusCode", 0).takeIf { it > 0 }
+                                                        else -> null
+                                                    }
+                                                    val referer = headers.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
+                                                    val pageUrl = capturedReport.optString("documentUrl")
+                                                        .ifBlank { capturedReport.optString("originUrl") }
                                                     val candidate = JaMediaSourceCandidate(
-                                                        requestUrl.toString(), report.optString("kind"), referer,
-                                                        headers["User-Agent"].orEmpty(), headers
+                                                        url = capturedUrl.toString(),
+                                                        kind = capturedKind,
+                                                        referer = referer,
+                                                        userAgent = headers.entries.firstOrNull { it.key.equals("User-Agent", true) }?.value.orEmpty(),
+                                                        requestHeaders = headers,
+                                                        pageUrl = pageUrl,
+                                                        frameId = capturedReport.optInt("frameId", -1),
+                                                        requestId = requestId,
+                                                        browserFinalUrl = browserFinalUrl,
+                                                        browserStatus = responseStatus,
+                                                        browserMime = capturedReport.optString("mime")
                                                     )
                                                     mainHandler.post {
                                                         if (mediaSourceDiagnosticsEnabled)

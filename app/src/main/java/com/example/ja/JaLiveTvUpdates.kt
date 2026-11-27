@@ -12,7 +12,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 
-/** OS-managed catalog downloads scheduled for after 6:00 AM in the device's local time zone. */
+/** OS-managed channel and guide refreshes scheduled after 6:00 AM local time. */
 internal object JaLiveTvUpdates {
     private const val DAILY=240301
     private const val OPEN=240302
@@ -65,11 +65,23 @@ class JaLiveTvUpdateService:JobService() {
     override fun onStartJob(params:JobParameters):Boolean {
         running[params.jobId]=scope.launch {
             try{
-                val result=JaLiveTvRepository(applicationContext).channels(force=true)
-                jobFinished(params,result.saved)
-                if(!result.saved&&params.jobId==240301)JaLiveTvUpdates.scheduleNext(applicationContext)
+                val repository=JaLiveTvRepository(applicationContext)
+                // Use the same local-day guard as the foreground screen so a catch-up job
+                // cannot download a second time after IPTV already refreshed today.
+                val result=repository.channels(force=false)
+                if(result.channels.isNotEmpty()){
+                    try{repository.guide(result.channels,force=false)}
+                    catch(e:CancellationException){throw e}
+                    catch(e:Exception){android.util.Log.w("JA_LIVE_TV","DAILY_GUIDE_REFRESH_FAILED; will retry at next daily run",e)}
+                }
+                jobFinished(params,false)
+                if(params.jobId==240301)JaLiveTvUpdates.scheduleNext(applicationContext)
             }catch(e:CancellationException){throw e}
-            catch(_:Exception){jobFinished(params,true)}
+            catch(e:Exception){
+                android.util.Log.w("JA_LIVE_TV","DAILY_REFRESH_FAILED; will retry at next daily run",e)
+                jobFinished(params,false)
+                if(params.jobId==240301)JaLiveTvUpdates.scheduleNext(applicationContext)
+            }
             finally{running.remove(params.jobId)}
         }
         return true

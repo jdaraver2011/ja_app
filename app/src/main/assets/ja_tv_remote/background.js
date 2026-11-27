@@ -9,7 +9,7 @@
   const trackedRequests = new Set();
   const MAX_TRACKED_REQUESTS = 96;
 
-  const classify = (raw, mime = '') => {
+  const classify = (raw, mime = '', resourceType = '') => {
     let url;
     try { url = new URL(raw); } catch (_) { return null; }
     if (!['http:', 'https:'].includes(url.protocol)) return null;
@@ -19,6 +19,12 @@
         /(?:^|[?&])(?:format|type)=m3u8(?:&|$)/i.test(url.search)) return 'HLS';
     if (/\.mpd$/.test(path) || /dash\+xml/.test(type) ||
         /(?:^|[?&])(?:format|type)=mpd(?:&|$)/i.test(url.search)) return 'DASH';
+    if (/\.key$/.test(path) || /\/(?:keys?|aes|hls-?key)\//i.test(path)) return 'KEY';
+    if (/\.(?:mp4|m4v|mov|webm|mkv|mp3|m4a|aac|ogg|opus|wav)(?:$|\.)/.test(path) ||
+        /^(?:video|audio)\//.test(type)) return 'MEDIA';
+    if (/\.(?:m4s|ts|cmfv|cmfa|aac)(?:$|\.)/.test(path)) return 'SEGMENT';
+    if (resourceType === 'media') return 'MEDIA';
+    if (resourceType === 'sub_frame') return 'IFRAME';
     return null;
   };
   const sendNative = message => {
@@ -26,7 +32,7 @@
   };
   const requestDetails = (event, details, extra = {}) => {
     if (!details || !details.requestId) return;
-    const kind = classify(details.url, extra.mime || '');
+    const kind = classify(details.url, extra.mime || '', details.type || '');
     if (!kind && event === 'MEDIA_REQUEST_CANDIDATE') return;
     if (kind) {
       if (!trackedRequests.has(details.requestId) && trackedRequests.size >= MAX_TRACKED_REQUESTS)
@@ -53,43 +59,62 @@
       trackedRequests.delete(details.requestId);
   };
 
+  const pendingHeaders = new Map();
+  const MAX_PENDING_HEADERS = 128;
+  const captureHeaders = rows => {
+    const headers = {};
+    for (const header of rows || []) {
+      const name = String(header.name || '').trim();
+      if (!name || name.length > 128) continue;
+      const value = String(header.value || '').slice(0, 8192);
+      if (value) {
+        const separator = name.toLowerCase() === 'cookie' ? '; ' : ', ';
+        headers[name] = headers[name] ? `${headers[name]}${separator}${value}` : value;
+      }
+    }
+    return headers;
+  };
   const onBeforeRequest = details => {
-    const kind = classify(details.url);
+    const kind = classify(details.url, '', details.type || '');
     if (kind) requestDetails('MEDIA_REQUEST_CANDIDATE', details, {kind});
   };
-  // Keep only the request context commonly required by native HLS players.
-  // These values stay in the short-lived native bridge payload and are never logged.
+  // Keep request headers briefly until the response MIME type confirms a media
+  // request. Values are sent only for media candidates and are never logged or
+  // persisted. This also catches manifests with opaque URLs.
   const onBeforeSendHeaders = details => {
-    const kind = classify(details.url);
-    if (!kind) return;
-    const allowed = new Map([
-      ['origin', 'Origin'], ['referer', 'Referer'], ['user-agent', 'User-Agent'],
-      ['cookie', 'Cookie'], ['authorization', 'Authorization'], ['accept', 'Accept'],
-      ['accept-language', 'Accept-Language'], ['x-requested-with', 'X-Requested-With']
-    ]);
-    const requestHeaders = {};
-    for (const header of details.requestHeaders || []) {
-      const rawName = String(header.name || '');
-      const key = allowed.get(rawName.toLowerCase()) ||
-        (/^x-[a-z0-9-]{1,60}$/i.test(rawName) ? rawName : null);
-      const value = String(header.value || '').slice(0, 8192);
-      if (key && value) requestHeaders[key] = value;
+    const requestHeaders = captureHeaders(details.requestHeaders);
+    if (details.requestId) {
+      if (pendingHeaders.size >= MAX_PENDING_HEADERS && !pendingHeaders.has(details.requestId))
+        pendingHeaders.delete(pendingHeaders.keys().next().value);
+      pendingHeaders.set(details.requestId, requestHeaders);
     }
-    requestDetails('MEDIA_REQUEST_SENT_HEADERS', details, {kind, requestHeaders});
+    const kind = classify(details.url, '', details.type || '');
+    if (kind) requestDetails('MEDIA_REQUEST_SENT_HEADERS', details, {kind, requestHeaders});
   };
   const onBeforeRedirect = details => requestDetails('MEDIA_REQUEST_REDIRECT', details);
   const onHeadersReceived = details => {
     const contentType = (details.responseHeaders || []).find(header =>
       String(header.name || '').toLowerCase() === 'content-type')?.value || '';
-    if (classify(details.url, contentType))
-      requestDetails('MEDIA_REQUEST_HEADERS', details, {mime:contentType});
+    const kind = classify(details.url, contentType, details.type || '');
+    if (kind) {
+      if (!trackedRequests.has(details.requestId)) {
+        if (trackedRequests.size >= MAX_TRACKED_REQUESTS)
+          trackedRequests.delete(trackedRequests.values().next().value);
+        trackedRequests.add(details.requestId);
+      }
+      requestDetails('MEDIA_REQUEST_HEADERS', details, {
+        kind, mime:contentType, requestHeaders:pendingHeaders.get(details.requestId) || {}
+      });
+    }
   };
   const onCompleted = details => {
     if (trackedRequests.has(details.requestId)) requestDetails('MEDIA_REQUEST_COMPLETE', details);
+    pendingHeaders.delete(details.requestId);
   };
   const onErrorOccurred = details => {
     if (trackedRequests.has(details.requestId))
       requestDetails('MEDIA_REQUEST_ERROR', details, {kind:classify(details.url) || 'UNKNOWN'});
+    pendingHeaders.delete(details.requestId);
   };
 
   const stopInspection = () => {
@@ -104,6 +129,7 @@
     inspecting = false;
     requestHeaderInspectionAvailable = false;
     trackedRequests.clear();
+    pendingHeaders.clear();
     sendNative({event:'MEDIA_REQUEST_INSPECTION_STOPPED'});
   };
   const startInspection = () => {
@@ -111,12 +137,12 @@
     try {
       if (!browser.webRequest) throw new Error('webRequest API unavailable');
       browser.webRequest.onBeforeRequest.addListener(onBeforeRequest,
-        {urls:['http://*/*','https://*/*'], types:['xmlhttprequest','media','other']});
+        {urls:['http://*/*','https://*/*'], types:['xmlhttprequest','media','other','sub_frame']});
       // This is observation only: no blocking or header mutation. Keep it
       // optional so older GeckoView builds still retain URL/status inspection.
       try {
         browser.webRequest.onBeforeSendHeaders.addListener(onBeforeSendHeaders,
-          {urls:['http://*/*','https://*/*'], types:['xmlhttprequest','media','other']}, ['requestHeaders']);
+          {urls:['http://*/*','https://*/*'], types:['xmlhttprequest','media','other','sub_frame']}, ['requestHeaders']);
         requestHeaderInspectionAvailable = true;
       } catch (_) { requestHeaderInspectionAvailable = false; }
       browser.webRequest.onBeforeRedirect.addListener(onBeforeRedirect,
