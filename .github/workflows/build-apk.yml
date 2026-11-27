@@ -347,6 +347,25 @@ jobs:
             *) echo "Unsupported APK build variant: $BUILD_VARIANT"; exit 1 ;;
           esac
           gradle --no-daemon --stacktrace ":app:$gradle_task"
+      - name: Verify diagnostic GeckoView package
+        if: ${{ github.ref_name == 'v2.9.0-diag' && (github.event_name == 'push' || inputs.build_variant == 'debug') }}
+        run: |
+          gradle --no-daemon :app:verifyGeckoViewRuntime
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_STORED, ZipFile
+
+          apk_path = Path("app/build/outputs/apk/debug/app-debug.apk")
+          with ZipFile(apk_path) as apk:
+              omni = apk.getinfo("assets/omni.ja")
+              if omni.compress_type != ZIP_STORED:
+                  raise SystemExit(f"omni.ja must be stored; APK method={omni.compress_type}")
+              xul = [entry for entry in apk.namelist() if entry.startswith("lib/") and entry.endswith("/libxul.so")]
+              if not xul:
+                  raise SystemExit("APK contains no GeckoView libxul.so native library")
+              print(f"Verified omni.ja STORED ({omni.file_size} bytes)")
+              print(f"Found GeckoView native libraries: {', '.join(xul)}")
+          PY
       - name: Verify JA Baseline Profile in APK
         if: ${{ inputs.generate_baseline_profile || (inputs.build_variant == 'release' && hashFiles('app/src/main/baseline-prof.txt') != '') }}
         env:
