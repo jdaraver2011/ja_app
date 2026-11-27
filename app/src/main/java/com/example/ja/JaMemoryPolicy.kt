@@ -35,7 +35,7 @@ internal object JaMemoryPolicy : ComponentCallbacks2 {
         Coil.setImageLoader(
             ImageLoader.Builder(appContext)
                 .memoryCache {
-                    MemoryCache.Builder().maxSizePercent(cacheFraction).build()
+                    MemoryCache.Builder(appContext).maxSizePercent(cacheFraction).build()
                 }
                 .build()
         )
