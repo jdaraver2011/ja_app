@@ -24,7 +24,10 @@ function harness({trusted = true, resumeMs = 0, ready = true, restart = false} =
   const document = {
     body:{innerText:''}, hidden:false, referrer:'https://unrelated.example/',
     querySelectorAll:()=>[video],
-    addEventListener:(name,cb)=>{documentEvents[name]=cb;}
+    addEventListener:(name,cb)=>{
+      const previous=documentEvents[name];
+      documentEvents[name]=previous ? (...args)=>{previous(...args);cb(...args);} : cb;
+    }
   };
   vm.runInNewContext(code, {
     window:win,document,location:{hostname:trusted?'vidsrc.sh':'ads.example'},
@@ -34,7 +37,7 @@ function harness({trusted = true, resumeMs = 0, ready = true, restart = false} =
     setInterval:(f,ms)=>{intervals.push({f,ms});return intervals.length;},
     clearInterval:()=>{},setTimeout:f=>{timers.push(f);return timers.length;}
   });
-  if (ready) receive({action:'resume',positionMs:resumeMs,restart});
+  if (ready && receive) receive({action:'resume',positionMs:resumeMs,restart});
   function advance(ms,position) {
     now += ms;
     if (position !== undefined) video.currentTime=position;
