@@ -60,8 +60,9 @@ android {
         manifestPlaceholders["jaAppLabel"] = "JA Diagnostics"
         buildConfigField("boolean", "JA_DIAGNOSTICS", "true")
     }
-    create("diagnostic") {
-        initWith(getByName("release"))
+    val releaseBuildType = buildTypes.getByName("release")
+    buildTypes.create("diagnostic") {
+        initWith(releaseBuildType)
         applicationIdSuffix = ".diag"
         versionNameSuffix = "-diag"
         manifestPlaceholders["jaAppLabel"] = "JA Diagnostics"
