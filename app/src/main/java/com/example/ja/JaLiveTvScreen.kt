@@ -1034,7 +1034,7 @@ private data class JaNativeHttpResult(
     val responseHeaders: Map<String, List<String>>
 )
 
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 private class JaObservedHttpDataSource(
     private val upstream: HttpDataSource,
     private val onResponse: (DataSpec, JaNativeHttpResult) -> Unit
@@ -1064,7 +1064,7 @@ private class JaObservedHttpDataSource(
     }
 }
 
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 private class JaObservedHttpDataSourceFactory(
     private val upstream: HttpDataSource.Factory,
     private val onResponse: (DataSpec, JaNativeHttpResult) -> Unit
