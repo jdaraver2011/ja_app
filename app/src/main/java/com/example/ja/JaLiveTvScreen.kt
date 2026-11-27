@@ -744,7 +744,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         }},confirmButton={TextButton(onClick={searchOpen=false;focusGroups()}){Text("Done")}},
         dismissButton={TextButton(onClick={state.query="";state.returnChannel=null}){Text("Clear")}})
     pinDialog?.let{mode->
-        JaNtvPinPrompt(mode,pinStore,
+        JaNtvPinPrompt(mode,state.pinStore,
             onDismiss={pinDialog=null},
             onCreated={pinDialog=null;state.adultOnlyUnlocked=true;selectGroup("Adult Only")},
             onUnlocked={pinDialog=null;state.adultOnlyUnlocked=true;selectGroup("Adult Only")})
