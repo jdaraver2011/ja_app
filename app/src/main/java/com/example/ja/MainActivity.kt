@@ -1262,6 +1262,7 @@ class MainActivity : ComponentActivity() {
             matchTvFrameRate = matchTvFrameRate,
             matchTvResolution = matchTvResolution,
             matchStreamQuality = matchStreamQuality,
+            adBlockerMode = adBlockerMode,
             modifier = Modifier.fillMaxSize())
         return
     }
@@ -1670,6 +1671,7 @@ class MainActivity : ComponentActivity() {
                     matchTvFrameRate = matchTvFrameRate,
                     matchTvResolution = matchTvResolution,
                     matchStreamQuality = matchStreamQuality,
+                    adBlockerMode = adBlockerMode,
                     modifier = Modifier.fillMaxWidth().weight(1f))
             } else if (tab == "Movies" || tab == "TV") {
                 val isMovieTab = tab == "Movies"

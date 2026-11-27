@@ -341,13 +341,14 @@ private enum class JaNtvPinDialog { CREATE, UNLOCK_ADULT }
 
 @Composable
 internal fun JaLiveTvScreen(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,
-    matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,matchStreamQuality:Boolean=false,modifier:Modifier=Modifier) {
-    JaScaledUi { JaLiveTvScreenContent(state,weather,onMainMenu,matchTvFrameRate,matchTvResolution,matchStreamQuality,modifier) }
+    matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,matchStreamQuality:Boolean=false,
+    adBlockerMode:String=JaGeckoAdBlockers.UBLOCK,modifier:Modifier=Modifier) {
+    JaScaledUi { JaLiveTvScreenContent(state,weather,onMainMenu,matchTvFrameRate,matchTvResolution,matchStreamQuality,adBlockerMode,modifier) }
 }
 
 @Composable
 private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onMainMenu:()->Unit,
-    matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,modifier:Modifier) {
+    matchTvFrameRate:Boolean,matchTvResolution:Boolean,matchStreamQuality:Boolean,adBlockerMode:String,modifier:Modifier) {
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
     val appContext=LocalContext.current
@@ -667,7 +668,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                                     onAttached = { state.playerAttached = it },
                                     fallbackUrls = channel.embeddedPlayerFallbackUrls,
                                     matchTvFrameRate=matchTvFrameRate,matchTvResolution=matchTvResolution,
-                                    matchStreamQuality=matchStreamQuality
+                                    matchStreamQuality=matchStreamQuality,adBlockerMode=adBlockerMode
                                 )
                             } else Text("Select the channel to watch", Modifier.align(Alignment.Center),
                                 color = Color.LightGray, fontSize = 12.sp)
@@ -917,7 +918,7 @@ private fun JaLiveEmbeddedPlayback(
     url: String, name: String, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit,
     isNtvStream: Boolean = false,
     fallbackUrls: List<String> = emptyList(),matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,
-    matchStreamQuality:Boolean=false
+    matchStreamQuality:Boolean=false,adBlockerMode:String=JaGeckoAdBlockers.UBLOCK
 ) {
     var frameMatcher by remember(url){mutableStateOf<JaTvFrameRateMatcher?>(null)}
     val qualityMatching=matchStreamQuality&&matchTvFrameRate&&matchTvResolution
@@ -939,7 +940,7 @@ private fun JaLiveEmbeddedPlayback(
                     TvFocusButton(onClick = onClose) { Text("Back to guide") }
                 }
             }
-        } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name, overlayGuardEnabled = false,
+        } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name, adBlockerMode=adBlockerMode, overlayGuardEnabled = false,
             adjustNtvPhoneViewport = isNtvStream,
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true

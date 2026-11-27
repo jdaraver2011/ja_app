@@ -63,6 +63,21 @@ import org.mozilla.geckoview.WebRequestError
 import java.util.Collections
 import java.util.WeakHashMap
 
+/** Logs only a URL's scheme, host and a short path; query strings are omitted. */
+private fun jaGeckoDiagnosticTarget(rawUrl: String?): String {
+    val parsed = runCatching { Uri.parse(rawUrl.orEmpty()) }.getOrNull() ?: return "unknown"
+    val scheme = parsed.scheme?.takeIf { it.matches(Regex("[A-Za-z][A-Za-z0-9+.-]{0,15}")) } ?: "unknown"
+    val host = parsed.host?.takeIf { it.matches(Regex("[A-Za-z0-9.-]{1,253}")) } ?: "unknown"
+    val path = parsed.path.orEmpty().split('/').joinToString("/") { segment ->
+        when {
+            segment.isEmpty() -> ""
+            segment.length > 40 || segment.matches(Regex("[A-Za-z0-9_-]{28,}")) -> "<redacted>"
+            else -> segment.take(48)
+        }
+    }.take(100)
+    return "$scheme://$host$path"
+}
+
 /**
  * Built-in extensions are runtime-wide, whereas their native-message delegates
  * are registered on each GeckoSession. Installing the same extension again for
@@ -338,13 +353,29 @@ private class JaSourceStatusBridge {
                                     override fun onConnect(port: WebExtension.Port) {
                                         if (!connected) return
                                         Log.i("JA_SOURCES", "SOURCE_STATUS_PORT_CONNECTED")
-                                        try { port.postMessage(JSONObject().put("action", "resume").put("positionMs", resumePositionMs).put("restart", restartFromBeginning)) }
+                                        try { port.postMessage(JSONObject().put("action", "resume").put("positionMs", resumePositionMs)
+                                            .put("restart", restartFromBeginning).put("diagnostics", BuildConfig.DEBUG)) }
                                         catch (_: Exception) { }
                                         port.setDelegate(object : WebExtension.PortDelegate {
                                             override fun onPortMessage(message: Any, port: WebExtension.Port) {
                                                 val report = message as? JSONObject ?: return
                                                 val event = report.optString("event")
                                                 val reason = report.optString("reason")
+                                                if (event == "DIAGNOSTIC_DOCUMENT_READY") {
+                                                    if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "CONTENT_DOCUMENT_READY " +
+                                                        "session=${System.identityHashCode(session)} frame=${report.optString("frame").take(120)} " +
+                                                        "top=${report.optBoolean("top")} readyState=${report.optString("readyState")}")
+                                                    return
+                                                }
+                                                if (event == "DIAGNOSTIC_VIDEO_ELEMENT") {
+                                                    if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "CONTENT_VIDEO_ELEMENT " +
+                                                        "session=${System.identityHashCode(session)} frame=${report.optString("frame").take(120)} " +
+                                                        "sourceHost=${report.optString("sourceHost").take(160)} " +
+                                                        "size=${report.optInt("width")}x${report.optInt("height")} " +
+                                                        "readyState=${report.optInt("readyState")} paused=${report.optBoolean("paused")} " +
+                                                        "error=${report.optInt("errorCode")}")
+                                                    return
+                                                }
                                                 if (event !in setOf("VIDEO_STARTED", "MEDIA_UNAVAILABLE", "PROGRESS", "STALLED")) return
                                                 handler.post {
                                                     if (!connected) return@post
@@ -785,6 +816,10 @@ fun GeckoExperimentalPlayer(
                     session: GeckoSession,
                     request: GeckoSession.NavigationDelegate.LoadRequest
                 ): GeckoResult<AllowOrDeny>? {
+                    if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "NAV_REQUEST level=top " +
+                        "session=${System.identityHashCode(session)} target=${jaGeckoDiagnosticTarget(request.uri)} " +
+                        "trigger=${jaGeckoDiagnosticTarget(request.triggerUri)} redirect=${request.isRedirect} " +
+                        "direct=${request.isDirectNavigation} gesture=${request.hasUserGesture}")
                     val originalHost = Uri.parse(url).host?.lowercase()?.trimEnd('.')
                     val targetUri = Uri.parse(request.uri)
                     val targetHost = targetUri.host?.lowercase()?.trimEnd('.')
@@ -815,6 +850,26 @@ fun GeckoExperimentalPlayer(
                     }
                     return null // GeckoView continues normally.
                 }
+                override fun onSubframeLoadRequest(
+                    session: GeckoSession,
+                    request: GeckoSession.NavigationDelegate.LoadRequest
+                ): GeckoResult<AllowOrDeny>? {
+                    if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "NAV_REQUEST level=frame " +
+                        "session=${System.identityHashCode(session)} target=${jaGeckoDiagnosticTarget(request.uri)} " +
+                        "trigger=${jaGeckoDiagnosticTarget(request.triggerUri)} redirect=${request.isRedirect} " +
+                        "gesture=${request.hasUserGesture}")
+                    return null
+                }
+                override fun onLocationChange(
+                    session: GeckoSession,
+                    url: String?,
+                    perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
+                    hasUserGesture: Boolean
+                ) {
+                    if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "NAV_LOCATION " +
+                        "session=${System.identityHashCode(session)} target=${jaGeckoDiagnosticTarget(url)} " +
+                        "gesture=$hasUserGesture")
+                }
                 override fun onLoadError(
                     session: GeckoSession,
                     uri: String?,
@@ -841,6 +896,9 @@ fun GeckoExperimentalPlayer(
                         (error.category == WebRequestError.ERROR_CATEGORY_NETWORK ||
                             error.category == WebRequestError.ERROR_CATEGORY_SECURITY)
                     val actionable = selectedDocument || foregroundDocument || playerConnectionError
+                    if (BuildConfig.DEBUG) Log.w("JA_GECKO_DIAG", "NAV_ERROR " +
+                        "session=${System.identityHashCode(session)} target=${jaGeckoDiagnosticTarget(failedUrl)} " +
+                        "code=${error.code} category=${error.category}")
                     Log.w("JA_SOURCES", "GECKO_LOAD_ERROR host=$failedHost selected=$selectedHost " +
                         "foreground=$activeHost code=${error.code} category=${error.category} " +
                         "actionable=$actionable started=$videoStarted")
@@ -868,6 +926,8 @@ fun GeckoExperimentalPlayer(
                     lastPageHost = android.net.Uri.parse(url).host ?: "unknown"
                     status = "Loading: $lastPageHost"
                     Log.i("JA_SOURCES", "TOP_LEVEL_PAGE_START host=$lastPageHost")
+                    if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "PAGE_START " +
+                        "session=${System.identityHashCode(session)} target=${jaGeckoDiagnosticTarget(url)}")
                     cancelNavigationWatchdog()
                     if (url.startsWith("https://", ignoreCase = true) ||
                         url.startsWith("http://", ignoreCase = true)) {
@@ -892,6 +952,9 @@ fun GeckoExperimentalPlayer(
                 override fun onPageStop(session: GeckoSession, success: Boolean) {
                     cancelNavigationWatchdog()
                     status = if (success) "Page loaded (video playback not confirmed)" else "Page load failed"
+                    if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "PAGE_STOP " +
+                        "session=${System.identityHashCode(session)} success=$success " +
+                        "target=${jaGeckoDiagnosticTarget(lastTopLevelUrl)}")
                     if (!success) {
                         Log.w("JA_SOURCES", "TOP_LEVEL_PAGE_STOP_FAILED host=$lastPageHost")
                         reportFatalOnce("EMBED_PAGE_LOAD_FAILED", "Embed page failed to load: $lastPageHost")
@@ -987,6 +1050,8 @@ fun GeckoExperimentalPlayer(
     }
     DisposableEffect(session) {
         onDispose {
+            if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "SESSION_DISPOSE_BEGIN " +
+                "id=${System.identityHashCode(session)} host=${Uri.parse(url).host ?: "unknown"}")
             playerDisposed.set(true)
             startupGate[0]?.cancel()
             startupGate[0] = null
@@ -996,7 +1061,13 @@ fun GeckoExperimentalPlayer(
             sourceStatusBridge.clear()
             vidFastBridge?.clear()
             overlayGuard.clear()
-            try { session.close() } catch (_: Exception) {}
+            try {
+                session.close()
+                if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "SESSION_CLOSE_RETURN " +
+                    "id=${System.identityHashCode(session)}")
+            } catch (error: Exception) {
+                Log.w("JA_GECKO_DIAG", "SESSION_CLOSE_FAILED id=${System.identityHashCode(session)}", error)
+            }
         }
     }
     Box(Modifier.fillMaxSize()) {

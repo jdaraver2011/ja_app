@@ -148,6 +148,9 @@
   // discarded VIDEO_STARTED. This only forwards events and never clicks media.
   let pendingStatus = null;
   let retryTimer = null;
+  let diagnosticsEnabled = false;
+  let diagnosticDocumentReported = false;
+  let diagnosticVideoReported = false;
   const scheduleReconnect = () => {
     if (retryTimer || attempts >= 12) return;
     attempts += 1;
@@ -178,6 +181,14 @@
       port = newPort;
       newPort.onMessage.addListener(message => {
         if (message?.action === 'resume') {
+          diagnosticsEnabled = message.diagnostics === true;
+          if (diagnosticsEnabled && !diagnosticDocumentReported) {
+            try {
+              newPort.postMessage({event:'DIAGNOSTIC_DOCUMENT_READY', frame:location.hostname,
+                top:window === window.top, readyState:document.readyState});
+              diagnosticDocumentReported = true;
+            } catch (_) {}
+          }
           resumeReady = true;
           resumeMs = Math.max(0, Number(message.positionMs) || 0);
           restartFromBeginning = message.restart === true;
@@ -259,6 +270,17 @@
       clearInterval(timer); return;
     }
     const found = videos();
+    if (diagnosticsEnabled && !diagnosticVideoReported && found.length && port) {
+      const v = found[0];
+      let sourceHost = '';
+      try { sourceHost = new URL(v.currentSrc || v.src || location.href).hostname; } catch (_) {}
+      try {
+        port.postMessage({event:'DIAGNOSTIC_VIDEO_ELEMENT', frame:location.hostname,
+          sourceHost, width:v.videoWidth || 0, height:v.videoHeight || 0,
+          readyState:v.readyState, paused:v.paused, errorCode:v.error?.code || 0});
+        diagnosticVideoReported = true;
+      } catch (_) {}
+    }
     found.forEach(v => { reportStarted(v); if (v.error) mediaError(v); });
     checkVisibleFailure();
   }, 450);
