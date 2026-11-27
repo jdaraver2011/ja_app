@@ -61,23 +61,23 @@ internal object JaGeckoRuntime {
         val contents = "prefs:\n  $EXTENSION_SCRIPT_PREF: $EXTENSION_SCRIPT_SECONDS\n" +
             "  $BACKGROUND_SCRIPT_PREF: $EXTENSION_SCRIPT_SECONDS\n"
         if (!config.exists() || config.readText() != contents) config.writeText(contents)
-        if (BuildConfig.DEBUG) logStartupEnvironment(context.applicationContext, config)
+        if (BuildConfig.JA_DIAGNOSTICS) logStartupEnvironment(context.applicationContext, config)
         val settings = GeckoRuntimeSettings.Builder()
             .configFilePath(config.absolutePath)
-            // Firefox DevTools are available only in the side-by-side debug
-            // package; release builds keep remote debugging disabled.
-            .remoteDebuggingEnabled(BuildConfig.DEBUG)
+            // Firefox DevTools are enabled only in side-by-side diagnostic
+            // packages; production releases keep remote debugging disabled.
+            .remoteDebuggingEnabled(BuildConfig.JA_DIAGNOSTICS)
             .build()
-        if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "REMOTE_DEBUG_ENABLED true")
-        if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "RUNTIME_CREATE_BEGIN uptimeMs=${android.os.SystemClock.elapsedRealtime()}")
+        if (BuildConfig.JA_DIAGNOSTICS) Log.i("JA_GECKO_DIAG", "REMOTE_DEBUG_ENABLED true")
+        if (BuildConfig.JA_DIAGNOSTICS) Log.i("JA_GECKO_DIAG", "RUNTIME_CREATE_BEGIN uptimeMs=${android.os.SystemClock.elapsedRealtime()}")
         return try {
             GeckoRuntime.create(context.applicationContext, settings).also {
                 instance = it
                 Log.i("JA_ADBLOCK", "EXTENSION_SCRIPT_BUDGET_CONFIGURED seconds=$EXTENSION_SCRIPT_SECONDS pageWatchdogSeconds=$EXTENSION_SCRIPT_SECONDS")
-                if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "RUNTIME_CREATE_RETURN uptimeMs=${android.os.SystemClock.elapsedRealtime()}")
+                if (BuildConfig.JA_DIAGNOSTICS) Log.i("JA_GECKO_DIAG", "RUNTIME_CREATE_RETURN uptimeMs=${android.os.SystemClock.elapsedRealtime()}")
             }
         } catch (error: Exception) {
-            if (BuildConfig.DEBUG) Log.e("JA_GECKO_DIAG", "RUNTIME_CREATE_THROW type=${error.javaClass.name} message=${error.message}", error)
+            if (BuildConfig.JA_DIAGNOSTICS) Log.e("JA_GECKO_DIAG", "RUNTIME_CREATE_THROW type=${error.javaClass.name} message=${error.message}", error)
             throw error
         }
     }

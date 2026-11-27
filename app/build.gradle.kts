@@ -28,6 +28,7 @@ android {
         versionName = "2.9.0"
         buildConfigField("boolean", "JA_DADDYLIVE_US_PILOT",
             (System.getenv("JA_DADDYLIVE_US_PILOT") == "true").toString())
+        buildConfigField("boolean", "JA_DIAGNOSTICS", "false")
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
         require(Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+").matches(updateRepo))
         buildConfigField("String", "JA_UPDATE_REPOSITORY", "\"$updateRepo\"")
@@ -57,6 +58,17 @@ android {
         applicationIdSuffix = ".diag"
         versionNameSuffix = "-diag"
         manifestPlaceholders["jaAppLabel"] = "JA Diagnostics"
+        buildConfigField("boolean", "JA_DIAGNOSTICS", "true")
+    }
+    create("diagnostic") {
+        initWith(getByName("release"))
+        applicationIdSuffix = ".diag"
+        versionNameSuffix = "-diag"
+        manifestPlaceholders["jaAppLabel"] = "JA Diagnostics"
+        isDebuggable = false
+        isMinifyEnabled = false
+        isShrinkResources = false
+        buildConfigField("boolean", "JA_DIAGNOSTICS", "true")
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

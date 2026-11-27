@@ -20,18 +20,18 @@ internal class JaAccountSyncWorker(context: Context, parameters: WorkerParameter
 
     override suspend fun doWork(): Result {
         val startedAt = SystemClock.elapsedRealtime()
-        if (BuildConfig.DEBUG) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_START attempt=$runAttemptCount id=$id")
+        if (BuildConfig.JA_DIAGNOSTICS) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_START attempt=$runAttemptCount id=$id")
         val session = applicationContext.getSharedPreferences("ja_account_session", Context.MODE_PRIVATE)
             .getString("session", null)
         if (session.isNullOrBlank()) {
-            if (BuildConfig.DEBUG) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_SKIP reason=no_session elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
+            if (BuildConfig.JA_DIAGNOSTICS) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_SKIP reason=no_session elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
             return Result.success()
         }
 
         val database = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()
         return try {
             JaAccountSync(applicationContext, database.dao()).sync()
-            if (BuildConfig.DEBUG) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_SUCCESS elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
+            if (BuildConfig.JA_DIAGNOSTICS) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_SUCCESS elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
             Result.success()
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
@@ -64,7 +64,7 @@ internal class JaAccountSyncWorker(context: Context, parameters: WorkerParameter
                 .setInitialDelay(delayMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15L, TimeUnit.SECONDS)
                 .build()
-            if (BuildConfig.DEBUG) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_ENQUEUE delayMs=${delayMs.coerceAtLeast(0L)} id=${request.id}")
+            if (BuildConfig.JA_DIAGNOSTICS) Log.i("JA_WORKER_DIAG", "ACCOUNT_SYNC_ENQUEUE delayMs=${delayMs.coerceAtLeast(0L)} id=${request.id}")
             WorkManager.getInstance(app).enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request)
         }
     }

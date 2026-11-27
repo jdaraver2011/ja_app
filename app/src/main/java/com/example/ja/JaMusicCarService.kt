@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 /** Android Auto renders these API-8 templates; it never displays JA's phone/video activity. */
 @androidx.car.app.annotations.RequiresCarApi(8)
 class JaMusicCarService : CarAppService() {
-    override fun createHostValidator(): HostValidator = if (BuildConfig.DEBUG) HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
+    override fun createHostValidator(): HostValidator = if (BuildConfig.JA_DIAGNOSTICS) HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
         else HostValidator.Builder(this).build() // This branch is a debug/device test, not a production car release.
     override fun onCreateSession(): Session = object : Session() {
         override fun onCreateScreen(intent: Intent): Screen = if (intent.action == "androidx.car.app.media.action.SHOW_MEDIA_PLAYBACK") MusicCarPlaying(carContext) else MusicCarBrowse(carContext)

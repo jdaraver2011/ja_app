@@ -427,7 +427,7 @@ class MainActivity : ComponentActivity() {
     val liveTv = remember { JaLiveTvState(appContext, JaLiveTvRepository(appContext), scope) }
     val liveActive = tab == "IPTV" && (liveTv.playerAttached || liveTv.previewChannel?.id==JA_WEATHER_CHANNEL)
     LaunchedEffect(tab) {
-        if (tab == "IPTV" && BuildConfig.DEBUG && JaMemoryPolicy.isConstrainedDevice()) {
+        if (tab == "IPTV" && BuildConfig.JA_DIAGNOSTICS && JaMemoryPolicy.isConstrainedDevice()) {
             withFrameNanos { }
             JaGeckoRuntime.prewarmForIptv(appContext)
         }
@@ -851,7 +851,7 @@ class MainActivity : ComponentActivity() {
     LaunchedEffect(playback,playbackLoading,liveActive,weatherOpen,weather.sound) {
         val videoActive = playback != null || playbackLoading || liveActive || (weatherOpen&&weather.weatherStar&&weather.sound)
         JaMusicService.setVideoActive(videoActive)
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.JA_DIAGNOSTICS) {
             android.util.Log.i("JA_PLAYBACK_DIAG", "UI_STATE elapsedMs=${android.os.SystemClock.elapsedRealtime()} " +
                 "playbackPresent=${playback != null} loading=$playbackLoading liveActive=$liveActive " +
                 "weatherVideo=${weatherOpen && weather.weatherStar && weather.sound} " +

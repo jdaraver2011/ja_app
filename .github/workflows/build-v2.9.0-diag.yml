@@ -17,6 +17,6 @@ jobs:
     with:
       run_checks: false
       publish_update: false
-      build_variant: debug
+      build_variant: diagnostic
       generate_baseline_profile: false
     secrets: inherit

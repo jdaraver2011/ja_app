@@ -30,7 +30,7 @@ on:
       build_variant:
         description: APK build variant
         type: choice
-        options: [debug, release]
+        options: [debug, diagnostic, release]
         default: debug
       generate_baseline_profile:
         description: Generate and package a Baseline Profile
@@ -343,19 +343,27 @@ jobs:
           fi
           case "$BUILD_VARIANT" in
             debug) gradle_task=assembleDebug ;;
+            diagnostic) gradle_task=assembleDiagnostic ;;
             release) gradle_task=assembleRelease ;;
             *) echo "Unsupported APK build variant: $BUILD_VARIANT"; exit 1 ;;
           esac
           gradle --no-daemon --stacktrace ":app:$gradle_task"
       - name: Verify diagnostic GeckoView package
-        if: ${{ github.ref_name == 'v2.9.0-diag' && (github.event_name == 'push' || inputs.build_variant == 'debug') }}
+        if: ${{ github.ref_name == 'v2.9.0-diag' && (github.event_name == 'push' || inputs.build_variant == 'debug' || inputs.build_variant == 'diagnostic') }}
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant || 'debug' }}
+          JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
+          JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
+          JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
         run: |
           gradle --no-daemon :app:verifyGeckoViewRuntime
           python3 - <<'PY'
+          import os
           from pathlib import Path
           from zipfile import ZIP_STORED, ZipFile
 
-          apk_path = Path("app/build/outputs/apk/debug/app-debug.apk")
+          variant = os.environ.get("BUILD_VARIANT", "diagnostic")
+          apk_path = Path(f"app/build/outputs/apk/{variant}/app-{variant}.apk")
           with ZipFile(apk_path) as apk:
               omni = apk.getinfo("assets/omni.ja")
               if omni.compress_type != ZIP_STORED:
