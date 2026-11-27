@@ -10,7 +10,7 @@ on:
       - gradle.properties
       - settings.gradle.kts
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     uses: ./.github/workflows/build-apk.yml
