@@ -59,14 +59,16 @@ class JaMusicService : Service() {
         } }
         fun setVideoActive(active: Boolean) {
             JaMusicLabService.setVideoActive(active)
+            if (videoActive == active) return
             videoActive = active
-            if (active) instance?.pause()
+            instance?.onVideoPlaybackChanged(active)
         }
         fun keepsProcessAlive(): Boolean = instance != null
         fun resetLogin() {
             val service = instance ?: return
             service.closePages()
             JaGeckoRuntime.get(service).storageController.clearDataForSessionContext(PROFILE)
+            service.desiredUrl = HOME
             service.createRoot()
         }
     }
@@ -83,6 +85,7 @@ class JaMusicService : Service() {
     private var desiredUrl = HOME
     private var prepared = false
     private var desktopMode = false
+    private var suspendedForVideo = false
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { pause() }
     }
@@ -120,12 +123,12 @@ class JaMusicService : Service() {
         receiverRegistered = true
         mutable.value = State(running = true, loading = true, message = "Preparing Deezer…", desktopSite = desktopMode)
         updateNotification()
-        createRoot()
+        if (videoActive) suspendedForVideo = true else createRoot()
         val runtime = JaGeckoRuntime.get(this)
         JaGeckoAdBlockers.prepare(runtime, PlayerControlSettings(this).adBlockerMode) {
             if (instance !== this) return@prepare
             prepared = true
-            current()?.loadUri(desiredUrl)
+            if (!suspendedForVideo) current()?.loadUri(desiredUrl)
         }
         Log.i("JA_MUSIC", "SERVICE_CREATED version=${BuildConfig.VERSION_NAME} desktopSite=$desktopMode")
     }
@@ -152,7 +155,7 @@ class JaMusicService : Service() {
     private fun createRoot() {
         pages.add(newPage())
         publishPage()
-        if (prepared) current()?.loadUri(HOME)
+        if (prepared) current()?.loadUri(desiredUrl)
     }
     private fun newPage(open: Boolean = true): GeckoSession {
         // Music sessions only; child/sign-in pages share this service's selected mode.
@@ -195,6 +198,7 @@ class JaMusicService : Service() {
             }
             override fun onLocationChange(session: GeckoSession, url: String?, perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) {
                 if (session === current()) {
+                    url?.takeIf { JaMusicRules.allowed(it) }?.let { desiredUrl = it }
                     mutable.value = mutable.value.copy(host = android.net.Uri.parse(url.orEmpty()).host.orEmpty())
                     publishPage()
                 }
@@ -324,6 +328,20 @@ class JaMusicService : Service() {
         mutable.value = mutable.value.copy(playing = false)
         audio.abandonAudioFocusRequest(focus)
         updateNotification()
+    }
+    private fun onVideoPlaybackChanged(active: Boolean) {
+        if (active) {
+            pause()
+            if (pages.isNotEmpty()) {
+                closePages()
+                suspendedForVideo = true
+                Log.i("JA_MUSIC", "PAGES_RELEASED reason=VIDEO_PLAYBACK")
+            }
+        } else if (suspendedForVideo && !destroying) {
+            suspendedForVideo = false
+            if (pages.isEmpty()) createRoot()
+            Log.i("JA_MUSIC", "PAGES_RESTORED reason=VIDEO_PLAYBACK_END")
+        }
     }
     private fun pending(action: String, code: Int): PendingIntent =
         PendingIntent.getService(this, code, Intent(this, JaMusicService::class.java).setAction(action),

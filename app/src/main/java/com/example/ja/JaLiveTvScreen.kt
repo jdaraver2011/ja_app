@@ -939,7 +939,7 @@ private fun JaLiveEmbeddedPlayback(
                     TvFocusButton(onClick = onClose) { Text("Back to guide") }
                 }
             }
-        } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name,
+        } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name, overlayGuardEnabled = false,
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
             })

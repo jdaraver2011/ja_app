@@ -88,6 +88,10 @@ private data class DetailReturnPoint(
  * Never hold up the catalog UI or title selection while it initializes.
  */
 private fun prewarmPlayerAdBlocker(context: Context, mode: String) {
+    if (JaMemoryPolicy.isConstrainedDevice()) {
+        Log.i("JA_STARTUP", "APP_EXTENSIONS_PREWARM skipped=CONSTRAINED_DEVICE")
+        return
+    }
     try {
         val runtime = JaGeckoRuntime.get(context)
         prepareJaPlayerExtensions(runtime) { ready ->
@@ -157,6 +161,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        JaMemoryPolicy.install(applicationContext)
         Log.i("JA_STARTUP", "APP_BUILD versionName=${BuildConfig.VERSION_NAME} versionCode=${BuildConfig.VERSION_CODE}")
         JaLiveTvUpdates.schedule(applicationContext)
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "ja.db").build()
@@ -828,7 +833,9 @@ class MainActivity : ComponentActivity() {
         }
     }
     LaunchedEffect(playback,playbackLoading,liveActive,weatherOpen,weather.sound) {
-        JaMusicService.setVideoActive(playback != null || playbackLoading || liveActive || (weatherOpen&&weather.weatherStar&&weather.sound))
+        val videoActive = playback != null || playbackLoading || liveActive || (weatherOpen&&weather.weatherStar&&weather.sound)
+        JaMusicService.setVideoActive(videoActive)
+        JaMemoryPolicy.setVideoPlaybackActive(playback != null || liveActive)
     }
     val catalogueVisible = !liveTv.fullscreen && selected == null && selectedPerson == null && playback == null && !playbackLoading && !exiting
     // Invalidate promptly, but defer catalogue requests until playback/details are closed.

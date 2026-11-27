@@ -31,6 +31,7 @@
   let stallReported = false;
   let lastEmittedPosition = -1;
   let lastEmittedDuration = -1;
+  let progressTimer = null;
   const emitProgress = () => {
     if (!trackedVideo || !reportedStarted || !port || !resumeApplied) return;
     const position = trackedVideo.currentTime;
@@ -76,6 +77,9 @@
       /(^|\.)(vidsrc\.sh|vidsrc\.mov|vidfast\.vc|vidfast\.pro|vidcore\.org|vidspark\.to)$/.test(parentHost) ||
       parentHost === 'player.videasy.ws';
   };
+  // Keep cross-origin injection for player frames, but skip the repeated DOM
+  // work in ad/tracker frames that this same context check would reject.
+  if (!confirmedPlayerContext()) return;
 
   const visibleFatalText = () => {
     if (!confirmedPlayerContext()) return '';
@@ -212,6 +216,7 @@
     } else if (now - earlier.at >= 3000 && v.currentTime - earlier.t >= 2.0) {
       reportedStarted = true;
       trackedVideo = v;
+      startProgressTimer();
       lastAdvanceAt = now;
       applyResume();
       send('VIDEO_STARTED', 'TIME_ADVANCING');
@@ -257,7 +262,7 @@
     found.forEach(v => { reportStarted(v); if (v.error) mediaError(v); });
     checkVisibleFailure();
   }, 450);
-  setInterval(() => {
+  const sampleProgress = () => {
     if (!reportedStarted || !trackedVideo || document.hidden) return;
     applyResume();
     const now = performance.now();
@@ -271,12 +276,24 @@
     }
     lastPosition = position;
     if (now - lastSavedAt >= 5000) { emitProgress(); lastSavedAt = now; }
-  }, 1000);
+  };
+  function startProgressTimer() {
+    if (progressTimer === null && reportedStarted && !document.hidden) {
+      progressTimer = setInterval(sampleProgress, 1000);
+    }
+  }
+  function stopProgressTimer() {
+    if (progressTimer !== null) clearInterval(progressTimer);
+    progressTimer = null;
+  }
   document.addEventListener('pause', emitProgress, true);
-  document.addEventListener('ended', emitProgress, true);
+  document.addEventListener('pause', stopProgressTimer, true);
+  document.addEventListener('play', startProgressTimer, true);
+  document.addEventListener('ended', () => { emitProgress(); stopProgressTimer(); }, true);
+  document.addEventListener('emptied', stopProgressTimer, true);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) emitProgress();
-    else lastAdvanceAt = performance.now();
+    if (document.hidden) { emitProgress(); stopProgressTimer(); }
+    else { lastAdvanceAt = performance.now(); startProgressTimer(); }
   });
-  window.addEventListener('pagehide', emitProgress);
+  window.addEventListener('pagehide', () => { emitProgress(); stopProgressTimer(); });
 })();

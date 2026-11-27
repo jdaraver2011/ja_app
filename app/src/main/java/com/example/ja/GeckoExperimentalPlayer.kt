@@ -424,7 +424,7 @@ private class JaOverlayGuardBridge {
         }
     }
 
-    fun attach(runtime: GeckoRuntime, session: GeckoSession, onReady: (Boolean) -> Unit) {
+    fun attach(runtime: GeckoRuntime, session: GeckoSession, enabled: Boolean, onReady: (Boolean) -> Unit) {
         try {
             installedOnce(runtime, "resource://android/assets/ja_overlay_guard/")
                 .accept({ extension ->
@@ -451,6 +451,12 @@ private class JaOverlayGuardBridge {
                                                 }
                                             }
                                         })
+                                        try {
+                                            port.postMessage(JSONObject().put("action", "setEnabled").put("enabled", enabled))
+                                            Log.i("JA_AD_GUARD", "OVERLAY_GUARD_SESSION_CONFIG enabled=$enabled")
+                                        } catch (error: Exception) {
+                                            Log.w("JA_AD_GUARD", "OVERLAY_GUARD_SESSION_CONFIG_FAILED", error)
+                                        }
                                     }
                                 }, "ja_overlay_guard"
                             )
@@ -500,6 +506,7 @@ fun GeckoExperimentalPlayer(
     onVideoStatistics: (Int, Double, Int, Int) -> Unit = { _, _, _, _ -> },
     frameRateMatcher: JaTvFrameRateMatcher? = null,
     matchStreamQuality: Boolean = false,
+    overlayGuardEnabled: Boolean = true,
     onFatalError: (String) -> Unit = {},
     // Independent GeckoView-level signal that media is playing. This only
     // suppresses the *unconfirmed* timeout banner: it must NOT mark the
@@ -915,7 +922,7 @@ fun GeckoExperimentalPlayer(
                             remoteBridge.attach(runtime, this) { remoteReady ->
                                 if (!playerDisposed.get() && !gate.isTerminal()) {
                                     if (!remoteReady) gate.fail("remote", "Remote delegate setup failed")
-                                    else overlayGuard.attach(runtime, this) { guardReady ->
+                                    else overlayGuard.attach(runtime, this, overlayGuardEnabled) { guardReady ->
                                         if (!playerDisposed.get() && !gate.isTerminal()) {
                                             if (!guardReady) gate.fail("overlay", "Overlay delegate setup failed")
                                             else sourceStatusBridge.attach(runtime, this) { statusReady ->

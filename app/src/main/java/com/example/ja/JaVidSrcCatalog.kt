@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
@@ -36,6 +37,7 @@ object JaVidSrcCatalog {
     private val automaticCalls=mutableSetOf<okhttp3.Call>()
     private val _dailyDownloads=MutableStateFlow(true)
     val dailyDownloads=_dailyDownloads.asStateFlow()
+    private val backgroundWorkAllowed=MutableStateFlow(true)
     private val qualityLock=Any()
     private val records=ConcurrentHashMap<Int,JaVidSrcDatabase.Quality>()
     private val pending=ConcurrentHashMap.newKeySet<Int>()
@@ -71,28 +73,32 @@ object JaVidSrcCatalog {
             initialized.await()
             for(item in queue) {
                 try {
-                    while(!foreground || playing)delay(500)
+                    backgroundWorkAllowed.first { it }
                     refreshQuality(item)
                 }catch(cancel:CancellationException){throw cancel}
                 catch(e:Exception){Log.w("JA_CATALOG_SYNC","QUALITY_CHECK_FAILED id=${item.id}",e)}
-                finally {pending.remove(item.id)}
+                finally {pending.remove(item.id);promoteIfReady()}
             }
         } }
-        scope.launch {
-            while(isActive) {
-                delay(1000)
-                if(promotePending && pending.isEmpty() && foreground && !playing) {
-                    promotePending=false
-                    _promotions.value=_promotions.value+1L
-                }
-            }
-        }
     }
-    fun foreground(value: Boolean) { foreground=value }
+    fun foreground(value: Boolean) {
+        foreground=value
+        updateBackgroundWorkGate()
+        promoteIfReady()
+    }
     fun playbackBusy(value: Boolean) {
         synchronized(feedSwitchLock) {
             playing = value
             if (value) automaticCalls.toList().forEach { it.cancel() }
+        }
+        updateBackgroundWorkGate()
+        promoteIfReady()
+    }
+    private fun updateBackgroundWorkGate() { backgroundWorkAllowed.value=foreground&&!playing }
+    @Synchronized private fun promoteIfReady() {
+        if(promotePending && pending.isEmpty() && foreground && !playing) {
+            promotePending=false
+            _promotions.value=_promotions.value+1L
         }
     }
     fun includeMovie(id: Int): Boolean {
@@ -215,7 +221,10 @@ object JaVidSrcCatalog {
             val record=JaVidSrcDatabase.Quality(item.id,label,now,0L,item)
             db.save(record);records[item.id]=record
             publishQuality()
-            if((old?.label=="CAM" || old?.label=="NOT_LISTED") && label!="CAM" && label!="NOT_LISTED")promotePending=true
+            if((old?.label=="CAM" || old?.label=="NOT_LISTED") && label!="CAM" && label!="NOT_LISTED") {
+                promotePending=true
+                promoteIfReady()
+            }
             Log.i("JA_CATALOG_SYNC","QUALITY_CONFIRMED id=${item.id} quality=$label")
         }catch(e:Exception) {
             // A 403, timeout, malformed JSON, or unknown label never becomes CAM or not-found.

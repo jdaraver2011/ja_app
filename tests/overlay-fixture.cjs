@@ -22,14 +22,18 @@ function fixture(source,{size=0}={}) {
  let observer;
  const document={body,documentElement:html,hidden:false,baseURI:'https://vidsrc.sh/embed/movie/123',addEventListener:(n,f)=>on('document',n,f),querySelector:s=>body.querySelector(s),querySelectorAll:s=>body.querySelectorAll(s),
   createTreeWalker(root){const nodes=[];function visit(n){for(const c of n.childNodes||[])if(c.nodeType===3)nodes.push(c);else visit(c);}visit(root);let i=0;return {nextNode(){if(i>=nodes.length)return null;walks++;return nodes[i++];}};}};
- const port={postMessage:m=>messages.push(m),onDisconnect:{addListener:()=>{}},disconnect(){}};
+ let activePort=null;
+ const createPort=()=>({nativeListeners:[],disconnectListeners:[],postMessage:m=>messages.push(m),
+  onMessage:{addListener(fn){this.owner.nativeListeners.push(fn);}},
+  onDisconnect:{addListener(fn){this.owner.disconnectListeners.push(fn);}},
+  disconnect(){for(const fn of this.disconnectListeners)fn();},nativeMessage(m){for(const fn of this.nativeListeners)fn(m);}});
  const set=(f,ms,interval)=>{const id=++next;timers.set(id,{f,at:now+ms,interval});return id;};
  const window={addEventListener:(n,f)=>on('window',n,f)};window.parent=window;
  vm.runInNewContext(source,{window,document,location:{hostname:'vidsrc.sh'},innerWidth:1280,innerHeight:720,NodeFilter:{SHOW_TEXT:4},URL,getComputedStyle:n=>n.css,performance:{now:()=>now},Date:{now:()=>1800000000000+now},
-  MutationObserver:class{constructor(cb){this.cb=cb;this.active=false;observer=this;}observe(){this.active=true;}disconnect(){this.active=false;}},browser:{runtime:{connectNative:()=>port}},setTimeout:(f,ms)=>set(f,ms,0),clearTimeout:id=>timers.delete(id),setInterval:(f,ms)=>set(f,ms,ms),clearInterval:id=>timers.delete(id)});
+  MutationObserver:class{constructor(cb){this.cb=cb;this.active=false;observer=this;}observe(){this.active=true;}disconnect(){this.active=false;}},browser:{runtime:{connectNative:()=>{activePort=createPort();activePort.onMessage.owner=activePort;activePort.onDisconnect.owner=activePort;return activePort;}}},setTimeout:(f,ms)=>set(f,ms,0),clearTimeout:id=>timers.delete(id),setInterval:(f,ms)=>set(f,ms,ms),clearInterval:id=>timers.delete(id)});
  function advance(ms){const target=now+ms;let steps=0;while(true){let chosen=null;for(const [id,t]of timers)if(t.at<=target&&(!chosen||t.at<chosen[1].at))chosen=[id,t];if(!chosen)break;if(++steps>200000)throw Error('timer loop');const [id,t]=chosen;now=t.at;if(t.interval)t.at+=t.interval;else timers.delete(id);const before=walks,readsBefore=textReads;t.f();maxTaskTextReads=Math.max(maxTaskTextReads,textReads-readsBefore);maxTaskWalks=Math.max(maxTaskWalks,walks-before);}now=target;}
  function mutation(records){if(observer.active)observer.cb(records);}
  function scam(parent=body){const el=parent.append(new El('div','Protect your connection with VPN'));el.className='popup warning';el.css.position='fixed';el.append(new El('button','Close'));return el;}
- return {document,body,El,Text,advance,mutation,scam,messages,emit,get textReads(){return textReads;},get maxTaskTextReads(){return maxTaskTextReads;},get walks(){return walks;},get maxTaskWalks(){return maxTaskWalks;},get timerCount(){return timers.size;},get observing(){return observer.active;}};
+ return {document,body,El,Text,advance,mutation,scam,messages,emit,enable(value=true){activePort?.nativeMessage({action:'setEnabled',enabled:value});},get textReads(){return textReads;},get maxTaskTextReads(){return maxTaskTextReads;},get walks(){return walks;},get maxTaskWalks(){return maxTaskWalks;},get timerCount(){return timers.size;},get observing(){return observer.active;}};
 }
 module.exports={fixture};

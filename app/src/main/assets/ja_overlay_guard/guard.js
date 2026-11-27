@@ -27,27 +27,43 @@
   const sourceIsVidspark = host === 'vidspark.to' || host.endsWith('.vidspark.to');
   const hidden = new WeakSet();
   let port = null;
-  let reconnectScheduled = false;
+  let enabled = false;
   let live = true;
   let reconnectTimer = null;
   let sentFrames = 0;
 
-  function send(kind, detail, metrics = {}) {
-    if (!live) return;
-    const message = { event: kind, host, detail: (detail || '').slice(0, 90), ...metrics };
+  function connect() {
+    if (!live || port) return;
     try {
-      if (!port) {
-        port = browser.runtime.connectNative('ja_overlay_guard');
-        port.onDisconnect.addListener(() => { port = null; });
-      }
-      port.postMessage(message);
+      const next = browser.runtime.connectNative('ja_overlay_guard');
+      port = next;
+      next.onMessage.addListener(message => {
+        if (message?.action !== 'setEnabled') return;
+        enabled = message.enabled === true;
+        if (enabled) resume();
+        else pause();
+      });
+      next.onDisconnect.addListener(() => {
+        if (port !== next) return;
+        port = null;
+        if (enabled && live && !document.hidden) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1200);
+        }
+      });
     } catch (_) {
       port = null;
-      if (!reconnectScheduled) {
-        reconnectScheduled = true;
-        reconnectTimer = setTimeout(() => { reconnectScheduled = false; }, 1800);
+      if (!reconnectTimer && enabled && live && !document.hidden) {
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1200);
       }
     }
+  }
+  function send(kind, detail, metrics = {}) {
+    if (!live || !enabled) return;
+    connect();
+    if (!port) return;
+    try { port.postMessage({ event: kind, host, detail: (detail || '').slice(0, 90), ...metrics }); }
+    catch (_) { port = null; }
   }
 
   function visible(node) {
@@ -265,12 +281,13 @@
     clearTimeout(workTimer); clearTimeout(reconnectTimer);
     clearInterval(sweepTimer); clearInterval(metricsTimer);
     workTimer = sweepTimer = metricsTimer = reconnectTimer = null;
-    active = null; roots = []; overflow = false; reconnectScheduled = false;
+    active = null; roots = []; overflow = false;
     try { port?.disconnect(); } catch (_) {}
     port = null;
   }
   function resume() {
-    if (!live || document.hidden || sweepTimer !== null) return;
+    if (!live || !enabled || document.hidden || sweepTimer !== null) return;
+    connect();
     observer.observe(document, {childList:true, subtree:true, characterData:true,
       attributes:true, attributeFilter:['class','style','hidden']});
     sweep();
@@ -280,6 +297,8 @@
   document.addEventListener('DOMContentLoaded', sweep, {once:true});
   document.addEventListener('visibilitychange', () => document.hidden ? pause() : resume());
   window.addEventListener('pagehide', () => { reportMetrics(); live = false; pause(); });
-  window.addEventListener('pageshow', () => { live = true; resume(); });
+  window.addEventListener('pageshow', () => { live = true; connect(); resume(); });
+  // Start dormant until the native player tells this session which tab is open.
+  connect();
   resume();
 })();

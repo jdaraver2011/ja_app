@@ -37,7 +37,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, master, v2.6.0-supabase-test, v2.6.2, v2.6.3, v2.7.2-settings-sync-iptv, v2.7.3-settings-iptv, v2.7.4-settings-iptv-visualizer, v2.7.6-settings-ui-navigation, v2.7.7-music-iptv, v2.7.8-deezer-library-viz, v2.7.9-deezer-butterchurn]
+    branches: [main, master, v2.6.0-supabase-test, v2.6.2, v2.6.3, v2.7.2-settings-sync-iptv, v2.7.3-settings-iptv, v2.7.4-settings-iptv-visualizer, v2.7.6-settings-ui-navigation, v2.7.7-music-iptv, v2.7.8-deezer-library-viz, v2.7.9-deezer-butterchurn, v2.8.8a]
 permissions:
   contents: read
 concurrency:
@@ -79,7 +79,7 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: python3 scripts/configure_build.py
       - name: Report Android lint findings
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         continue-on-error: false
         env:
           JA_KEYSTORE_PASSWORD: ${{ secrets.JA_KEYSTORE_PASSWORD }}
@@ -95,7 +95,7 @@ jobs:
       - name: Build offline MilkDrop-compatible visualizer
         run: python3 scripts/build-music-visualizer.py
       - name: Smoke test bundled weather presentation
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           python3 -m pip install --user playwright==1.56.0
           python3 tests/weatherstar-smoke.py
@@ -103,17 +103,17 @@ jobs:
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-pcm" app/src/main/java/com/example/ja/JaMusicPcm.java tests/JaMusicPcmTest.java
           java -cp "$RUNNER_TEMP/ja-pcm" com.example.ja.JaMusicPcmTest
       - name: Check WeatherStar condition graphics
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-weather-icons" app/src/main/java/com/example/ja/JaWeatherIcons.java tests/JaWeatherIconsTest.java
           java -cp "$RUNNER_TEMP/ja-weather-icons" com.example.ja.JaWeatherIconsTest
       - name: Check navigation levels
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-navigation-tests" app/src/main/java/com/example/ja/JaNavigationRules.java tests/JaNavigationRulesTest.java
           java -cp "$RUNNER_TEMP/ja-navigation-tests" com.example.ja.JaNavigationRulesTest
       - name: Check player scripts
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           while IFS= read -r -d '' script; do
             node --check "$script"
@@ -129,23 +129,23 @@ jobs:
           node tests/quality-activation.test.cjs
           node tests/quality-menu-mask.test.cjs
       - name: Test update acceptance and release metadata
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-update-tests" app/src/main/java/com/example/ja/JaUpdateRules.java tests/JaUpdateRulesTest.java
           java -cp "$RUNNER_TEMP/ja-update-tests" com.example.ja.JaUpdateRulesTest
           python3 tests/update-release.test.py
       - name: Test TV season source preferences
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-season-source-tests" app/src/main/java/com/example/ja/JaTvSeasonSourceRules.java tests/JaTvSeasonSourceRulesTest.java
           java -cp "$RUNNER_TEMP/ja-season-source-tests" com.example.ja.JaTvSeasonSourceRulesTest
       - name: Test TV episode release delay
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-episode-release-tests" app/src/main/java/com/example/ja/JaEpisodeReleaseRules.java tests/JaEpisodeReleaseRulesTest.java
           java -cp "$RUNNER_TEMP/ja-episode-release-tests" com.example.ja.JaEpisodeReleaseRulesTest
       - name: Test Live TV playlist, guide and distance rules
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           mkdir -p /tmp/ja-live-tests
           javac -d /tmp/ja-live-tests app/src/main/java/com/example/ja/JaLiveTvRules.java tests/JaLiveTvRulesTest.java
@@ -153,137 +153,137 @@ jobs:
           javac -d /tmp/ja-live-tests app/src/main/java/com/example/ja/JaLiveTvRecovery.java tests/JaLiveTvRecoveryTest.java
           java -cp /tmp/ja-live-tests com.example.ja.JaLiveTvRecoveryTest
       - name: Test IPTV favorite ordering
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-live-order-tests" app/src/main/java/com/example/ja/JaLiveTvOrder.java tests/JaLiveTvOrderTest.java
           java -cp "$RUNNER_TEMP/ja-live-order-tests" com.example.ja.JaLiveTvOrderTest
       - name: Test IPTV channel move transactions
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-live-move-tests" app/src/main/java/com/example/ja/JaLiveTvOrder.java app/src/main/java/com/example/ja/JaLiveTvMoveSession.java tests/JaLiveTvMoveSessionTest.java
           java -cp "$RUNNER_TEMP/ja-live-move-tests" com.example.ja.JaLiveTvMoveSessionTest
       - name: Test IPTV guide geometry, Groups boundaries and held-menu keys
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-guide-ui-tests" app/src/main/java/com/example/ja/JaLiveTvGuideRules.java tests/JaLiveTvGuideRulesTest.java
           java -cp "$RUNNER_TEMP/ja-guide-ui-tests" com.example.ja.JaLiveTvGuideRulesTest
       - name: Test six-hour weather imagery rules
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-imagery-tests" app/src/main/java/com/example/ja/JaWeatherMediaRules.java tests/JaWeatherMediaRulesTest.java
           java -cp "$RUNNER_TEMP/ja-imagery-tests" com.example.ja.JaWeatherMediaRulesTest
       - name: Test weather units and ZIP validation
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-weather-tests" app/src/main/java/com/example/ja/JaWeatherRules.java tests/JaWeatherRulesTest.java
           java -cp "$RUNNER_TEMP/ja-weather-tests" com.example.ja.JaWeatherRulesTest
       - name: Test resume labels
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-resume-label-tests" app/src/main/java/com/example/ja/JaResumeLabels.java tests/JaResumeLabelsTest.java
           java -cp "$RUNNER_TEMP/ja-resume-label-tests" com.example.ja.JaResumeLabelsTest
       - name: Test music navigation and audio ownership
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-music-tests" app/src/main/java/com/example/ja/JaMusicRules.java tests/JaMusicRulesTest.java
           java -cp "$RUNNER_TEMP/ja-music-tests" com.example.ja.JaMusicRulesTest
       - name: Test native music stripe decoding and seek ranges
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-deezer-tests" app/src/main/java/com/example/ja/JaDeezerStripeInputStream.java tests/JaDeezerStripeInputStreamTest.java
           java -cp "$RUNNER_TEMP/ja-deezer-tests" com.example.ja.JaDeezerStripeInputStreamTest
       - name: Test experimental Music source coordination
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-music-source-tests" app/src/main/java/com/example/ja/experiments/music/JaMusicSourceCoordinator.java app/src/main/java/com/example/ja/experiments/music/JaMusicExperimentChecks.java
           java -cp "$RUNNER_TEMP/ja-music-source-tests" com.example.ja.experiments.music.JaMusicExperimentChecks
       - name: Test row jump indexing
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-row-jump-tests" app/src/main/java/com/example/ja/JaRowJumpIndex.java tests/JaRowJumpIndexTest.java
           java -cp "$RUNNER_TEMP/ja-row-jump-tests" com.example.ja.JaRowJumpIndexTest
       - name: Test additional TMDB source URLs
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-additional-source-tests" app/src/main/java/com/example/ja/JaAdditionalTmdbUrls.java tests/JaAdditionalTmdbUrlsTest.java
           java -cp "$RUNNER_TEMP/ja-additional-source-tests" com.example.ja.JaAdditionalTmdbUrlsTest
       - name: Test startup ordering
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-startup-tests" app/src/main/java/com/example/ja/JaStartupBarrier.java tests/JaStartupBarrierTest.java
           java -cp "$RUNNER_TEMP/ja-startup-tests" com.example.ja.JaStartupBarrierTest
       - name: Test media cadence sampling
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-cadence-tests" app/src/main/java/com/example/ja/JaFrameRateSampler.java tests/JaFrameRateSamplerTest.java
           java -cp "$RUNNER_TEMP/ja-cadence-tests" com.example.ja.JaFrameRateSamplerTest
       - name: Test blocker selection lifecycle
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-blocker-tests" app/src/main/java/com/example/ja/JaBlockerLifecycleState.java tests/JaBlockerLifecycleStateTest.java
           java -cp "$RUNNER_TEMP/ja-blocker-tests" com.example.ja.JaBlockerLifecycleStateTest
       - name: Test watched threshold and page focus rules
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-watch-tests" app/src/main/java/com/example/ja/JaWatchRules.java tests/JaWatchRulesTest.java
           java -cp "$RUNNER_TEMP/ja-watch-tests" com.example.ja.JaWatchRulesTest
       - name: Test metadata cache expiry and eviction
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-cache-tests" app/src/main/java/com/example/ja/JaTimedCache.java tests/JaTimedCacheTest.java
           java -cp "$RUNNER_TEMP/ja-cache-tests" com.example.ja.JaTimedCacheTest
       - name: Test display mode recovery
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-recovery-tests" app/src/main/java/com/example/ja/JaFrameRateRecovery.java tests/JaFrameRateRecoveryTest.java
           java -cp "$RUNNER_TEMP/ja-recovery-tests" com.example.ja.JaFrameRateRecoveryTest
       - name: Test double Back exit timing
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-exit-tests" app/src/main/java/com/example/ja/JaDoubleBackExit.java tests/JaDoubleBackExitTest.java
           java -cp "$RUNNER_TEMP/ja-exit-tests" com.example.ja.JaDoubleBackExitTest
       - name: Test biography reading and escape controls
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-biography-tests" app/src/main/java/com/example/ja/JaBiographyNavigation.java tests/JaBiographyNavigationTest.java
           java -cp "$RUNNER_TEMP/ja-biography-tests" com.example.ja.JaBiographyNavigationTest
       - name: Test movie release cutoff
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-release-tests" app/src/main/java/com/example/ja/JaMovieReleaseRules.java tests/JaMovieReleaseRulesTest.java
           java -cp "$RUNNER_TEMP/ja-release-tests" com.example.ja.JaMovieReleaseRulesTest
       - name: Test independent genre membership
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-genre-tests" app/src/main/java/com/example/ja/JaGenreCatalog.java tests/JaGenreCatalogTest.java
           java -cp "$RUNNER_TEMP/ja-genre-tests" com.example.ja.JaGenreCatalogTest
       - name: Test catalogue refresh lifecycle
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-catalog-refresh-tests" app/src/main/java/com/example/ja/JaCatalogRefresh.java tests/JaCatalogRefreshTest.java
           java -cp "$RUNNER_TEMP/ja-catalog-refresh-tests" com.example.ja.JaCatalogRefreshTest
       - name: Test VidSrc feed parsing and freshness
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-vidsrc-tests" app/src/main/java/com/example/ja/JaVidSrcRules.java tests/JaVidSrcRulesTest.java
           java -cp "$RUNNER_TEMP/ja-vidsrc-tests" com.example.ja.JaVidSrcRulesTest
       - name: Test VidFast playback confirmation
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-vidfast-tests" app/src/main/java/com/example/ja/JaVidFastTimeline.java tests/JaVidFastTimelineTest.java
           java -cp "$RUNNER_TEMP/ja-vidfast-tests" com.example.ja.JaVidFastTimelineTest
       - name: Test playback performance windows
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-perf-tests" app/src/main/java/com/example/ja/JaPlaybackWindow.java tests/JaPlaybackWindowTest.java
           java -cp "$RUNNER_TEMP/ja-perf-tests" com.example.ja.JaPlaybackWindowTest
       - name: Test confirmed frame-rate warmup
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-warmup-tests" app/src/main/java/com/example/ja/JaFrameStatsWarmup.java app/src/main/java/com/example/ja/JaFrameRateSampler.java tests/JaFrameStatsWarmupTest.java
           java -cp "$RUNNER_TEMP/ja-warmup-tests" com.example.ja.JaFrameStatsWarmupTest
       - name: Test catalogue pagination
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           java com.sun.tools.javac.Main -d "$RUNNER_TEMP/ja-pagination-tests" app/src/main/java/com/example/ja/JaCatalogBatch.java app/src/main/java/com/example/ja/JaGenreCatalog.java tests/JaCatalogBatchTest.java
           java -cp "$RUNNER_TEMP/ja-pagination-tests" com.example.ja.JaCatalogBatchTest
@@ -371,11 +371,11 @@ jobs:
           print(f"Verified JA rules and packaged {variant} Baseline Profile.")
           PY
       - name: Enable KVM for music service regression
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         run: |
           sudo chmod 666 /dev/kvm
       - name: Test music foreground lifecycle on Android 35
-        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')) }}
+        if: ${{ inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a')) }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -399,7 +399,7 @@ jobs:
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
       - name: Upload music device regression reports
-        if: ${{ always() && (inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master'))) }}
+        if: ${{ always() && (inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a'))) }}
         uses: actions/upload-artifact@v7.0.2
         with:
           name: JA-music-service-regression
@@ -423,7 +423,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload lint report
-        if: ${{ always() && (inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master'))) }}
+        if: ${{ always() && (inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a'))) }}
         uses: actions/upload-artifact@v7.0.2
         with:
           name: JA-lint-report
