@@ -658,6 +658,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                             if (state.fullscreen) key(channel.id) {
                                 JaLiveEmbeddedPlayback(
                                     channel.embeddedPlayerUrl, channel.name,
+                                    isNtvStream = "source-ntv" in channel.categories,
                                     onClose = {
                                         state.fullscreen = false
                                         state.returnChannel = channel.id
@@ -914,6 +915,7 @@ private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiv
 @Composable
 private fun JaLiveEmbeddedPlayback(
     url: String, name: String, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit,
+    isNtvStream: Boolean = false,
     fallbackUrls: List<String> = emptyList(),matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,
     matchStreamQuality:Boolean=false
 ) {
@@ -938,6 +940,7 @@ private fun JaLiveEmbeddedPlayback(
                 }
             }
         } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name, overlayGuardEnabled = false,
+            adjustNtvPhoneViewport = isNtvStream,
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
             })

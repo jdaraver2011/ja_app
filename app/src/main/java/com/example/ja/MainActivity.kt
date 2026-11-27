@@ -1335,7 +1335,7 @@ class MainActivity : ComponentActivity() {
                                 Text(group, textAlign = TextAlign.Center, maxLines = 1)
                             }
                         }
-                        TvFocusButton(
+                        Button(
                             onClick = {
                                 settingsLogoTaps += 1
                                 if (settingsLogoTaps == 10) {
@@ -1345,13 +1345,20 @@ class MainActivity : ComponentActivity() {
                                     showAdultGroupCodePrompt = true
                                 }
                             },
-                            modifier = Modifier.size(76.dp)
+                            modifier = Modifier.size(96.dp),
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            border = null,
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Transparent,
+                                contentColor = Color.White
+                            )
                         ) {
                             androidx.compose.foundation.Image(
                                 painter = androidx.compose.ui.res.painterResource(R.mipmap.ic_launcher_foreground),
                                 contentDescription = "JA logo",
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(56.dp)
+                                modifier = Modifier.size(80.dp)
                             )
                         }
                     }

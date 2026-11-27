@@ -507,6 +507,7 @@ fun GeckoExperimentalPlayer(
     frameRateMatcher: JaTvFrameRateMatcher? = null,
     matchStreamQuality: Boolean = false,
     overlayGuardEnabled: Boolean = true,
+    adjustNtvPhoneViewport: Boolean = false,
     onFatalError: (String) -> Unit = {},
     // Independent GeckoView-level signal that media is playing. This only
     // suppresses the *unconfirmed* timeout banner: it must NOT mark the
@@ -517,6 +518,8 @@ fun GeckoExperimentalPlayer(
     val context = LocalContext.current
     val isTelevision = (LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
         Configuration.UI_MODE_TYPE_TELEVISION
+    val isSmallPhone = adjustNtvPhoneViewport && !isTelevision &&
+        LocalConfiguration.current.smallestScreenWidthDp < 600
     val latestOnProgress by rememberUpdatedState(onProgress)
     val latestOnStalled by rememberUpdatedState(onPlaybackStalled)
     val latestOnMediaStarted by rememberUpdatedState(onMediaStarted)
@@ -983,7 +986,9 @@ fun GeckoExperimentalPlayer(
         // factory's anonymous GeckoView key handler.
         key(session) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().then(
+                if (isSmallPhone) Modifier.padding(bottom = 32.dp) else Modifier
+            ),
             factory = {
                 object : GeckoView(it) {
                     // The web player may auto-hide its toolbar even while native
