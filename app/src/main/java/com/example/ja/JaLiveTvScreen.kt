@@ -91,6 +91,7 @@ import java.util.Locale
 @Stable
 internal class JaLiveTvState(context:android.content.Context,val repository:JaLiveTvRepository,private val scope:CoroutineScope) {
     private val prefs=context.getSharedPreferences("ja_live_favorites",android.content.Context.MODE_PRIVATE)
+    val pinStore=JaIptvPinStore(context)
     var favorites by mutableStateOf(prefs.getStringSet("ids",emptySet())?.toSet()?:emptySet())
     var favoriteOrder by mutableStateOf(runCatching {
         val a=org.json.JSONArray(prefs.getString("order","[]"));(0 until a.length()).map{a.getString(it)}
@@ -116,6 +117,8 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
     val sourceFocus=FocusRequester()
     val sourceList=LazyListState()
     var source by mutableStateOf("Favorites")
+    var adultGroupEnabled by mutableStateOf(pinStore.isAdultGroupEnabled())
+    fun enableAdultOnlyGroup(){pinStore.enableAdultGroup();adultGroupEnabled=true}
     var previewChannel by mutableStateOf<JaLiveChannel?>(null)
     var playingChannelId by mutableStateOf<String?>(null)
     var timelineScale=0f
@@ -348,7 +351,6 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val scope=rememberCoroutineScope()
     val owner=LocalLifecycleOwner.current
     val appContext=LocalContext.current
-    val pinStore=remember(appContext){JaIptvPinStore(appContext)}
     var resumed by remember{mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     var groupsFocused by remember{mutableStateOf(false)}
     var sourcesFocused by remember{mutableStateOf(false)}
@@ -385,10 +387,10 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     val programs=remember(state.guide,now/1_800_000,weather.zip){state.guide?.byChannel.orEmpty()+mapOf(JA_WEATHER_CHANNEL to jaWeatherPrograms(now,weather.zip))}
     val start=now/1_800_000*1_800_000
     val finish=start+86_400_000
-    val groups=remember(state.sourceGroups,state.channelsBySourceGroup,state.source,programs,now/30_000,finish){
+    val groups=remember(state.sourceGroups,state.channelsBySourceGroup,state.source,state.adultGroupEnabled,programs,now/30_000,finish){
         state.sourceGroups.filter{group->
             val inGroup=state.channelsBySourceGroup[state.source to group].orEmpty()
-            inGroup.isNotEmpty()&&(group!="With EPG"||inGroup.any{channel->
+            inGroup.isNotEmpty()&&(group!="Adult Only"||state.source!="NTV"||state.adultGroupEnabled)&&(group!="With EPG"||inGroup.any{channel->
                 programs[channel.id].orEmpty().any{JaLiveTvRules.hasGuide(it.start,it.end,it.title,now,finish)}
             })
         }
@@ -448,10 +450,6 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
         if(state.view!=group){state.finishMove(false);state.view=group;state.returnChannel=null}
     }
     fun selectSource(source:String){
-        if(source=="NTV"&&!pinStore.hasPin()){
-            if(pinDialog==null)pinDialog=JaNtvPinDialog.CREATE
-            return
-        }
         if(state.source==source)return
         state.lockAdultOnly()
         state.finishMove(false);state.source=source;state.query="";state.returnChannel=null
@@ -748,7 +746,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
     pinDialog?.let{mode->
         JaNtvPinPrompt(mode,pinStore,
             onDismiss={pinDialog=null},
-            onCreated={pinDialog=null;selectSource("NTV")},
+            onCreated={pinDialog=null;state.adultOnlyUnlocked=true;selectGroup("Adult Only")},
             onUnlocked={pinDialog=null;state.adultOnlyUnlocked=true;selectGroup("Adult Only")})
     }
     menuChannel?.let{channel->
@@ -785,9 +783,9 @@ private fun JaNtvPinPrompt(
     AlertDialog(
         onDismissRequest=onDismiss,
         properties=DialogProperties(securePolicy=androidx.compose.ui.window.SecureFlagPolicy.SecureOn),
-        title={Text(if(creating)"Create NTV PIN" else "Adult Only")},
+        title={Text(if(creating)"Create Adult Only PIN" else "Adult Only")},
         text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
-            Text(if(creating)"Create a six-digit PIN to enable NTV." else "Enter your six-digit PIN to open Adult Only channels.")
+            Text(if(creating)"Create a six-digit PIN to open the Adult Only group." else "Enter your six-digit PIN to open Adult Only channels.")
             OutlinedTextField(
                 value=pin,
                 onValueChange={value->pin=value.filter(Char::isDigit).take(6);error=""},

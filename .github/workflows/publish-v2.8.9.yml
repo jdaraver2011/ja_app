@@ -1,0 +1,18 @@
+name: Publish JA 2.8.9 device update
+on:
+  push:
+    branches: [v2.8.9]
+    paths: [.github/workflows/publish-v2.8.9.yml]
+permissions:
+  contents: write
+jobs:
+  publish:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      run_checks: true
+      publish_update: true
+      build_variant: release
+      # Reuse and verify the checked-in JA Baseline Profile. The reusable
+      # workflow fails unless the release APK contains both profile assets.
+      generate_baseline_profile: false
+    secrets: inherit

@@ -350,6 +350,10 @@ class MainActivity : ComponentActivity() {
     var tab by remember { mutableStateOf("Movies") }
     var settingsSection by remember { mutableStateOf<String?>(null) }
     var settingsReturnSection by remember { mutableStateOf<String?>(null) }
+    var settingsLogoTaps by remember { mutableIntStateOf(0) }
+    var showAdultGroupCodePrompt by remember { mutableStateOf(false) }
+    var adultGroupCode by remember { mutableStateOf("") }
+    var adultGroupCodeError by remember { mutableStateOf("") }
     val settingsGroups = remember { listOf("Account", "Ad Blocking", "Player", "Tabs", "Sources") }
     val settingsGroupFocus = remember { settingsGroups.associateWith { FocusRequester() } }
     val settingsBackFocus = remember { FocusRequester() }
@@ -361,6 +365,9 @@ class MainActivity : ComponentActivity() {
             settingsReturnSection?.let { section -> runCatching { settingsGroupFocus[section]?.requestFocus() } }
             settingsReturnSection = null
         } else runCatching { settingsBackFocus.requestFocus() }
+    }
+    LaunchedEffect(tab, settingsSection) {
+        if (tab != "Settings" || settingsSection != null) settingsLogoTaps = 0
     }
     // Keep independent vertical and horizontal scroll positions for Movies and TV.
     val sectionScrollStates = remember { mutableMapOf<String, LazyListState>() }
@@ -1328,6 +1335,25 @@ class MainActivity : ComponentActivity() {
                                 Text(group, textAlign = TextAlign.Center, maxLines = 1)
                             }
                         }
+                        TvFocusButton(
+                            onClick = {
+                                settingsLogoTaps += 1
+                                if (settingsLogoTaps == 10) {
+                                    settingsLogoTaps = 0
+                                    adultGroupCode = ""
+                                    adultGroupCodeError = ""
+                                    showAdultGroupCodePrompt = true
+                                }
+                            },
+                            modifier = Modifier.size(76.dp)
+                        ) {
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(R.mipmap.ic_launcher_foreground),
+                                contentDescription = "JA logo",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.size(56.dp)
+                            )
+                        }
                     }
                 }
             } else {
@@ -1806,6 +1832,41 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+        if (showAdultGroupCodePrompt && tab == "Settings" && settingsSection == null) {
+            AlertDialog(
+                onDismissRequest = { showAdultGroupCodePrompt = false },
+                title = { Text("Unlock Adult Only group") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Enter the JA access password to show Adult Only under NTV.")
+                        OutlinedTextField(
+                            value = adultGroupCode,
+                            onValueChange = { adultGroupCode = it.filter(Char::isDigit).take(6); adultGroupCodeError = "" },
+                            label = { Text("Password") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        )
+                        if (adultGroupCodeError.isNotBlank()) Text(adultGroupCodeError, color = Color(0xFFFF8A80))
+                    }
+                },
+                confirmButton = {
+                    TvFocusButton(onClick = {
+                        if (adultGroupCode == JA_TEST_UNLOCK_CODE) {
+                            liveTv.enableAdultOnlyGroup()
+                            showAdultGroupCodePrompt = false
+                            adultGroupCode = ""
+                        } else adultGroupCodeError = "That password is not correct."
+                    }, colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black)) {
+                        Text("Show Adult Only group", color = Color.Black)
+                    }
+                },
+                dismissButton = {
+                    TvFocusButton(onClick = { showAdultGroupCodePrompt = false; adultGroupCode = "" },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) { Text("Cancel") }
+                }
+            )
         }
         }
     }

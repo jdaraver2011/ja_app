@@ -44,6 +44,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
+/** Shared code for the existing sign-in-screen test unlock and the hidden settings reveal. */
+internal const val JA_TEST_UNLOCK_CODE = "192168"
+
 @Composable
 private fun jaAccountFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Color.White,
@@ -270,7 +273,7 @@ internal fun JaRequiredAccountGate(
                 },
                 confirmButton = {
                     TvFocusButton(onClick = {
-                        if (unlockCode == "192168") {
+                        if (unlockCode == JA_TEST_UNLOCK_CODE) {
                             showUnlockPrompt = false
                             onTestUnlock()
                         } else unlockError = "That code is not correct."

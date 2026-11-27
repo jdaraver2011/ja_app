@@ -14,6 +14,12 @@ internal class JaIptvPinStore(context: Context) {
     fun hasPin(): Boolean = !prefs.getString(SALT_KEY, null).isNullOrBlank() &&
         !prefs.getString(HASH_KEY, null).isNullOrBlank()
 
+    fun isAdultGroupEnabled(): Boolean = prefs.getBoolean(ADULT_GROUP_ENABLED_KEY, false)
+
+    fun enableAdultGroup() {
+        check(prefs.edit().putBoolean(ADULT_GROUP_ENABLED_KEY, true).commit())
+    }
+
     fun save(pin: String) {
         require(pin.matches(Regex("\\d{6}")))
         val salt = ByteArray(SALT_BYTES).also(SecureRandom()::nextBytes)
@@ -43,6 +49,7 @@ internal class JaIptvPinStore(context: Context) {
     private companion object {
         const val SALT_KEY = "ntv-pin-salt"
         const val HASH_KEY = "ntv-pin-hash"
+        const val ADULT_GROUP_ENABLED_KEY = "adult-group-enabled"
         const val SALT_BYTES = 16
         const val ITERATIONS = 120_000
         const val HASH_BITS = 256
