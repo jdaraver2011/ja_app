@@ -14,6 +14,9 @@ fun prop(key: String) = (local.getProperty(key) ?: "").replace("\\", "\\\\").rep
 android {
     namespace = "com.example.ja"
     compileSdk { version = release(37) { minorApiLevel = 2 } }
+    // GeckoView's omni.ja is memory-mapped from the APK and must stay stored.
+    // Keep this on all variants so the diagnostic artifact matches release packaging.
+    androidResources { noCompress += "ja" }
     defaultConfig {
         applicationId = "com.example.ja"
         manifestPlaceholders["jaAppLabel"] = "JA"

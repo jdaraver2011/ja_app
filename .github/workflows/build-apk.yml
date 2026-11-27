@@ -37,7 +37,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, master, v2.6.0-supabase-test, v2.6.2, v2.6.3, v2.7.2-settings-sync-iptv, v2.7.3-settings-iptv, v2.7.4-settings-iptv-visualizer, v2.7.6-settings-ui-navigation, v2.7.7-music-iptv, v2.7.8-deezer-library-viz, v2.7.9-deezer-butterchurn, v2.8.8a]
+    branches: [main, master, v2.6.0-supabase-test, v2.6.2, v2.6.3, v2.7.2-settings-sync-iptv, v2.7.3-settings-iptv, v2.7.4-settings-iptv-visualizer, v2.7.6-settings-ui-navigation, v2.7.7-music-iptv, v2.7.8-deezer-library-viz, v2.7.9-deezer-butterchurn, v2.8.8a, v2.9.0-diag]
 permissions:
   contents: read
 concurrency:

@@ -899,8 +899,12 @@ fun GeckoExperimentalPlayer(
                 }
             }
             try {
+                val openStartedAt = android.os.SystemClock.elapsedRealtime()
+                if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "SESSION_OPEN_BEGIN id=${System.identityHashCode(this)} host=${Uri.parse(url).host ?: "unknown"} uptimeMs=$openStartedAt")
                 val runtime = JaGeckoRuntime.get(context)
+                if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "SESSION_RUNTIME_READY id=${System.identityHashCode(this)} elapsedMs=${android.os.SystemClock.elapsedRealtime() - openStartedAt}")
                 open(runtime)
+                if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "SESSION_OPEN_RETURN id=${System.identityHashCode(this)} elapsedMs=${android.os.SystemClock.elapsedRealtime() - openStartedAt}")
                 val startedAt = android.os.SystemClock.elapsedRealtime()
                 val gate = JaStartupBarrier(object : JaStartupBarrier.Listener {
                     override fun onReady() {
@@ -910,6 +914,7 @@ fun GeckoExperimentalPlayer(
                         try {
                             embedLoadWasRequested = true
                             latestOnEmbedLoadRequested()
+                            if (BuildConfig.DEBUG) Log.i("JA_GECKO_DIAG", "SESSION_LOADURI_BEGIN id=${System.identityHashCode(this)} host=${Uri.parse(url).host ?: "unknown"} elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}")
                             loadUri(url)
                         } catch (error: Exception) {
                             Log.e("JA_STARTUP", "PLAYER_LOAD_FAILED", error)
