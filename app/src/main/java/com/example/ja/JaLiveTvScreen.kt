@@ -1027,7 +1027,6 @@ private fun JaLiveEmbeddedPlayback(
     }
 }
 
-@Composable
 private data class JaNativeHttpResult(
     val responseCode: Int,
     val responseUri: String,
@@ -1074,6 +1073,7 @@ private class JaObservedHttpDataSourceFactory(
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
 private fun JaNativeCandidatePlayer(
     candidate: JaMediaSourceCandidate,
     capturedCandidates: List<JaMediaSourceCandidate>,
@@ -1142,7 +1142,7 @@ private fun JaNativeCandidatePlayer(
             dataSpec.buildUpon().setHttpRequestHeaders(safeHeaders).build()
         }
         Log.i("JA_MEDIA_DIAG", "NATIVE_TEST_START kind=${candidate.kind} host=$originHost " +
-            "headerNames=${headers.keys.sorted().joinToString(",").ifBlank { "none" }}")
+            "headerNames=${safeManifestHeaders.keys.sorted().joinToString(",").ifBlank { "none" }}")
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(requestScopedFactory))
             .build().apply {
