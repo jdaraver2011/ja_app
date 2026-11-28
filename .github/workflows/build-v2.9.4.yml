@@ -18,7 +18,7 @@ on:
       - scripts/prepare_update_release.py
       - tests/**
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     uses: ./.github/workflows/build-apk.yml
