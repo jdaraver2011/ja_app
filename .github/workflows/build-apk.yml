@@ -418,6 +418,14 @@ jobs:
           path: app/build/outputs/apk/${{ inputs.build_variant || 'debug' }}/*.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Upload release R8 mapping
+        if: ${{ always() && steps.assemble-apk.outcome == 'success' && (inputs.build_variant || 'debug') == 'release' && hashFiles('app/build/outputs/mapping/release/mapping.txt') != '' }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: JA-${{ steps.apk-artifact.outputs.ref_name }}-r8-mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: ignore
+          retention-days: 90
       - name: Upload lint report
         if: ${{ always() && (inputs.run_checks || (github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'v2.8.8a'))) }}
         uses: actions/upload-artifact@v7.0.2

@@ -1,9 +1,19 @@
-# Room locates its generated database implementation from the database class name.
+# Preserve GeckoView's Java API and classes reached through JNI/reflection.
+# R8 still optimizes JA's own application code.
+-keep class org.mozilla.** { *; }
+-keepclasseswithmembernames class * { native <methods>; }
+
+# GeckoView's DebugConfig uses SnakeYAML. TypeDescription initializes its
+# logger with TypeDescription.class.getPackage().getName(), which fails if R8
+# repackages the class into the unnamed package. SnakeYAML also reflects over
+# DebugConfig fields, so preserve parser classes and their names.
+-keeppackagenames org.yaml.snakeyaml.**
+-keep class org.yaml.snakeyaml.** { *; }
+
+# Preserve runtime metadata used by Java/Kotlin reflection and serialization.
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,Exceptions
+
+# Room discovers its generated implementation by database class name.
 -keep class com.example.ja.AppDatabase { *; }
 -keep class com.example.ja.AppDatabase_Impl { *; }
 -keep class com.example.ja.WatchItem { *; }
-
-# GeckoView crosses JNI and loads extension/runtime components dynamically.
-# Preserve its Java API names while allowing R8 to optimize the app's own code.
--keep class org.mozilla.geckoview.** { *; }
--keep class org.mozilla.gecko.** { *; }
