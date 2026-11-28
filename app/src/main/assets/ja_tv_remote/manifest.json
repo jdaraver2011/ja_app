@@ -20,6 +20,27 @@
         "https://*/*"
       ],
       "js": [
+        "stream-diagnostics.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_start",
+      "exclude_matches": [
+        "*://deezer.com/*",
+        "*://*.deezer.com/*",
+        "*://*.dzcdn.net/*",
+        "*://accounts.google.com/*",
+        "*://appleid.apple.com/*",
+        "*://facebook.com/*",
+        "*://*.facebook.com/*"
+      ]
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
         "jw-api.js",
         "output-quality.js",
         "jw-preferences.js",
