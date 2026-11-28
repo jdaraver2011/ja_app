@@ -55,7 +55,7 @@ internal class JaIptvPinStore(context: Context) {
         val salt = saltText?.let { Base64.decode(it, Base64.NO_WRAP) }
         val hash = hashText?.let { Base64.decode(it, Base64.NO_WRAP) }
         require(salt == null || salt.size == SALT_BYTES) { "Invalid synced Adult PIN salt" }
-        require(hash == null || hash.size == HASH_BYTES / 8) { "Invalid synced Adult PIN hash" }
+        require(hash == null || hash.size == HASH_BITS / 8) { "Invalid synced Adult PIN hash" }
         val updatedAt = value.optLong("updated_at", 0L).coerceAtLeast(0L)
         val edit = prefs.edit()
             .putBoolean(ADULT_GROUP_ENABLED_KEY, value.optBoolean("adult_group_enabled", false))
