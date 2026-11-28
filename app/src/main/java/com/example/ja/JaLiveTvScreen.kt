@@ -939,7 +939,6 @@ private fun JaLiveEmbeddedPlayback(
                 }
             }
         } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name, overlayGuardEnabled = isNtvStream,
-            adjustNtvPhoneViewport = isNtvStream,
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
             })

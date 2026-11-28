@@ -269,8 +269,9 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         val sourcePreferences = prefsJson(context.getSharedPreferences("ja_source_preferences_reset", Context.MODE_PRIVATE).all)
         val settings = JSONObject().put("player_controls", playerControls).put("weather", weather)
             .put("playback_sources", playbackSources).put("source_preferences", sourcePreferences)
+            .put("iptv_security", JaIptvPinStore(context).syncState())
         val credentials = JSONObject().put("deezer_arl", JaMusicLabVault(context).read() ?: JSONObject.NULL)
-        return JSONObject().put("schema", 2).put("media", media).put("music", music).put("iptv", iptv)
+        return JSONObject().put("schema", 3).put("media", media).put("music", music).put("iptv", iptv)
             .put("search", search).put("settings", settings).put("credentials", credentials)
     }
 
@@ -302,6 +303,17 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
             .put("movie", mergeOrderedValues(localOrder.optString("movie"), cloudOrder.optString("movie")))
             .put("tv", mergeOrderedValues(localOrder.optString("tv"), cloudOrder.optString("tv"))))
         merged.put("media", media)
+        val localSecurity = local.optJSONObject("settings")?.optJSONObject("iptv_security")
+        val cloudSecurity = cloud.optJSONObject("settings")?.optJSONObject("iptv_security")
+        if (localSecurity != null || cloudSecurity != null) {
+            val selectedSecurity = when {
+                localSecurity == null -> cloudSecurity
+                cloudSecurity == null -> localSecurity
+                cloudSecurity.optLong("updated_at") > localSecurity.optLong("updated_at") -> cloudSecurity
+                else -> localSecurity
+            }
+            merged.optJSONObject("settings")?.put("iptv_security", JSONObject(selectedSecurity.toString()))
+        }
         return merged
     }
 
@@ -432,6 +444,9 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
                 settings.optJSONObject("source_preferences")?.let {
                     applyPrefs("ja_source_preferences_reset", it, stringSets = false)
                 }
+                settings.optJSONObject("iptv_security")?.let {
+                    JaIptvPinStore(context).applySyncState(it)
+                }
             }
             val credentials = state.optJSONObject("credentials")
             if (credentials?.has("deezer_arl") == true && !credentials.isNull("deezer_arl")) {
@@ -486,6 +501,10 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         if ((state.optJSONObject("search")?.optJSONObject("values")?.length() ?: 0) > 0) return false
         val settings = state.optJSONObject("settings") ?: JSONObject()
         if (listOf("player_controls", "weather", "playback_sources", "source_preferences").any { (settings.optJSONObject(it)?.length() ?: 0) > 0 }) return false
+        val iptvSecurity = settings.optJSONObject("iptv_security")
+        if (iptvSecurity != null && (iptvSecurity.optLong("updated_at") > 0L ||
+                iptvSecurity.optString("pin_hash").let { it.isNotBlank() && it != "null" } ||
+                iptvSecurity.optBoolean("adult_group_enabled"))) return false
         val iptv = state.optJSONObject("iptv")?.optJSONObject("values") ?: JSONObject()
         for (key in iptv.keys()) {
             val value = iptv.get(key)
@@ -500,13 +519,15 @@ internal class JaAccountSync(private val context: Context, private val dao: Watc
         return arl.isBlank() || arl == "null"
     }
 
-    private fun emptySnapshot() = JSONObject().put("schema", 2)
+    private fun emptySnapshot() = JSONObject().put("schema", 3)
         .put("media", JSONObject().put("watch_items", JSONArray()).put("watched", JSONArray())
             .put("favorite_order", JSONObject().put("movie", "").put("tv", "")))
         .put("music", JSONObject().put("values", JSONObject()))
         .put("iptv", JSONObject().put("values", JSONObject()))
         .put("search", JSONObject().put("values", JSONObject()))
         .put("settings", JSONObject().put("player_controls", JSONObject()).put("weather", JSONObject())
-            .put("playback_sources", JSONObject()).put("source_preferences", JSONObject()))
+            .put("playback_sources", JSONObject()).put("source_preferences", JSONObject())
+            .put("iptv_security", JSONObject().put("pin_salt", JSONObject.NULL).put("pin_hash", JSONObject.NULL)
+                .put("adult_group_enabled", false).put("updated_at", 0L)))
         .put("credentials", JSONObject().put("deezer_arl", JSONObject.NULL))
 }

@@ -1,0 +1,26 @@
+name: Publish JA 2.9.2 device update
+on:
+  push:
+    branches: [v2.9.2]
+    paths:
+      - .github/workflows/publish-v2.9.2.yml
+      - .github/workflows/build-apk.yml
+      - app/build.gradle.kts
+      - app/src/main/java/com/example/ja/GeckoExperimentalPlayer.kt
+      - app/src/main/java/com/example/ja/JaAccountSync.kt
+      - app/src/main/java/com/example/ja/JaAccountSyncSettings.kt
+      - app/src/main/java/com/example/ja/JaIptvPinStore.kt
+      - app/src/main/java/com/example/ja/JaLiveTvScreen.kt
+      - app/src/main/java/com/example/ja/MainActivity.kt
+permissions:
+  contents: write
+jobs:
+  publish:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      daddylive_us_pilot: true
+      run_checks: true
+      publish_update: true
+      build_variant: release
+      generate_baseline_profile: false
+    secrets: inherit
