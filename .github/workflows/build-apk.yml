@@ -337,10 +337,6 @@ jobs:
           JA_KEY_ALIAS: ${{ secrets.JA_KEY_ALIAS }}
           JA_KEY_PASSWORD: ${{ secrets.JA_KEY_PASSWORD }}
         run: |
-          if [[ "$JA_DADDYLIVE_US_PILOT" == "true" && "${{ inputs.publish_update || false }}" == "true" && "$GITHUB_REF_NAME" != "v2.8.4" && "$GITHUB_REF_NAME" != "v2.8.5" && "$GITHUB_REF_NAME" != "v2.9.1" ]]; then
-            echo 'DaddyLive USA device updates may only be published from a confirmed release branch.'
-            exit 1
-          fi
           case "$BUILD_VARIANT" in
             debug) gradle_task=assembleDebug ;;
             release) gradle_task=assembleRelease ;;
