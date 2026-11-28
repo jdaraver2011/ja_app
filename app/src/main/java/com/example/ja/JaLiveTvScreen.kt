@@ -476,7 +476,9 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
             if(state.source=="NTV")selectGroup("Adult Only")
             return
         }
-        state.tune(channel, channel.embeddedPlayerUrl != null || state.previewChannel?.id == channel.id)
+        // Match the iptv-org interaction for every source: first OK tunes the
+        // preview; OK on that same channel promotes it to fullscreen.
+        state.tune(channel, state.previewChannel?.id == channel.id)
     }
     LaunchedEffect(state.view){if(state.appliedView!=state.view){
         if(state.returnChannel==null)state.list.scrollToItem(0);state.appliedView=state.view
@@ -654,9 +656,10 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                             }
                         }
                         else if (channel.embeddedPlayerUrl != null) {
-                            if (state.fullscreen) key(channel.id) {
+                            key(channel.id) {
                                 JaLiveEmbeddedPlayback(
                                     channel.embeddedPlayerUrl, channel.name,
+                                    fullscreen = state.fullscreen,
                                     isNtvStream = "source-ntv" in channel.categories,
                                     onClose = {
                                         state.fullscreen = false
@@ -668,8 +671,7 @@ private fun JaLiveTvScreenContent(state:JaLiveTvState,weather:JaWeatherState,onM
                                     matchTvFrameRate=matchTvFrameRate,matchTvResolution=matchTvResolution,
                                     matchStreamQuality=matchStreamQuality
                                 )
-                            } else Text("Select the channel to watch", Modifier.align(Alignment.Center),
-                                color = Color.LightGray, fontSize = 12.sp)
+                            }
                         }
                         else key(channel.id){JaLiveTvPlayback(channel,state.repository,state.fullscreen,
                             matchTvFrameRate,matchTvResolution,matchStreamQuality,
@@ -913,13 +915,13 @@ private fun JaLiveChannelMenu(channel:JaLiveChannel,favorite:Boolean,guard:JaLiv
 
 @Composable
 private fun JaLiveEmbeddedPlayback(
-    url: String, name: String, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit,
+    url: String, name: String, fullscreen: Boolean, onClose: () -> Unit, onPlaying: () -> Unit, onAttached: (Boolean) -> Unit,
     isNtvStream: Boolean = false,
     fallbackUrls: List<String> = emptyList(),matchTvFrameRate:Boolean=false,matchTvResolution:Boolean=false,
     matchStreamQuality:Boolean=false
 ) {
     var frameMatcher by remember(url){mutableStateOf<JaTvFrameRateMatcher?>(null)}
-    val qualityMatching=matchStreamQuality&&matchTvFrameRate&&matchTvResolution
+    val qualityMatching=fullscreen&&matchStreamQuality&&matchTvFrameRate&&matchTvResolution
     var fallbackIndex by remember(url) { mutableIntStateOf(0) }
     val activeUrl=(listOf(url)+fallbackUrls).getOrElse(fallbackIndex){url}
     val attached by rememberUpdatedState(onAttached)
@@ -928,8 +930,8 @@ private fun JaLiveEmbeddedPlayback(
         onDispose { attached(false) }
     }
     var failed by remember(activeUrl) { mutableStateOf(false) }
-    JaLivePresentation(true, onClose) {
-        JaLiveFrameMatcherHost(matchTvFrameRate,matchTvResolution){frameMatcher=it}
+    JaLivePresentation(fullscreen, onClose) {
+        JaLiveFrameMatcherHost(fullscreen&&matchTvFrameRate,matchTvResolution){frameMatcher=it}
         if (failed) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

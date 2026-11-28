@@ -45,6 +45,7 @@ class JaTvFrameRateMatcher(
     private var lastVideoHeight = 0
     private var requestedMode: Display.Mode? = null
     private var attempted = false
+    private var preciseCorrectionAttempted = false
     private var closed = false
     private var statisticsReceived = 0
 
@@ -66,7 +67,13 @@ class JaTvFrameRateMatcher(
     }
 
     /** Accept one-second bridge reports; require two agreeing cadence intervals. */
-    fun observe(totalFrames: Int, positionSeconds: Double, videoWidth: Int, videoHeight: Int) {
+    fun observe(
+        totalFrames: Int,
+        positionSeconds: Double,
+        videoWidth: Int,
+        videoHeight: Int,
+        preciseFrameRate: Double = Double.NaN
+    ) {
         statisticsReceived++
         if (statisticsReceived <= 3 || statisticsReceived % 24 == 0) {
             Log.i(tag, "FRAME_STATS_RECEIVED count=$statisticsReceived enabled=$enabled closed=$closed " +
@@ -75,6 +82,25 @@ class JaTvFrameRateMatcher(
         }
         if (!enabled || closed || totalFrames <= 0 || positionSeconds < 0.0) return
         if (videoWidth < 480 || videoHeight < 270) return
+        // Refine the early cumulative-counter choice only after the JS sampler
+        // has confirmed a stable 30+ second requestVideoFrameCallback window.
+        // This is particularly useful when both 23.976 and 24.000 Hz modes exist.
+        if (!preciseCorrectionAttempted && preciseFrameRate.isFinite()) {
+            val preciseTarget = preciseTargetFor(preciseFrameRate)
+            if (preciseTarget != null) {
+                preciseCorrectionAttempted = true
+                val existingRate = requestedMode?.refreshRate
+                if (existingRate == null || abs(existingRate - preciseTarget) > 0.01f) {
+                    Log.i(tag, "FRAME_RATE_PRECISE_CORRECTION rate=${"%.4f".format(java.util.Locale.US, preciseFrameRate)} " +
+                        "previousHz=${existingRate ?: 0f} targetHz=$preciseTarget")
+                    attempted = true
+                    requestMode(preciseTarget, videoWidth, videoHeight)
+                } else {
+                    Log.i(tag, "FRAME_RATE_PRECISE_CONFIRMED rate=${"%.4f".format(java.util.Locale.US, preciseFrameRate)} " +
+                        "targetHz=$preciseTarget")
+                }
+            }
+        }
         requestedMode?.let { mode ->
             if (!window.decorView.hasWindowFocus()) return
             val attrs = window.attributes
@@ -112,6 +138,22 @@ class JaTvFrameRateMatcher(
         frameRate in 49.5..50.5 -> 50.0f
         frameRate in 59.5..60.5 -> 59.94f
         else -> null
+    }
+
+    /** Tight recognition for long-window rVFC estimates; no guessed near-match. */
+    private fun preciseTargetFor(frameRate: Double): Float? {
+        val candidates = listOf(
+            23.976f to 0.008,
+            24.0f to 0.008,
+            25.0f to 0.010,
+            29.97f to 0.010,
+            30.0f to 0.010,
+            50.0f to 0.012,
+            59.94f to 0.015,
+            60.0f to 0.015
+        )
+        val nearest = candidates.minByOrNull { abs(frameRate - it.first) } ?: return null
+        return nearest.first.takeIf { abs(frameRate - nearest.first) <= nearest.second }
     }
 
     private fun requestMode(rate: Float, videoWidth: Int, videoHeight: Int) {

@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -134,12 +135,13 @@ private class JaRemoteBridge {
     // hides its controls and the JS navigation mode expires.
     var onControlModeClosed: (() -> Unit)? = null
     // Read-only reports from the actual video frame (not ad/tracker frames).
-    var onVideoStatistics: ((Int, Double, Int, Int) -> Unit)? = null
+    var onVideoStatistics: ((Int, Double, Int, Int, Double) -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ports = mutableSetOf<WebExtension.Port>()
     private var activePort: WebExtension.Port? = null
     private var hideTitlePending = false
     private var statisticsLogCount = 0
+    private var frameCadenceEnabled = false
     private val captionTargets = mutableSetOf<WebExtension.Port>()
     private val qualityTargets = mutableMapOf<WebExtension.Port, Int>()
     private val playbackWindows = mutableMapOf<WebExtension.Port, JaPlaybackWindow>()
@@ -183,6 +185,14 @@ private class JaRemoteBridge {
                                                 if (seconds > 0.0 && seconds.isFinite()) {
                                                     val width = report.optInt("width", 0)
                                                     val height = report.optInt("height", 0)
+                                                    val preciseRate = report.optDouble("rvfcRate", 0.0)
+                                                        .takeIf { report.optBoolean("rvfcStable", false) && it.isFinite() && it > 0.0 }
+                                                        ?: Double.NaN
+                                                    val preciseSpan = report.optDouble("rvfcSpan", 0.0)
+                                                    if (preciseRate.isFinite() && (statisticsLogCount <= 3 || statisticsLogCount % 30 == 0)) {
+                                                        Log.i("JA_FRAME_RATE", "RVFC_CADENCE rate=${String.format(java.util.Locale.US, "%.4f", preciseRate)} " +
+                                                            "span=${String.format(java.util.Locale.US, "%.1f", preciseSpan)}s stable=true")
+                                                    }
                                                     val window = playbackWindows.getOrPut(port) { JaPlaybackWindow() }
                                                     window.sample(android.os.SystemClock.elapsedRealtime(), frames,
                                                         report.optInt("dropped", -1), width, height, seconds)?.let { sample ->
@@ -196,7 +206,7 @@ private class JaRemoteBridge {
                                                     mainHandler.post {
                                                         if (port !in ports) return@post
                                                         frameWarmup.record(port, document, sampledAt, frames, seconds, width, height)
-                                                        onVideoStatistics?.invoke(frames, seconds, width, height)
+                                                        onVideoStatistics?.invoke(frames, seconds, width, height, preciseRate)
                                                     }
                                                 }
                                             }
@@ -222,6 +232,10 @@ private class JaRemoteBridge {
                                         Log.i("JA_TV_BRIDGE", "FRAME_DISCONNECTED ports=${ports.size}")
                                     }
                                 })
+                                try {
+                                    port.postMessage(JSONObject().put("action", "setFrameCadence")
+                                        .put("enabled", frameCadenceEnabled))
+                                } catch (_: Exception) { }
                             }
                         }, "ja_tv_remote"
                     )
@@ -257,10 +271,21 @@ private class JaRemoteBridge {
         }
     }
 
+    fun setFrameCadenceEnabled(enabled: Boolean) {
+        if (frameCadenceEnabled == enabled) return
+        frameCadenceEnabled = enabled
+        for (port in ports.toList()) {
+            try {
+                port.postMessage(JSONObject().put("action", "setFrameCadence").put("enabled", enabled))
+            } catch (_: Exception) { ports.remove(port) }
+        }
+        Log.i("JA_FRAME_RATE", "RVFC_SAMPLING_ENABLED enabled=$enabled ports=${ports.size}")
+    }
+
     fun replayConfirmedStatistics(document: String?) {
         val samples = frameWarmup.matching(document, android.os.SystemClock.elapsedRealtime())
         Log.i("JA_FRAME_RATE", "FRAME_RATE_WARMUP samples=${samples.size} exactDocument=true")
-        samples.forEach { onVideoStatistics?.invoke(it.frames, it.position, it.width, it.height) }
+        samples.forEach { onVideoStatistics?.invoke(it.frames, it.position, it.width, it.height, Double.NaN) }
     }
 
     fun initializeCaptions(confirmedDocument: String?) {
@@ -572,20 +597,21 @@ fun GeckoExperimentalPlayer(
     sourceStatusBridge.onStalled = { latestOnStalled() }
     val overlayGuard = remember(url, reload) { JaOverlayGuardBridge() }
     var videoStarted by remember(url, reload) { mutableStateOf(false) }
+    SideEffect { remoteBridge.setFrameCadenceEnabled(frameRateMatcher != null && videoStarted) }
     val frameStatsDebugCount = remember(url, reload) { intArrayOf(0) }
-    remoteBridge.onVideoStatistics = { frames, seconds, width, height ->
+    remoteBridge.onVideoStatistics = { frames, seconds, width, height, preciseRate ->
         val confirmed = videoStarted
         frameStatsDebugCount[0]++
         if (frameStatsDebugCount[0] <= 3 || frameStatsDebugCount[0] % 24 == 0) {
             Log.i("JA_FRAME_RATE", "FRAME_STATS_HANDOFF sample=${frameStatsDebugCount[0]} " +
                 "videoStarted=$confirmed matcherAttached=${latestFrameRateMatcher != null} " +
-                "frames=$frames position=$seconds resolution=${width}x$height " +
+                "frames=$frames position=$seconds resolution=${width}x$height rvfcRate=$preciseRate " +
                 "bridge=${System.identityHashCode(remoteBridge)}")
         }
         // The title's VIDEO_STARTED event is an explicit confirmation from
         // the foreground source. Do not change the display for ads/pre-roll.
         if (confirmed) {
-            latestFrameRateMatcher?.observe(frames, seconds, width, height)
+            latestFrameRateMatcher?.observe(frames, seconds, width, height, preciseRate)
             if (vidFastBridge == null) remoteBridge.initializeCaptions(sourceStatusBridge.confirmedDocumentUrl)
             if (latestMatchStreamQuality && isTelevision && vidFastBridge == null) {
                 latestFrameRateMatcher?.confirmedQualityHeight()?.let { outputHeight ->

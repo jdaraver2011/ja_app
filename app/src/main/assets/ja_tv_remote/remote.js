@@ -63,6 +63,134 @@
     return /(^|\.)vidfast\.vc$/.test(host) ||
       /(^|\.)vidfast\.vc$/.test(parent);
   };
+  // requestVideoFrameCallback is used only as a local cadence sensor. It does
+  // no DOM work and sends no per-frame bridge messages; the 1 Hz sampler below
+  // reports a stable estimate after a 30 s window. Older Gecko versions keep
+  // using getVideoPlaybackQuality() alone.
+  const frameCadenceSampler = (() => {
+    const state = {video:null, callbackId:null, latest:null, points:[], estimates:[],
+      lastPresented:-1, lastMediaTime:-1, lastSampleAt:0, lastCurrentTime:-1,
+      lastEstimateAt:0, lastWidth:0, lastHeight:0, lastFrameCallbackAt:0};
+    const resetSamples = () => {
+      state.points.length = 0;
+      state.estimates.length = 0;
+      state.lastSampleAt = 0;
+      state.lastEstimateAt = 0;
+      state.lastCurrentTime = -1;
+    };
+    const stop = () => {
+      try { if (state.video && state.callbackId != null)
+        state.video.cancelVideoFrameCallback?.(state.callbackId); } catch (_) {}
+      state.video = null;
+      state.callbackId = null;
+      state.latest = null;
+      state.lastPresented = -1;
+      state.lastMediaTime = -1;
+      state.lastWidth = 0;
+      state.lastHeight = 0;
+      state.lastFrameCallbackAt = 0;
+      resetSamples();
+    };
+    const schedule = video => {
+      if (state.video !== video || video.paused || video.ended || !video.isConnected) {
+        stop();
+        return;
+      }
+      try {
+        state.callbackId = video.requestVideoFrameCallback((_now, metadata) => {
+          state.callbackId = null;
+          if (state.video !== video || video.paused || video.ended || !video.isConnected) {
+            stop();
+            return;
+          }
+          const presented = Number(metadata?.presentedFrames);
+          const mediaTime = Number(metadata?.mediaTime);
+          const width = Number(metadata?.width || video.videoWidth || 0);
+          const height = Number(metadata?.height || video.videoHeight || 0);
+          if (Number.isFinite(presented) && Number.isFinite(mediaTime)) {
+            const callbackAt = performance.now();
+            if (state.lastFrameCallbackAt && callbackAt - state.lastFrameCallbackAt > 2500) resetSamples();
+            state.lastFrameCallbackAt = callbackAt;
+            if ((state.lastPresented >= 0 && presented < state.lastPresented) ||
+                (state.lastMediaTime >= 0 && mediaTime < state.lastMediaTime) ||
+                (state.lastWidth && (width !== state.lastWidth || height !== state.lastHeight))) {
+              resetSamples();
+            }
+            state.lastPresented = presented;
+            state.lastMediaTime = mediaTime;
+            state.lastWidth = width;
+            state.lastHeight = height;
+            state.latest = {presented, mediaTime, width, height};
+          }
+          schedule(video);
+        });
+      } catch (_) { stop(); }
+    };
+    const regressionRate = points => {
+      const first = points[0];
+      let sx=0, sy=0, sxx=0, syy=0, sxy=0;
+      for (const point of points) {
+        const x = point.time - first.time;
+        const y = point.frames - first.frames;
+        sx += x; sy += y; sxx += x*x; syy += y*y; sxy += x*y;
+      }
+      const n = points.length;
+      const denominator = n*sxx - sx*sx;
+      if (denominator <= 0) return null;
+      const rate = (n*sxy - sx*sy) / denominator;
+      const corrDenominator = (n*sxx - sx*sx) * (n*syy - sy*sy);
+      const rSquared = corrDenominator > 0 ? ((n*sxy - sx*sy) ** 2) / corrDenominator : 0;
+      return Number.isFinite(rate) && rSquared >= .995 ? rate : null;
+    };
+    return {
+      stop,
+      sample(video) {
+        if (!video || video.paused || video.ended || !video.isConnected ||
+            typeof video.requestVideoFrameCallback !== 'function') {
+          if (state.video) stop();
+          return null;
+        }
+        if (state.video !== video) {
+          stop();
+          state.video = video;
+          schedule(video);
+          return null;
+        }
+        const latest = state.latest;
+        if (!latest) return null;
+        const now = performance.now();
+        if (state.lastFrameCallbackAt && now - state.lastFrameCallbackAt > 2500) {
+          resetSamples();
+          return null;
+        }
+        if (state.lastCurrentTime >= 0 && video.currentTime < state.lastCurrentTime - 1) resetSamples();
+        state.lastCurrentTime = video.currentTime;
+        if (now - state.lastSampleAt >= 900 &&
+            (!state.points.length || latest.presented > state.points[state.points.length-1].frames)) {
+          state.points.push({frames:latest.presented, time:latest.mediaTime});
+          state.lastSampleAt = now;
+          while (state.points.length > 70 ||
+                 (state.points.length > 2 && latest.mediaTime - state.points[1].time > 65))
+            state.points.shift();
+        }
+        if (state.points.length < 25 || latest.mediaTime - state.points[0].time < 30) return null;
+        if (now - state.lastEstimateAt >= 5000) {
+          state.lastEstimateAt = now;
+          const estimate = regressionRate(state.points);
+          if (estimate != null && estimate >= 20 && estimate <= 61) {
+            state.estimates.push(estimate);
+            while (state.estimates.length > 3) state.estimates.shift();
+          } else state.estimates.length = 0;
+        }
+        if (state.estimates.length < 3) return null;
+        const min = Math.min(...state.estimates), max = Math.max(...state.estimates);
+        if (max - min > .008) return null;
+        const rate = state.estimates.reduce((sum, value) => sum + value, 0) / state.estimates.length;
+        return {rate, span:Math.round((latest.mediaTime - state.points[0].time) * 10) / 10, stable:true};
+      }
+    };
+  })();
+  let frameCadenceEnabled = false;
   // v1.1.5f: VidFast must own its control DOM and all touch handling. The
   // primary JA extension is designed for VidSrc's JW Player. Even its benign
   // document-level listeners and injected styles are not installed here.
@@ -87,14 +215,18 @@
     // provider playback UI, remote key mapping, quality, or autoplay.
     setInterval(() => {
       const video = activeVideo();
-      if (!video || video.paused || video.ended) return;
+        if (!video || video.paused || video.ended) { frameCadenceSampler.stop(); return; }
       try {
         const quality = video.getVideoPlaybackQuality?.();
         if (!quality || !video.videoWidth || !video.videoHeight) return;
+        const cadence = frameCadenceEnabled && video.videoWidth >= 480 && video.videoHeight >= 270
+          ? frameCadenceSampler.sample(video) : null;
         sendDetail({event:'VIDEO_STATS', width:video.videoWidth,
           height:video.videoHeight, total:quality.totalVideoFrames,
           dropped:quality.droppedVideoFrames,
-          position:Math.round(video.currentTime*1000)/1000});
+          position:Math.round(video.currentTime*1000)/1000,
+          rvfcRate:cadence?.rate || 0, rvfcSpan:cadence?.span || 0,
+          rvfcStable:!!cadence?.stable});
       } catch (_) {}
     }, 1000);
     const elementLabel = el => {
@@ -160,6 +292,11 @@
     }, {capture:true,passive:true});
     const onCommand = async message => {
       const action=message?.action;
+      if (action === 'setFrameCadence') {
+        frameCadenceEnabled = message.enabled === true;
+        if (!frameCadenceEnabled) frameCadenceSampler.stop();
+        return;
+      }
       if (!['toggle','back10','forward10','controlsOpen','controlsClose'].includes(action)) return;
       const video=activeVideo();
       if (action === 'controlsOpen' || action === 'controlsClose') {
@@ -1403,6 +1540,11 @@
 
   async function handle(message) {
     const action = message?.action;
+    if (action === 'setFrameCadence') {
+      frameCadenceEnabled = message.enabled === true;
+      if (!frameCadenceEnabled) frameCadenceSampler.stop();
+      return;
+    }
     if (['toggle','back10','forward10','controlsOpen','controlsNext','controlsPrev','controlsSelect','controlsClose','controlsUp','controlsDown'].includes(action))qualityIntentVersion++;
     if (action === 'initializePlaybackPreferences') { captionDefaults.start(); return; }
     if (action === 'matchOutputQuality') { outputQuality.request(message.height); return; }
@@ -1537,12 +1679,18 @@
   // The matcher still requires valid data and may reject unsupported modes.
   perfTimer = setInterval(() => {
     const video = currentVideo();
-    if (!video || video.paused) return;
+    if (!video || video.paused) { frameCadenceSampler.stop(); return; }
     try {
       const q = video.getVideoPlaybackQuality?.();
-      if (q) send({event:'VIDEO_STATS', width:video.videoWidth, height:video.videoHeight,
+      if (q) {
+        const cadence = frameCadenceEnabled && video.videoWidth >= 480 && video.videoHeight >= 270
+          ? frameCadenceSampler.sample(video) : null;
+        send({event:'VIDEO_STATS', width:video.videoWidth, height:video.videoHeight,
         total:q.totalVideoFrames, dropped:q.droppedVideoFrames,
-        position:Math.round(video.currentTime * 1000) / 1000});
+        position:Math.round(video.currentTime * 1000) / 1000,
+        rvfcRate:cadence?.rate || 0, rvfcSpan:cadence?.span || 0,
+        rvfcStable:!!cadence?.stable});
+      }
     } catch (_) {}
   }, 1000);
   // JA v1.0.16: sequential startup configuration, NOT another autoplay engine.
