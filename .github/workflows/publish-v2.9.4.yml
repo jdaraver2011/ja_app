@@ -1,0 +1,15 @@
+name: Publish JA 2.9.4 device update
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      daddylive_us_pilot: true
+      run_checks: true
+      publish_update: true
+      build_variant: release
+      generate_baseline_profile: false
+    secrets: inherit

@@ -1,0 +1,31 @@
+name: Build JA 2.9.4 onn test APK
+on:
+  push:
+    branches: [v2.9.4]
+    paths:
+      - .github/workflows/build-v2.9.4.yml
+      - .github/workflows/build-apk.yml
+      - app/build.gradle.kts
+      - app/proguard-rules.pro
+      - gradle.properties
+      - app/src/main/baseline-prof.txt
+      - app/src/main/java/**
+      - app/src/main/assets/**
+      - app/src/main/AndroidManifest.xml
+      - baselineprofile/**
+      - scripts/configure_build.py
+      - scripts/restore_update_signing.py
+      - scripts/prepare_update_release.py
+      - tests/**
+permissions:
+  contents: read
+jobs:
+  build:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      daddylive_us_pilot: true
+      run_checks: true
+      publish_update: false
+      build_variant: release
+      generate_baseline_profile: false
+    secrets: inherit
