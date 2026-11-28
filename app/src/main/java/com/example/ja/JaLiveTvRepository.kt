@@ -52,8 +52,10 @@ internal data class JaLiveGuide(val programs:List<JaLiveProgram>,val fetched:Lon
 }
 
 internal class JaLiveTvRepository(private val context:Context) {
-    private companion object { val catalogLock=Mutex() }
-    private val guideLock=Mutex()
+    private companion object {
+        val catalogLock=Mutex()
+        val guideLock=Mutex()
+    }
     @Volatile private var memoryCatalog:Pair<JaLiveChannels,Long>?=null
     @Volatile private var memoryGuide:Pair<String,JaLiveGuide>?=null
     private val root=File(context.cacheDir,"live-tv").apply{mkdirs()}
@@ -94,7 +96,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         val prefs=context.getSharedPreferences("ja_live_tv_refresh",Context.MODE_PRIVATE)
         val attemptedToday=prefs.getString("automatic_attempt_date","")==localDate.toString()
         // Refresh once per day after new NTV Raptor event groups and route rules are introduced.
-        val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<4&&
+        val sourceGroupsUpgradeDue=cached!=null&&prefs.getInt("source_groups_schema",0)<5&&
             prefs.getString("source_groups_upgrade_attempt_date","")!=localDate.toString()
         val shouldRefresh=force||sourceGroupsUpgradeDue||(due&&!attemptedToday)
         if(cached!=null&&!shouldRefresh)return@withContext cached.also{memoryCatalog=it to cachedAt}
@@ -108,7 +110,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         try {
             val raw=downloadDirectCatalog()
             val parsed=parseCatalog(raw,false)
-            write(file,raw);prefs.edit().putInt("source_groups_schema",4).remove("source_groups_upgrade_attempt_date").apply()
+            write(file,raw);prefs.edit().putInt("source_groups_schema",5).remove("source_groups_upgrade_attempt_date").apply()
             memoryCatalog=parsed to file.lastModified();parsed
         }catch(e:CancellationException){throw e}catch(e:Exception){
             cached?.copy(saved=true)?.also{memoryCatalog=it to cachedAt}?:throw e
@@ -147,7 +149,7 @@ internal class JaLiveTvRepository(private val context:Context) {
                 .filter{it.categories.contains("source-ntv")&&it.categories.contains("ntv-sport-all")}}
                 .getOrDefault(emptyList())
         }
-        val channels=mergeM3uChannels(loaded)+ntvChannels+ntvEvents
+        val channels=mergeM3uChannels(loaded)+ntvChannels+ntvEvents+curatedDaddyLiveChannels()
         if(channels.isEmpty())throw IOException("No live TV sources could be loaded")
         val nflChannels=channels.count{"source-ntv" in it.categories&&"ntv-sport-nfl" in it.categories}
         val nflGames=ntvEvents.count{"ntv-sport-nfl" in it.categories}
@@ -156,6 +158,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         val ncaafGames=ntvEvents.count{"ntv-sport-ncaaf" in it.categories}
         Log.i("JA_LIVE_TV","NTV_SPORT_GROUPS_COMPILED nflChannels=$nflChannels nflGames=$nflGames " +
             "nflNetworkFeeds=$nflNetwork ncaafChannels=$ncaafChannels ncaafGames=$ncaafGames")
+        Log.i("JA_LIVE_TV", "DADDYLIVE_CATALOG_READY channels=${channels.count { "source-daddylive" in it.categories }}")
         val failed=sources.filterIndexed{index,_->results[index]==null}.joinToString(","){it.id}
         if(failed.isNotBlank())Log.w("JA_LIVE_TV","CATALOG_PARTIAL sources=${loaded.size} failed=$failed channels=${channels.size}")
         catalogJson(channels)
@@ -381,6 +384,28 @@ internal class JaLiveTvRepository(private val context:Context) {
             same.drop(1).fold(same.first()){base,next->base.copy(urls=(base.urls+next.urls).distinct(),
                 categories=base.categories+next.categories,logo=base.logo.ifBlank{next.logo})}
         }.sortedBy{it.name.lowercase(Locale.ROOT)}
+    private fun curatedDaddyLiveChannels():List<JaLiveChannel> = jaDaddyLiveUsPilot.map {
+        it.copy(categories=it.categories+"source-daddylive")
+    }
+    private fun mergeCuratedDaddyLive(channels:List<JaLiveChannel>):List<JaLiveChannel> {
+        val curated=curatedDaddyLiveChannels()
+        if(curated.isEmpty())return channels
+        val ids=curated.mapTo(HashSet()){it.id}
+        val byId=channels.associateBy{it.id}
+        val merged=curated.map{item->
+            val cached=byId[item.id]?:return@map item
+            cached.copy(
+                logo=cached.logo.ifBlank{item.logo},
+                urls=(cached.urls+item.urls).distinct(),
+                headers=cached.headers+item.headers,
+                categories=cached.categories+item.categories,
+                embeddedPlayerUrl=cached.embeddedPlayerUrl?:item.embeddedPlayerUrl,
+                xmlTvGuideId=cached.xmlTvGuideId?:item.xmlTvGuideId,
+                embeddedPlayerFallbackUrls=(cached.embeddedPlayerFallbackUrls+item.embeddedPlayerFallbackUrls).distinct()
+            )
+        }
+        return (channels.filterNot{it.id in ids}+merged).distinctBy{it.id}.sortedBy{it.name.lowercase(Locale.ROOT)}
+    }
     private fun catalogJson(channels:List<JaLiveChannel>):String {
         val entries=JSONArray();val counts=JSONObject()
         for(channel in channels){
@@ -389,6 +414,7 @@ internal class JaLiveTvRepository(private val context:Context) {
             entries.put(JSONObject().put("id",channel.id).put("name",channel.name).put("logo",channel.logo)
                 .put("categories",groups).put("streams",streams)
                 .put("embeddedPlayerUrl",channel.embeddedPlayerUrl)
+                .put("xmlTvGuideId",channel.xmlTvGuideId)
                 .put("embeddedPlayerFallbackUrls",JSONArray(channel.embeddedPlayerFallbackUrls)))
         }
         return JSONObject().put("schema",1).put("generatedAt",Instant.now().toString()).put("channels",entries)
@@ -402,7 +428,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         require(stamp>0&&stamp<=System.currentTimeMillis()+300_000)
         val entries=doc.getJSONArray("channels")
         require(entries.length() in 1..10000)
-        val channels=(0 until entries.length()).map{entries.getJSONObject(it)}.mapNotNull{c ->
+        val parsedChannels=(0 until entries.length()).map{entries.getJSONObject(it)}.mapNotNull{c ->
             val streams=c.getJSONArray("streams")
             val headers=mutableMapOf<String,Map<String,String>>()
             val urls=(0 until streams.length()).map{streams.getJSONObject(it)}.mapNotNull{stream ->
@@ -433,8 +459,10 @@ internal class JaLiveTvRepository(private val context:Context) {
             if("country-us" !in categories&&"country-uk" !in categories&&"test" !in categories&&"source-ntv" !in categories)categories.add("country-us")
             if((urls.isEmpty()&&embeddedUrl==null)||("test" in categories&&"country-us" !in categories&&"country-uk" !in categories))null
             else JaLiveChannel(c.getString("id"),c.getString("name"),c.optString("logo"),urls,headers,categories,
-                embeddedPlayerUrl=embeddedUrl,embeddedPlayerFallbackUrls=embeddedFallbacks)
+                embeddedPlayerUrl=embeddedUrl,xmlTvGuideId=c.optString("xmlTvGuideId").takeIf{it.isNotBlank()},
+                embeddedPlayerFallbackUrls=embeddedFallbacks)
         }.distinctBy{it.id}.sortedBy{it.name.lowercase()}
+        val channels=mergeCuratedDaddyLive(parsedChannels)
         require(channels.isNotEmpty())
         return JaLiveChannels(channels,saved,verified,doc.optJSONObject("counts")?.has("categories")==true)
     }
@@ -523,9 +551,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         val exactCache=cachedGuide(channels)
         if(!force&&exactCache!=null){
             val rebuiltAt=File(root,"guide-$key.json").lastModified()
-            val coversNow=exactCache.programs.any{it.start<=now&&it.end>now}
-            if((coversNow&&!refreshDueAfterSix(rebuiltAt,now))||
-                (!exactCache.saved&&JaLiveTvRules.fresh(exactCache.fetched,now,21_600_000)))return@withContext exactCache
+            if(!refreshDueAfterSix(rebuiltAt,now))return@withContext exactCache
         }
         val cached=exactCache ?: if (channels.any { it.xmlTvGuideId != null }) {
             cachedGuide(channels.filter { it.embeddedPlayerUrl == null })
@@ -533,7 +559,7 @@ internal class JaLiveTvRepository(private val context:Context) {
         val cancellation=currentCoroutineContext()
         suspend fun loadFeed(url:String,name:String,limit:Long,aliases:Map<String,String>):Feed? {
             val file=File(root,name);var stale=false
-            if(force||!JaLiveTvRules.fresh(file.lastModified(),now,21_600_000)) {
+            if(force||refreshDueAfterSix(file.lastModified(),now)) {
                 try {
                     client.newCall(request(url)).execute().use{response->
                         if(!response.isSuccessful)throw IOException("Guide HTTP ${response.code}")

@@ -65,7 +65,13 @@ class JaLiveTvUpdateService:JobService() {
     override fun onStartJob(params:JobParameters):Boolean {
         running[params.jobId]=scope.launch {
             try{
-                val result=JaLiveTvRepository(applicationContext).channels(force=true)
+                val repository=JaLiveTvRepository(applicationContext)
+                val result=repository.channels(force=false)
+                try {
+                    val guide=repository.guide(result.channels,force=false)
+                    android.util.Log.i("JA_LIVE_TV", "DAILY_GUIDE_UPDATE programs=${guide.programs.size} saved=${guide.saved}")
+                } catch(e:CancellationException){throw e}
+                catch(e:Exception){android.util.Log.w("JA_LIVE_TV", "DAILY_GUIDE_UPDATE_FAILED", e)}
                 jobFinished(params,result.saved)
                 if(!result.saved&&params.jobId==240301)JaLiveTvUpdates.scheduleNext(applicationContext)
             }catch(e:CancellationException){throw e}

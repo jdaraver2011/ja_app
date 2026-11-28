@@ -14,6 +14,22 @@ internal object JaGeckoRuntime {
     const val EXTENSION_SCRIPT_PREF = "dom.max_ext_content_script_run_time"
     private var instance: GeckoRuntime? = null
 
+    /** Start the shared Gecko runtime while entering IPTV, before a channel is opened. */
+    fun prewarmForIptv(context: Context) {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Gecko runtime requires the main thread" }
+        val reused = instance != null
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        Log.i("JA_STARTUP", "IPTV_RUNTIME_PREWARM_BEGIN reused=$reused")
+        try {
+            get(context)
+            Log.i("JA_STARTUP", "IPTV_RUNTIME_PREWARM_RETURN reused=$reused " +
+                "elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}")
+        } catch (error: Exception) {
+            Log.e("JA_STARTUP", "IPTV_RUNTIME_PREWARM_FAILED type=${error.javaClass.name} " +
+                "elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}", error)
+        }
+    }
+
     /** Only called after the user confirms the root-level double-Back exit. */
     fun shutdownForExit(onComplete: () -> Unit) {
         val runtime = instance

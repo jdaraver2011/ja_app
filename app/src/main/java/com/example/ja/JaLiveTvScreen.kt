@@ -282,8 +282,7 @@ internal class JaLiveTvState(context:android.content.Context,val repository:JaLi
                     if (indexedChannels !== result.channels) {
                         val indexStart = SystemClock.elapsedRealtime()
                         catalogIndex = withContext(Dispatchers.Default) {
-                            val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL } +
-                                jaDaddyLiveUsPilot.map{it.copy(categories=it.categories+"source-daddylive")}
+                            val channels = listOf(jaWeatherChannel()) + result.channels.filter { it.id != JA_WEATHER_CHANNEL }
                             val allSourceGroups=JaLiveTvRules.sources().associateWith{sourceName->
                                 val sourceChannels=channels.filter{JaLiveTvRules.sourceMatches(sourceName,it.categories)}
                                 JaLiveTvRules.groupsForSource(sourceName,sourceChannels.flatMap{it.categories}.toSet())
@@ -939,7 +938,7 @@ private fun JaLiveEmbeddedPlayback(
                     TvFocusButton(onClick = onClose) { Text("Back to guide") }
                 }
             }
-        } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name, overlayGuardEnabled = false,
+        } else GeckoExperimentalPlayer(url = activeUrl, diagnosticsLabel = name, overlayGuardEnabled = isNtvStream,
             adjustNtvPhoneViewport = isNtvStream,
             onMediaStarted = onPlaying, frameRateMatcher=frameMatcher,matchStreamQuality=qualityMatching,onFatalError = {
                 if(fallbackIndex<fallbackUrls.size)fallbackIndex++ else failed=true
