@@ -19,8 +19,8 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 20904
-        versionName = "2.9.4"
+        versionCode = 20905
+        versionName = "2.9.5"
         buildConfigField("boolean", "JA_DADDYLIVE_US_PILOT",
             (System.getenv("JA_DADDYLIVE_US_PILOT") == "true").toString())
         val updateRepo = local.getProperty("JA_UPDATE_REPOSITORY", "jdaraver2011/ja_app")
